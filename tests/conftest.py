@@ -2,6 +2,9 @@
 
 import pytest
 
+# Register test mode plugin (--azure flag, azure_mode/storage_mode fixtures)
+pytest_plugins = ["tests.conftest_modes"]
+
 
 @pytest.fixture
 def sample_party_data() -> dict:

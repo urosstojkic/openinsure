@@ -110,6 +110,31 @@ Key ADRs:
 6. **Coverage**: `pytest --cov=src/openinsure --cov-fail-under=80` — ≥80%
 7. **Build**: `pip install -e .` — installs cleanly
 
+## Security Requirements (Non-Negotiable)
+
+Every code change MUST satisfy these security requirements without being asked:
+
+1. **No hardcoded credentials** — All secrets via environment variables or Key Vault
+2. **Input validation** — All API inputs validated via Pydantic models
+3. **Authentication** — All /api/* endpoints require authentication
+4. **CORS** — No wildcard origins; environment-specific allowed origins
+5. **Error handling** — Error responses MUST NOT leak internal details (stack traces, connection strings)
+6. **Dependency security** — `bandit -r src/openinsure/ -ll` must pass with 0 findings
+7. **Test coverage** — Every new feature must include tests; API endpoints must have integration tests
+8. **Decision records** — Every AI agent decision must produce a DecisionRecord
+
+## Quality Compromise Tracking
+
+When a technical compromise is made (e.g., using a different Azure service than specified, using stubs instead of real implementations, reducing test coverage threshold), the agent MUST:
+
+1. Document the compromise clearly in the commit message
+2. Create a GitHub issue with label "quality" explaining:
+   - What was compromised
+   - Why (the technical constraint)
+   - Impact on the system
+   - Proposed resolution path
+3. Never silently reduce quality without transparent tracking
+
 ## Available Agents
 
 | Agent | Invoke With | Use For |

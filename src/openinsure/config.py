@@ -56,6 +56,9 @@ class Settings(BaseSettings):
     api_key: str = ""
     require_auth: bool = False
 
+    # Test/Storage mode
+    storage_mode: str = "memory"  # "memory" for local dev, "azure" for real Azure resources
+
     # Server
     host: str = "0.0.0.0"  # nosec B104 — bind-all is intentional for container deployment
     port: int = 8000

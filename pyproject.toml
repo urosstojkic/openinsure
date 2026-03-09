@@ -91,3 +91,6 @@ ignore_errors = true
 asyncio_mode = "auto"
 testpaths = ["tests"]
 addopts = "--strict-markers -ra"
+markers = [
+    "azure: marks tests that require Azure resources (deselect with '-m not azure')",
+]

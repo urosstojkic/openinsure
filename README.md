@@ -105,6 +105,23 @@ ruff check src/ tests/ && ruff format src/ tests/
 mypy src/openinsure/
 ```
 
+## Testing
+
+### Local Mode (default, no Azure resources needed)
+```bash
+pytest tests/ -v
+```
+
+### Azure Mode (requires deployed Azure resources)
+```bash
+pytest tests/ --azure -v
+```
+
+### Skip Azure-dependent tests
+```bash
+pytest tests/ -m "not azure" -v
+```
+
 ### Azure Deployment
 
 ```bash

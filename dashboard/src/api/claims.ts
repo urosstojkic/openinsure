@@ -15,3 +15,8 @@ export async function getClaim(id: string): Promise<Claim | undefined> {
   const { data } = await client.get<Claim>(`/claims/${id}`);
   return data;
 }
+
+export async function createClaim(payload: Record<string, unknown>): Promise<Claim> {
+  const { data } = await client.post<Claim>('/claims', payload);
+  return data;
+}

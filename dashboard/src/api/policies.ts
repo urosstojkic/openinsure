@@ -15,3 +15,8 @@ export async function getPolicy(id: string): Promise<Policy | undefined> {
   const { data } = await client.get<Policy>(`/policies/${id}`);
   return data;
 }
+
+export async function createPolicy(payload: Record<string, unknown>): Promise<Policy> {
+  const { data } = await client.post<Policy>('/policies', payload);
+  return data;
+}

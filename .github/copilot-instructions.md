@@ -1,5 +1,16 @@
 # OpenInsure — Copilot Instructions
 
+## Mandatory Pre-Merge Checklist
+
+Before ANY merge to main, ALL of these must pass:
+1. `pytest tests/ -v` — all green
+2. `ruff check src/ tests/` — no errors
+3. `ruff format --check src/ tests/` — compliant
+4. `mypy src/openinsure/` — no errors
+5. `bandit -r src/openinsure/ -ll` — no findings
+6. Security review: no hardcoded credentials, proper auth, input validation
+7. Quality compromises documented as GitHub issues
+
 ## Quick Reference
 
 - **Language**: Python 3.12+ with strict typing

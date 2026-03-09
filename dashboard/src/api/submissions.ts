@@ -16,7 +16,7 @@ export async function getSubmission(id: string): Promise<Submission | undefined>
   return data;
 }
 
-export async function createSubmission(payload: Partial<Submission>): Promise<Submission> {
+export async function createSubmission(payload: Record<string, unknown>): Promise<Submission> {
   const { data } = await client.post<Submission>('/submissions', payload);
   return data;
 }
