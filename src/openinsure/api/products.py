@@ -14,12 +14,14 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
+from openinsure.infrastructure.repositories.products import InMemoryProductRepository
+
 router = APIRouter()
 
 # ---------------------------------------------------------------------------
-# In-memory store
+# Repository (in-memory for local dev; swap for SqlRepository in prod)
 # ---------------------------------------------------------------------------
-_products: dict[str, dict[str, Any]] = {}
+_repo = InMemoryProductRepository()
 
 
 # ---------------------------------------------------------------------------
@@ -149,8 +151,8 @@ class CoverageListResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-def _get_product(product_id: str) -> dict[str, Any]:
-    product = _products.get(product_id)
+async def _get_product(product_id: str) -> dict[str, Any]:
+    product = await _repo.get_by_id(product_id)
     if product is None:
         raise HTTPException(status_code=404, detail=f"Product {product_id} not found")
     return product
@@ -184,7 +186,7 @@ async def create_product(body: ProductCreate) -> ProductResponse:
         "created_at": now,
         "updated_at": now,
     }
-    _products[pid] = record
+    await _repo.create(record)
     return ProductResponse(**record)
 
 
@@ -196,15 +198,14 @@ async def list_products(
     limit: int = Query(20, ge=1, le=100),
 ) -> ProductList:
     """List products with optional filtering and pagination."""
-    results = list(_products.values())
-
+    filters: dict[str, Any] = {}
     if status is not None:
-        results = [p for p in results if p["status"] == status]
+        filters["status"] = status
     if product_line is not None:
-        results = [p for p in results if p["product_line"] == product_line]
+        filters["product_line"] = product_line
 
-    total = len(results)
-    page = results[skip : skip + limit]
+    total = await _repo.count(filters)
+    page = await _repo.list_all(filters=filters, skip=skip, limit=limit)
     return ProductList(
         items=[ProductResponse(**r) for r in page],
         total=total,
@@ -216,13 +217,13 @@ async def list_products(
 @router.get("/{product_id}", response_model=ProductResponse)
 async def get_product(product_id: str) -> ProductResponse:
     """Retrieve a single product by ID."""
-    return ProductResponse(**_get_product(product_id))
+    return ProductResponse(**await _get_product(product_id))
 
 
 @router.put("/{product_id}", response_model=ProductResponse)
 async def update_product(product_id: str, body: ProductUpdate) -> ProductResponse:
     """Update a product definition."""
-    record = _get_product(product_id)
+    record = await _get_product(product_id)
     if record["status"] == ProductStatus.RETIRED:
         raise HTTPException(status_code=409, detail="Cannot update a retired product")
 
@@ -247,7 +248,7 @@ async def calculate_rate(product_id: str, body: RateRequest) -> RateResponse:
     Stub implementation — returns a deterministic rate based on product
     base rates.  The real version calls the rating engine.
     """
-    record = _get_product(product_id)
+    record = await _get_product(product_id)
     if record["status"] != ProductStatus.ACTIVE:
         raise HTTPException(status_code=409, detail="Rating is only available for active products")
 
@@ -281,7 +282,7 @@ async def calculate_rate(product_id: str, body: RateRequest) -> RateResponse:
 @router.get("/{product_id}/coverages", response_model=CoverageListResponse)
 async def list_coverages(product_id: str) -> CoverageListResponse:
     """List available coverages for a product."""
-    record = _get_product(product_id)
+    record = await _get_product(product_id)
     return CoverageListResponse(
         product_id=product_id,
         coverages=[CoverageDefinition(**c) for c in record["coverages"]],

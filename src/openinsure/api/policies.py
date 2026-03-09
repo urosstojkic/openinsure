@@ -14,12 +14,14 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
+from openinsure.infrastructure.repositories.policies import InMemoryPolicyRepository
+
 router = APIRouter()
 
 # ---------------------------------------------------------------------------
-# In-memory store
+# Repository (in-memory for local dev; swap for SqlRepository in prod)
 # ---------------------------------------------------------------------------
-_policies: dict[str, dict[str, Any]] = {}
+_repo = InMemoryPolicyRepository()
 
 
 # ---------------------------------------------------------------------------
@@ -159,8 +161,8 @@ class PolicyDocumentList(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-def _get_policy(policy_id: str) -> dict[str, Any]:
-    policy = _policies.get(policy_id)
+async def _get_policy(policy_id: str) -> dict[str, Any]:
+    policy = await _repo.get_by_id(policy_id)
     if policy is None:
         raise HTTPException(status_code=404, detail=f"Policy {policy_id} not found")
     return policy
@@ -201,7 +203,7 @@ async def create_policy(body: PolicyCreate) -> PolicyResponse:
         "created_at": now,
         "updated_at": now,
     }
-    _policies[pid] = record
+    await _repo.create(record)
     return PolicyResponse(**record)
 
 
@@ -214,18 +216,16 @@ async def list_policies(
     limit: int = Query(20, ge=1, le=100),
 ) -> PolicyList:
     """List policies with optional filtering and pagination."""
-    results = list(_policies.values())
-
+    filters: dict[str, Any] = {}
     if status is not None:
-        results = [p for p in results if p["status"] == status]
+        filters["status"] = status
     if policyholder is not None:
-        lower = policyholder.lower()
-        results = [p for p in results if lower in p["policyholder_name"].lower()]
+        filters["policyholder_name__contains"] = policyholder
     if product_id is not None:
-        results = [p for p in results if p["product_id"] == product_id]
+        filters["product_id"] = product_id
 
-    total = len(results)
-    page = results[skip : skip + limit]
+    total = await _repo.count(filters)
+    page = await _repo.list_all(filters=filters, skip=skip, limit=limit)
     return PolicyList(
         items=[PolicyResponse(**r) for r in page],
         total=total,
@@ -237,13 +237,13 @@ async def list_policies(
 @router.get("/{policy_id}", response_model=PolicyResponse)
 async def get_policy(policy_id: str) -> PolicyResponse:
     """Retrieve a single policy by ID."""
-    return PolicyResponse(**_get_policy(policy_id))
+    return PolicyResponse(**await _get_policy(policy_id))
 
 
 @router.put("/{policy_id}", response_model=PolicyResponse)
 async def update_policy(policy_id: str, body: PolicyUpdate) -> PolicyResponse:
     """Update a policy's mutable fields."""
-    record = _get_policy(policy_id)
+    record = await _get_policy(policy_id)
     if record["status"] == PolicyStatus.CANCELLED:
         raise HTTPException(status_code=409, detail="Cannot update a cancelled policy")
 
@@ -261,7 +261,7 @@ async def update_policy(policy_id: str, body: PolicyUpdate) -> PolicyResponse:
 @router.post("/{policy_id}/endorse", response_model=EndorsementResponse, status_code=201)
 async def endorse_policy(policy_id: str, body: EndorsementRequest) -> EndorsementResponse:
     """Create an endorsement (mid-term change) on a policy."""
-    record = _get_policy(policy_id)
+    record = await _get_policy(policy_id)
     if record["status"] != PolicyStatus.ACTIVE:
         raise HTTPException(status_code=409, detail="Endorsements require an active policy")
 
@@ -288,7 +288,7 @@ async def renew_policy(policy_id: str) -> RenewalResponse:
 
     Creates a new policy record with updated effective/expiration dates.
     """
-    record = _get_policy(policy_id)
+    record = await _get_policy(policy_id)
     if record["status"] not in {PolicyStatus.ACTIVE, PolicyStatus.EXPIRED}:
         raise HTTPException(status_code=409, detail="Only active or expired policies can be renewed")
 
@@ -314,7 +314,7 @@ async def renew_policy(policy_id: str) -> RenewalResponse:
         "created_at": now,
         "updated_at": now,
     }
-    _policies[new_pid] = renewal
+    await _repo.create(renewal)
 
     return RenewalResponse(
         policy_id=policy_id,
@@ -328,7 +328,7 @@ async def renew_policy(policy_id: str) -> RenewalResponse:
 @router.post("/{policy_id}/cancel", response_model=CancelResponse)
 async def cancel_policy(policy_id: str, body: CancelRequest) -> CancelResponse:
     """Cancel an active policy."""
-    record = _get_policy(policy_id)
+    record = await _get_policy(policy_id)
     if record["status"] != PolicyStatus.ACTIVE:
         raise HTTPException(status_code=409, detail="Only active policies can be cancelled")
 
@@ -351,7 +351,7 @@ async def list_policy_documents(policy_id: str) -> PolicyDocumentList:
 
     Stub — returns placeholder documents based on the IDs stored on the policy.
     """
-    record = _get_policy(policy_id)
+    record = await _get_policy(policy_id)
     docs = [
         DocumentItem(document_id=did, name=f"document-{did[:8]}", type="application/pdf") for did in record["documents"]
     ]

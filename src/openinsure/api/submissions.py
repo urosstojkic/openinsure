@@ -14,12 +14,14 @@ from typing import Any
 from fastapi import APIRouter, File, HTTPException, Query, UploadFile
 from pydantic import BaseModel, Field
 
+from openinsure.infrastructure.repositories.submissions import InMemorySubmissionRepository
+
 router = APIRouter()
 
 # ---------------------------------------------------------------------------
-# In-memory store (replaced by database adapter later)
+# Repository (in-memory for local dev; swap for SqlRepository in prod)
 # ---------------------------------------------------------------------------
-_submissions: dict[str, dict[str, Any]] = {}
+_repo = InMemorySubmissionRepository()
 
 
 # ---------------------------------------------------------------------------
@@ -152,9 +154,9 @@ class DocumentUploadResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-def _get_submission(submission_id: str) -> dict[str, Any]:
+async def _get_submission(submission_id: str) -> dict[str, Any]:
     """Retrieve a submission or raise 404."""
-    sub = _submissions.get(submission_id)
+    sub = await _repo.get_by_id(submission_id)
     if sub is None:
         raise HTTPException(status_code=404, detail=f"Submission {submission_id} not found")
     return sub
@@ -187,7 +189,7 @@ async def create_submission(body: SubmissionCreate) -> SubmissionResponse:
         "created_at": now,
         "updated_at": now,
     }
-    _submissions[sid] = record
+    await _repo.create(record)
     return SubmissionResponse(**record)
 
 
@@ -202,21 +204,20 @@ async def list_submissions(
     limit: int = Query(20, ge=1, le=100),
 ) -> SubmissionList:
     """List submissions with optional filtering and pagination."""
-    results = list(_submissions.values())
-
+    filters: dict[str, Any] = {}
     if status is not None:
-        results = [s for s in results if s["status"] == status]
+        filters["status"] = status
     if channel is not None:
-        results = [s for s in results if s["channel"] == channel]
+        filters["channel"] = channel
     if lob is not None:
-        results = [s for s in results if s["line_of_business"] == lob]
+        filters["line_of_business"] = lob
     if created_after is not None:
-        results = [s for s in results if s["created_at"] >= created_after]
+        filters["created_at_gte"] = created_after
     if created_before is not None:
-        results = [s for s in results if s["created_at"] <= created_before]
+        filters["created_at_lte"] = created_before
 
-    total = len(results)
-    page = results[skip : skip + limit]
+    total = await _repo.count(filters)
+    page = await _repo.list_all(filters=filters, skip=skip, limit=limit)
     return SubmissionList(
         items=[SubmissionResponse(**r) for r in page],
         total=total,
@@ -228,13 +229,13 @@ async def list_submissions(
 @router.get("/{submission_id}", response_model=SubmissionResponse)
 async def get_submission(submission_id: str) -> SubmissionResponse:
     """Retrieve a single submission by ID."""
-    return SubmissionResponse(**_get_submission(submission_id))
+    return SubmissionResponse(**await _get_submission(submission_id))
 
 
 @router.put("/{submission_id}", response_model=SubmissionResponse)
 async def update_submission(submission_id: str, body: SubmissionUpdate) -> SubmissionResponse:
     """Update a submission's mutable fields."""
-    record = _get_submission(submission_id)
+    record = await _get_submission(submission_id)
     if record["status"] in {SubmissionStatus.BOUND, SubmissionStatus.DECLINED}:
         raise HTTPException(status_code=409, detail="Cannot update a submission that is bound or declined")
 
@@ -258,7 +259,7 @@ async def triage_submission(submission_id: str) -> TriageResult:
     In the real implementation this dispatches to the triage agent; here
     we return a deterministic stub result.
     """
-    record = _get_submission(submission_id)
+    record = await _get_submission(submission_id)
     if record["status"] not in {SubmissionStatus.SUBMITTED, SubmissionStatus.IN_TRIAGE}:
         raise HTTPException(status_code=409, detail="Submission is not in a triageable state")
 
@@ -280,7 +281,7 @@ async def generate_quote(submission_id: str) -> QuoteResponse:
 
     Stub implementation — the real version calls the rating engine.
     """
-    record = _get_submission(submission_id)
+    record = await _get_submission(submission_id)
     if record["status"] not in {SubmissionStatus.TRIAGED, SubmissionStatus.QUOTING}:
         raise HTTPException(status_code=409, detail="Submission must be triaged before quoting")
 
@@ -304,7 +305,7 @@ async def bind_submission(submission_id: str) -> BindResponse:
 
     Stub implementation — the real version orchestrates policy issuance.
     """
-    record = _get_submission(submission_id)
+    record = await _get_submission(submission_id)
     if record["status"] != SubmissionStatus.QUOTED:
         raise HTTPException(status_code=409, detail="Submission must be quoted before binding")
 
@@ -325,7 +326,7 @@ async def upload_documents(
     files: list[UploadFile] = File(...),
 ) -> DocumentUploadResponse:
     """Upload one or more documents to a submission."""
-    record = _get_submission(submission_id)
+    record = await _get_submission(submission_id)
     doc_ids: list[str] = []
     for f in files:
         doc_id = str(uuid.uuid4())

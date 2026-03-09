@@ -14,12 +14,14 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
+from openinsure.infrastructure.repositories.claims import InMemoryClaimRepository
+
 router = APIRouter()
 
 # ---------------------------------------------------------------------------
-# In-memory store
+# Repository (in-memory for local dev; swap for SqlRepository in prod)
 # ---------------------------------------------------------------------------
-_claims: dict[str, dict[str, Any]] = {}
+_repo = InMemoryClaimRepository()
 
 
 # ---------------------------------------------------------------------------
@@ -189,8 +191,8 @@ class ReopenResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-def _get_claim(claim_id: str) -> dict[str, Any]:
-    claim = _claims.get(claim_id)
+async def _get_claim(claim_id: str) -> dict[str, Any]:
+    claim = await _repo.get_by_id(claim_id)
     if claim is None:
         raise HTTPException(status_code=404, detail=f"Claim {claim_id} not found")
     return claim
@@ -233,7 +235,7 @@ async def create_claim(body: ClaimCreate) -> ClaimResponse:
         "created_at": now,
         "updated_at": now,
     }
-    _claims[cid] = record
+    await _repo.create(record)
     return ClaimResponse(**record)
 
 
@@ -246,17 +248,16 @@ async def list_claims(
     limit: int = Query(20, ge=1, le=100),
 ) -> ClaimList:
     """List claims with optional filtering and pagination."""
-    results = list(_claims.values())
-
+    filters: dict[str, Any] = {}
     if status is not None:
-        results = [c for c in results if c["status"] == status]
+        filters["status"] = status
     if claim_type is not None:
-        results = [c for c in results if c["claim_type"] == claim_type]
+        filters["claim_type"] = claim_type
     if policy_id is not None:
-        results = [c for c in results if c["policy_id"] == policy_id]
+        filters["policy_id"] = policy_id
 
-    total = len(results)
-    page = results[skip : skip + limit]
+    total = await _repo.count(filters)
+    page = await _repo.list_all(filters=filters, skip=skip, limit=limit)
     return ClaimList(
         items=[ClaimResponse(**r) for r in page],
         total=total,
@@ -268,13 +269,13 @@ async def list_claims(
 @router.get("/{claim_id}", response_model=ClaimResponse)
 async def get_claim(claim_id: str) -> ClaimResponse:
     """Retrieve a single claim by ID."""
-    return ClaimResponse(**_get_claim(claim_id))
+    return ClaimResponse(**await _get_claim(claim_id))
 
 
 @router.put("/{claim_id}", response_model=ClaimResponse)
 async def update_claim(claim_id: str, body: ClaimUpdate) -> ClaimResponse:
     """Update a claim's mutable fields."""
-    record = _get_claim(claim_id)
+    record = await _get_claim(claim_id)
     if record["status"] == ClaimStatus.CLOSED:
         raise HTTPException(status_code=409, detail="Cannot update a closed claim; reopen it first")
 
@@ -292,7 +293,7 @@ async def update_claim(claim_id: str, body: ClaimUpdate) -> ClaimResponse:
 @router.post("/{claim_id}/reserve", response_model=ReserveResponse, status_code=201)
 async def set_reserve(claim_id: str, body: ReserveRequest) -> ReserveResponse:
     """Set or update reserves on a claim."""
-    record = _get_claim(claim_id)
+    record = await _get_claim(claim_id)
     if record["status"] == ClaimStatus.CLOSED:
         raise HTTPException(status_code=409, detail="Cannot set reserves on a closed claim")
 
@@ -326,7 +327,7 @@ async def set_reserve(claim_id: str, body: ReserveRequest) -> ReserveResponse:
 @router.post("/{claim_id}/payment", response_model=PaymentResponse, status_code=201)
 async def record_payment(claim_id: str, body: PaymentRequest) -> PaymentResponse:
     """Record a payment against a claim."""
-    record = _get_claim(claim_id)
+    record = await _get_claim(claim_id)
     if record["status"] == ClaimStatus.CLOSED:
         raise HTTPException(status_code=409, detail="Cannot record payments on a closed claim")
 
@@ -363,7 +364,7 @@ async def record_payment(claim_id: str, body: PaymentRequest) -> PaymentResponse
 @router.post("/{claim_id}/close", response_model=CloseResponse)
 async def close_claim(claim_id: str, body: CloseRequest) -> CloseResponse:
     """Close a claim."""
-    record = _get_claim(claim_id)
+    record = await _get_claim(claim_id)
     if record["status"] == ClaimStatus.CLOSED:
         raise HTTPException(status_code=409, detail="Claim is already closed")
 
@@ -383,7 +384,7 @@ async def close_claim(claim_id: str, body: CloseRequest) -> CloseResponse:
 @router.post("/{claim_id}/reopen", response_model=ReopenResponse)
 async def reopen_claim(claim_id: str, body: ReopenRequest) -> ReopenResponse:
     """Reopen a previously closed claim."""
-    record = _get_claim(claim_id)
+    record = await _get_claim(claim_id)
     if record["status"] != ClaimStatus.CLOSED:
         raise HTTPException(status_code=409, detail="Only closed claims can be reopened")
 

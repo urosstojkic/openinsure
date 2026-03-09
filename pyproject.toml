@@ -47,7 +47,7 @@ target-version = "py312"
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W", "UP", "S", "B", "A", "C4", "DTZ", "T20", "ICN", "PIE", "PT", "RSE", "RET", "SLF", "SIM", "TID", "TCH", "ARG", "ERA", "PGH", "PLC", "PLE", "PLW", "TRY", "FLY", "PERF", "RUF"]
 
-ignore = ["RUF002", "RUF003", "TRY003", "B008", "ERA001", "S104", "DTZ011", "N802", "SIM102", "TRY300", "PERF401"]
+ignore = ["RUF002", "RUF003", "TRY003", "B008", "ERA001", "S104", "DTZ011", "N802", "SIM102", "TRY300", "PERF401", "PLC0415"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["S101", "B017", "PT011", "ARG002"]

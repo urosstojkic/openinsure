@@ -14,12 +14,14 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
+from openinsure.infrastructure.repositories.billing import InMemoryBillingRepository
+
 router = APIRouter()
 
 # ---------------------------------------------------------------------------
-# In-memory store
+# Repository (in-memory for local dev; swap for SqlRepository in prod)
 # ---------------------------------------------------------------------------
-_billing_accounts: dict[str, dict[str, Any]] = {}
+_repo = InMemoryBillingRepository()
 
 
 # ---------------------------------------------------------------------------
@@ -151,8 +153,8 @@ class InvoiceList(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-def _get_account(account_id: str) -> dict[str, Any]:
-    account = _billing_accounts.get(account_id)
+async def _get_account(account_id: str) -> dict[str, Any]:
+    account = await _repo.get_by_id(account_id)
     if account is None:
         raise HTTPException(status_code=404, detail=f"Billing account {account_id} not found")
     return account
@@ -189,20 +191,20 @@ async def create_billing_account(body: BillingAccountCreate) -> BillingAccountRe
         "created_at": now,
         "updated_at": now,
     }
-    _billing_accounts[aid] = record
+    await _repo.create(record)
     return BillingAccountResponse(**record)
 
 
 @router.get("/accounts/{account_id}", response_model=BillingAccountResponse)
 async def get_billing_account(account_id: str) -> BillingAccountResponse:
     """Retrieve a billing account by ID."""
-    return BillingAccountResponse(**_get_account(account_id))
+    return BillingAccountResponse(**await _get_account(account_id))
 
 
 @router.post("/accounts/{account_id}/payment", response_model=PaymentResponse, status_code=201)
 async def record_payment(account_id: str, body: PaymentRequest) -> PaymentResponse:
     """Record a payment against a billing account."""
-    record = _get_account(account_id)
+    record = await _get_account(account_id)
     if record["status"] == BillingAccountStatus.CANCELLED:
         raise HTTPException(status_code=409, detail="Cannot record payment on a cancelled account")
     if record["status"] == BillingAccountStatus.PAID_IN_FULL:
@@ -245,7 +247,7 @@ async def list_invoices(
     limit: int = Query(20, ge=1, le=100),
 ) -> InvoiceList:
     """List invoices for a billing account."""
-    record = _get_account(account_id)
+    record = await _get_account(account_id)
     invoices = record["invoices"]
 
     if status is not None:
@@ -265,7 +267,7 @@ async def list_invoices(
 @router.post("/accounts/{account_id}/invoices", response_model=InvoiceResponse, status_code=201)
 async def generate_invoice(account_id: str, body: InvoiceCreate) -> InvoiceResponse:
     """Generate an invoice on a billing account."""
-    record = _get_account(account_id)
+    record = await _get_account(account_id)
     if record["status"] == BillingAccountStatus.CANCELLED:
         raise HTTPException(status_code=409, detail="Cannot generate invoices on a cancelled account")
 

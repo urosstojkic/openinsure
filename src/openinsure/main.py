@@ -25,10 +25,15 @@ def create_app() -> FastAPI:
         openapi_url="/openapi.json",
     )
 
-    # CORS middleware
+    # CORS middleware — allow the dashboard (port 3000) and any local origin
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],  # Configure per environment in production
+        allow_origins=[
+            "http://localhost:3000",
+            "http://127.0.0.1:3000",
+            "http://localhost:8000",
+            "*",  # Fallback for other dev tools; restrict in production
+        ],
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
@@ -40,6 +45,13 @@ def create_app() -> FastAPI:
     @app.on_event("startup")
     async def startup() -> None:
         logger.info("openinsure.startup", version=settings.app_version)
+
+        # Seed sample data in debug / local-dev mode
+        if settings.debug:
+            from openinsure.infrastructure.seed_data import seed_sample_data
+
+            await seed_sample_data()
+            logger.info("openinsure.seed_data", status="loaded")
 
     @app.on_event("shutdown")
     async def shutdown() -> None:
