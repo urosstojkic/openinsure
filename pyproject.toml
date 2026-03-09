@@ -55,6 +55,7 @@ ignore = ["RUF002", "RUF003", "TRY003", "B008", "ERA001", "S104", "DTZ011", "N80
 "src/openinsure/agents/*" = ["ARG002", "ARG004"]
 "src/openinsure/infrastructure/*" = ["ARG002", "ARG004"]
 "src/openinsure/services/*" = ["ARG002", "ARG004"]
+"src/scripts/*" = ["E501", "S110", "T201"]
 
 [tool.mypy]
 python_version = "3.12"

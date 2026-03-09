@@ -6,6 +6,15 @@ import type {
   AgentDecision,
   ComplianceSummary,
   Product,
+  UnderwriterQueueItem,
+  ClaimsQueueItem,
+  DecisionAuditItem,
+  OverrideLogEntry,
+  BiasChartData,
+  ExecutiveDashboardData,
+  BrokerSubmission,
+  BrokerPolicy,
+  BrokerClaim,
 } from '../types';
 
 // ── Dashboard Stats ──
@@ -229,4 +238,399 @@ export const mockProducts: Product[] = [
   { id: 'prod3', name: "Directors & Officers Liability", lob: 'dnol', description: 'D&O coverage protecting leadership from personal liability', min_premium: 25_000, max_coverage: 50_000_000, available: true },
   { id: 'prod4', name: 'Employment Practices Liability', lob: 'epli', description: 'EPLI coverage for wrongful termination, discrimination, and harassment claims', min_premium: 8_000, max_coverage: 10_000_000, available: true },
   { id: 'prod5', name: 'General Liability', lob: 'general_liability', description: 'Commercial general liability for bodily injury and property damage', min_premium: 5_000, max_coverage: 25_000_000, available: true },
+];
+
+// ── Underwriter Workbench Queue ──
+export const mockUnderwriterQueue: UnderwriterQueueItem[] = [
+  {
+    id: 'SUB-2025-0248', applicant_name: 'Robert Chen', company_name: 'CloudNine Security', lob: 'cyber',
+    status: 'underwriting', risk_score: 62, confidence: 0.78, agent_recommendation: 'Quote — needs review',
+    priority: 'high', due_date: '2025-01-17T17:00:00Z', received_date: '2025-01-15T12:00:00Z',
+    annual_revenue: 50_000_000, employee_count: 350, industry: 'Cybersecurity', requested_coverage: 10_000_000,
+    documents: [
+      { id: 'd3', name: 'Application.pdf', type: 'application/pdf', size: 312_000, uploaded_at: '2025-01-15T12:00:00Z', url: '#' },
+      { id: 'd3b', name: 'Security_Audit_2024.pdf', type: 'application/pdf', size: 189_000, uploaded_at: '2025-01-15T12:00:00Z', url: '#' },
+    ],
+    risk_factors: [
+      { factor: 'Security Rating', impact: 'positive', score: 82, description: 'Above-average security posture for industry' },
+      { factor: 'Revenue Exposure', impact: 'negative', score: 65, description: 'High revenue creates larger target surface' },
+      { factor: 'Industry Sector', impact: 'positive', score: 90, description: 'Cybersecurity firms demonstrate strong controls' },
+      { factor: 'Employee Count', impact: 'neutral', score: 50, description: 'Moderate workforce — standard training requirements' },
+      { factor: 'Third-Party Risk', impact: 'neutral', score: 71, description: 'Acceptable vendor management practices' },
+    ],
+    comparable_accounts: [
+      { company: 'SecureNet Solutions', industry: 'Cybersecurity', premium: 135_000, limit: 10_000_000, loss_ratio: 0.28 },
+      { company: 'CyberShield Inc', industry: 'Cybersecurity', premium: 118_000, limit: 10_000_000, loss_ratio: 0.35 },
+      { company: 'DefensePoint Corp', industry: 'InfoSec', premium: 142_000, limit: 15_000_000, loss_ratio: 0.22 },
+    ],
+    recommended_terms: { limit: 10_000_000, deductible: 100_000, premium: 128_000, conditions: ['Mandatory MFA on all systems', '24hr incident reporting requirement', 'Annual penetration testing'] },
+    reasoning_chain: [
+      'Application data extracted and validated — all fields complete',
+      'Cybersecurity sector identified — favorable industry classification',
+      'Security rating 82/100 — above-average posture',
+      'Revenue $50M with 350 employees — mid-market risk profile',
+      '$10M coverage request within standard parameters',
+      'Comparable accounts show 22-35% loss ratios for similar firms',
+      'Recommended premium $128,000 based on actuarial model and comparables',
+      'Confidence 78% — recommend human review due to high coverage amount',
+    ],
+    decision_history: [
+      { id: 'dh2', timestamp: '2025-01-15T12:00:00Z', actor: 'System', action: 'Submission received', details: 'Cyber application from CloudNine Security', is_agent: false },
+      { id: 'dh3', timestamp: '2025-01-15T12:05:00Z', actor: 'triage_agent', action: 'Triage completed', details: 'Appetite match confirmed, risk score 62', is_agent: true },
+      { id: 'dh3b', timestamp: '2025-01-15T12:30:00Z', actor: 'underwriting_agent', action: 'Analysis complete', details: 'Quote recommendation generated — $128K premium', is_agent: true },
+    ],
+    cyber_risk_data: { security_rating: 82, open_vulnerabilities: 3, last_breach: null, mfa_enabled: true, encryption_at_rest: true, incident_response_plan: true, employee_training: true, third_party_risk_score: 71 },
+  },
+  {
+    id: 'SUB-2025-0245', applicant_name: 'Emily Davis', company_name: 'TechStart Inc', lob: 'professional_liability',
+    status: 'underwriting', risk_score: 45, confidence: 0.87, agent_recommendation: 'Approve quote',
+    priority: 'medium', due_date: '2025-01-18T17:00:00Z', received_date: '2025-01-14T09:15:00Z',
+    annual_revenue: 8_000_000, employee_count: 55, industry: 'Software', requested_coverage: 2_000_000,
+    documents: [
+      { id: 'd4', name: 'Application.pdf', type: 'application/pdf', size: 198_000, uploaded_at: '2025-01-14T09:15:00Z', url: '#' },
+      { id: 'd5', name: 'Loss_History.pdf', type: 'application/pdf', size: 56_000, uploaded_at: '2025-01-14T09:15:00Z', url: '#' },
+    ],
+    risk_factors: [
+      { factor: 'Loss History', impact: 'positive', score: 95, description: 'No claims in 5 years — excellent track record' },
+      { factor: 'Industry Sector', impact: 'positive', score: 78, description: 'Software industry within standard appetite' },
+      { factor: 'Revenue', impact: 'positive', score: 72, description: '$8M revenue appropriate for requested coverage' },
+      { factor: 'Growth Rate', impact: 'neutral', score: 60, description: 'Moderate growth — no unusual risk concentration' },
+    ],
+    comparable_accounts: [
+      { company: 'CodeBridge Solutions', industry: 'Software', premium: 42_000, limit: 2_000_000, loss_ratio: 0.18 },
+      { company: 'AppLayer Inc', industry: 'Software', premium: 48_000, limit: 2_000_000, loss_ratio: 0.25 },
+    ],
+    recommended_terms: { limit: 2_000_000, deductible: 25_000, premium: 45_000, conditions: ['Standard E&O exclusions apply', 'Client contract review clause'] },
+    reasoning_chain: [
+      'Clean loss history — no claims in 5 years',
+      'Software industry — within standard appetite',
+      'Revenue $8M, 55 employees — small tech firm profile',
+      'Professional liability coverage at $2M — standard request',
+      'Premium recommendation $45,000 based on rate model',
+      'High confidence — straightforward risk profile',
+    ],
+    decision_history: [
+      { id: 'dh4', timestamp: '2025-01-14T09:15:00Z', actor: 'System', action: 'Submission received', details: 'Professional liability application', is_agent: false },
+      { id: 'dh5', timestamp: '2025-01-14T09:20:00Z', actor: 'triage_agent', action: 'Triage completed', details: 'Appetite match, risk score 45', is_agent: true },
+      { id: 'dh6', timestamp: '2025-01-14T10:30:00Z', actor: 'underwriting_agent', action: 'Quote generated', details: 'Premium $45,000, confidence 87%', is_agent: true },
+      { id: 'dh7', timestamp: '2025-01-14T11:00:00Z', actor: 'Sarah Chen', action: 'Assigned for review', details: 'Human review of AI-generated quote', is_agent: false },
+    ],
+  },
+  {
+    id: 'SUB-2025-0228', applicant_name: 'Anna Kowalski', company_name: 'Metro Construction LLC', lob: 'general_liability',
+    status: 'referred', risk_score: 72, confidence: 0.45, agent_recommendation: 'Refer — manual review required',
+    priority: 'urgent', due_date: '2025-01-16T17:00:00Z', received_date: '2025-01-10T15:45:00Z',
+    annual_revenue: 45_000_000, employee_count: 320, industry: 'Construction', requested_coverage: 10_000_000,
+    documents: [
+      { id: 'd10', name: 'Application.pdf', type: 'application/pdf', size: 287_000, uploaded_at: '2025-01-10T15:45:00Z', url: '#' },
+      { id: 'd11', name: 'Safety_Record.pdf', type: 'application/pdf', size: 145_000, uploaded_at: '2025-01-10T15:45:00Z', url: '#' },
+      { id: 'd12', name: 'Project_List_2024.xlsx', type: 'application/xlsx', size: 92_000, uploaded_at: '2025-01-10T15:45:00Z', url: '#' },
+    ],
+    risk_factors: [
+      { factor: 'Industry Sector', impact: 'negative', score: 35, description: 'Construction — elevated bodily injury and property damage risk' },
+      { factor: 'Employee Count', impact: 'negative', score: 40, description: '320 employees with field exposure' },
+      { factor: 'Coverage Amount', impact: 'negative', score: 30, description: '$10M GL limit — high for construction sector' },
+      { factor: 'Safety Record', impact: 'positive', score: 75, description: 'Strong OSHA compliance record' },
+    ],
+    comparable_accounts: [
+      { company: 'BuildRight Corp', industry: 'Construction', premium: 185_000, limit: 10_000_000, loss_ratio: 0.52 },
+      { company: 'Premier Builders', industry: 'Construction', premium: 210_000, limit: 10_000_000, loss_ratio: 0.48 },
+    ],
+    recommended_terms: { limit: 10_000_000, deductible: 100_000, premium: 195_000, conditions: ['Subcontractor insurance requirements', 'Monthly safety reporting', 'Excess coverage recommended'] },
+    reasoning_chain: [
+      'Construction industry — requires specialist underwriting review',
+      'Elevated risk profile — 320 employees in field operations',
+      'Revenue $45M — large-scale commercial projects',
+      'Insufficient data for full automated risk scoring',
+      'Recommend manual underwriting review before proceeding',
+    ],
+    decision_history: [
+      { id: 'dh15', timestamp: '2025-01-10T15:45:00Z', actor: 'System', action: 'Submission received', details: 'GL application', is_agent: false },
+      { id: 'dh16', timestamp: '2025-01-10T16:00:00Z', actor: 'underwriting_agent', action: 'Referred', details: 'Construction risk requires senior review', is_agent: true },
+    ],
+  },
+  {
+    id: 'SUB-2025-0252', applicant_name: 'James Morrison', company_name: 'FinEdge Capital', lob: 'dnol',
+    status: 'underwriting', risk_score: 58, confidence: 0.71, agent_recommendation: 'Quote with conditions',
+    priority: 'high', due_date: '2025-01-19T17:00:00Z', received_date: '2025-01-15T16:00:00Z',
+    annual_revenue: 120_000_000, employee_count: 85, industry: 'Financial Services', requested_coverage: 25_000_000,
+    documents: [
+      { id: 'd20', name: 'Application.pdf', type: 'application/pdf', size: 340_000, uploaded_at: '2025-01-15T16:00:00Z', url: '#' },
+      { id: 'd21', name: 'Annual_Report_2024.pdf', type: 'application/pdf', size: 520_000, uploaded_at: '2025-01-15T16:00:00Z', url: '#' },
+    ],
+    risk_factors: [
+      { factor: 'Revenue Exposure', impact: 'negative', score: 55, description: '$120M revenue — significant D&O exposure' },
+      { factor: 'Industry Sector', impact: 'neutral', score: 50, description: 'Financial services — standard regulatory environment' },
+      { factor: 'Board Composition', impact: 'positive', score: 78, description: 'Experienced board with strong governance' },
+      { factor: 'Litigation History', impact: 'positive', score: 82, description: 'No D&O claims in company history' },
+    ],
+    comparable_accounts: [
+      { company: 'PeakView Advisors', industry: 'Financial Services', premium: 280_000, limit: 25_000_000, loss_ratio: 0.15 },
+      { company: 'Granite Capital', industry: 'Financial Services', premium: 310_000, limit: 25_000_000, loss_ratio: 0.20 },
+    ],
+    recommended_terms: { limit: 25_000_000, deductible: 500_000, premium: 295_000, conditions: ['SEC compliance warranty', 'Prior acts exclusion date: 2020-01-01', 'Regulatory proceedings sublimit $5M'] },
+    reasoning_chain: [
+      'Financial services D&O — requires enhanced due diligence',
+      'Board composition strong — experienced independent directors',
+      'No prior D&O claims — favorable loss history',
+      '$25M limit within underwriting authority but near threshold',
+      'Recommend human review due to coverage amount proximity to authority limit',
+    ],
+    decision_history: [
+      { id: 'dh20', timestamp: '2025-01-15T16:00:00Z', actor: 'System', action: 'Submission received', details: 'D&O application from FinEdge Capital', is_agent: false },
+      { id: 'dh21', timestamp: '2025-01-15T16:10:00Z', actor: 'triage_agent', action: 'Triage completed', details: 'Appetite match, priority high', is_agent: true },
+      { id: 'dh22', timestamp: '2025-01-15T17:00:00Z', actor: 'underwriting_agent', action: 'Analysis complete', details: 'Quote with conditions — $295K premium', is_agent: true },
+    ],
+  },
+  {
+    id: 'SUB-2025-0249', applicant_name: 'Jane Williams', company_name: 'Acme Corp', lob: 'cyber',
+    status: 'received', risk_score: 0, confidence: 0, agent_recommendation: 'Pending triage',
+    priority: 'medium', due_date: '2025-01-20T17:00:00Z', received_date: '2025-01-15T14:30:00Z',
+    annual_revenue: 25_000_000, employee_count: 200, industry: 'Technology', requested_coverage: 5_000_000,
+    documents: [
+      { id: 'd1', name: 'Application.pdf', type: 'application/pdf', size: 245_000, uploaded_at: '2025-01-15T14:30:00Z', url: '#' },
+      { id: 'd2', name: 'Financials_2024.xlsx', type: 'application/xlsx', size: 128_000, uploaded_at: '2025-01-15T14:30:00Z', url: '#' },
+    ],
+    risk_factors: [],
+    comparable_accounts: [],
+    recommended_terms: { limit: 0, deductible: 0, premium: 0, conditions: [] },
+    reasoning_chain: ['Submission received — awaiting triage'],
+    decision_history: [
+      { id: 'dh1', timestamp: '2025-01-15T14:30:00Z', actor: 'System', action: 'Submission received', details: 'Cyber liability application from Acme Corp', is_agent: false },
+    ],
+  },
+];
+
+// ── Claims Workbench Queue ──
+export const mockClaimsQueue: ClaimsQueueItem[] = [
+  {
+    id: 'clm2', claim_number: 'CLM-2025-0038', policy_id: 'pol2', policy_number: 'POL-2025-1830',
+    insured_name: 'DataFlow Systems', status: 'reserved', severity: 'critical', loss_date: '2025-01-05',
+    reserve: 425_000, days_open: 10, fraud_score: 0.08, description: 'Ransomware attack — data exfiltration and business interruption', lob: 'cyber',
+    coverage_verification: { status: 'verified', policy_active: true, within_coverage: true, exclusions_checked: ['War exclusion', 'Nation-state exclusion', 'Intentional acts'], notes: 'All coverage requirements met. Policy active, incident within coverage period.' },
+    reserve_recommendation: { recommended_indemnity: 350_000, recommended_expense: 75_000, confidence: 0.82, basis: 'Based on comparable ransomware claims for mid-market data firms. Includes estimated forensics, notification, and business interruption costs.' },
+    comparable_claims: [
+      { claim_number: 'CLM-2024-0089', type: 'Ransomware', settled_amount: 380_000, duration_days: 45 },
+      { claim_number: 'CLM-2024-0102', type: 'Data Breach', settled_amount: 520_000, duration_days: 62 },
+      { claim_number: 'CLM-2023-0245', type: 'Ransomware', settled_amount: 290_000, duration_days: 38 },
+    ],
+    fraud_indicators: [
+      { indicator: 'Reporting Timeline', severity: 'low', description: 'Reported within 24 hours — consistent with genuine incident' },
+      { indicator: 'Third-Party Validation', severity: 'low', description: 'CrowdStrike forensics report corroborates claims' },
+    ],
+    timeline: [
+      { timestamp: '2025-01-05T03:00:00Z', event: 'Incident Occurred', actor: 'System', details: 'Ransomware encryption detected on primary servers', is_agent: false },
+      { timestamp: '2025-01-06T09:00:00Z', event: 'FNOL Filed', actor: 'DataFlow Systems', details: 'First notice of loss submitted via portal', is_agent: false },
+      { timestamp: '2025-01-06T09:15:00Z', event: 'Claim Created', actor: 'claims_agent', details: 'Automated claim creation and initial assessment', is_agent: true },
+      { timestamp: '2025-01-06T10:00:00Z', event: 'Coverage Verified', actor: 'claims_agent', details: 'Policy active, coverage confirmed', is_agent: true },
+      { timestamp: '2025-01-06T14:00:00Z', event: 'Assigned', actor: 'System', details: 'Assigned to Mike Johnson — senior cyber adjuster', is_agent: false },
+      { timestamp: '2025-01-08T11:00:00Z', event: 'Reserve Set', actor: 'Mike Johnson', details: 'Initial reserve $250,000 based on preliminary assessment', is_agent: false },
+      { timestamp: '2025-01-10T15:00:00Z', event: 'Reserve Increased', actor: 'Mike Johnson', details: 'Reserve increased to $425,000 after forensics report received', is_agent: false },
+      { timestamp: '2025-01-12T09:00:00Z', event: 'Payment Authorized', actor: 'Mike Johnson', details: '$75,000 emergency payment for incident response costs', is_agent: false },
+    ],
+    claim_documents: [
+      { id: 'cd1', name: 'FNOL_Report.pdf', type: 'application/pdf', uploaded_at: '2025-01-06T09:00:00Z', category: 'fnol' },
+      { id: 'cd2', name: 'CrowdStrike_Forensics.pdf', type: 'application/pdf', uploaded_at: '2025-01-08T14:00:00Z', category: 'adjuster_notes' },
+      { id: 'cd3', name: 'IR_Vendor_Invoice.pdf', type: 'application/pdf', uploaded_at: '2025-01-10T10:00:00Z', category: 'invoice' },
+      { id: 'cd4', name: 'Adjuster_Notes_Jan10.pdf', type: 'application/pdf', uploaded_at: '2025-01-10T16:00:00Z', category: 'adjuster_notes' },
+    ],
+    financials: { indemnity_reserve: 350_000, expense_reserve: 75_000, indemnity_paid: 0, expense_paid: 75_000, total_incurred: 500_000, recovery: 0 },
+  },
+  {
+    id: 'clm1', claim_number: 'CLM-2025-0042', policy_id: 'pol3', policy_number: 'POL-2024-1650',
+    insured_name: 'Meridian Healthcare', status: 'investigating', severity: 'high', loss_date: '2025-01-10',
+    reserve: 250_000, days_open: 5, fraud_score: 0.12, description: 'Alleged medical malpractice — patient injury during procedure', lob: 'professional_liability',
+    coverage_verification: { status: 'verified', policy_active: true, within_coverage: true, exclusions_checked: ['Criminal acts', 'Intentional misconduct', 'Punitive damages'], notes: 'Professional liability policy covers alleged malpractice. Claims-made trigger verified.' },
+    reserve_recommendation: { recommended_indemnity: 200_000, recommended_expense: 50_000, confidence: 0.72, basis: 'Medical malpractice claims in this jurisdiction average $180K-$350K for similar procedures.' },
+    comparable_claims: [
+      { claim_number: 'CLM-2024-0156', type: 'Medical Malpractice', settled_amount: 275_000, duration_days: 180 },
+      { claim_number: 'CLM-2023-0312', type: 'Medical Malpractice', settled_amount: 195_000, duration_days: 120 },
+    ],
+    fraud_indicators: [
+      { indicator: 'Claim Pattern', severity: 'low', description: 'No unusual claim patterns for this insured' },
+      { indicator: 'Documentation', severity: 'medium', description: 'Medical records pending — unable to fully verify at this stage' },
+    ],
+    timeline: [
+      { timestamp: '2025-01-10T14:00:00Z', event: 'Incident Occurred', actor: 'System', details: 'Patient injury during surgical procedure', is_agent: false },
+      { timestamp: '2025-01-12T10:00:00Z', event: 'FNOL Filed', actor: 'Meridian Healthcare', details: 'First notice of loss filed', is_agent: false },
+      { timestamp: '2025-01-12T10:30:00Z', event: 'Claim Created', actor: 'claims_agent', details: 'Claim assessed — severity high, escalation recommended', is_agent: true },
+      { timestamp: '2025-01-12T14:00:00Z', event: 'Assigned', actor: 'System', details: 'Assigned to Mike Johnson', is_agent: false },
+      { timestamp: '2025-01-13T09:00:00Z', event: 'Investigation Started', actor: 'Mike Johnson', details: 'Medical records requested from hospital', is_agent: false },
+    ],
+    claim_documents: [
+      { id: 'cd5', name: 'FNOL_Malpractice.pdf', type: 'application/pdf', uploaded_at: '2025-01-12T10:00:00Z', category: 'fnol' },
+      { id: 'cd6', name: 'Initial_Assessment.pdf', type: 'application/pdf', uploaded_at: '2025-01-12T10:30:00Z', category: 'adjuster_notes' },
+    ],
+    financials: { indemnity_reserve: 200_000, expense_reserve: 50_000, indemnity_paid: 0, expense_paid: 0, total_incurred: 250_000, recovery: 0 },
+  },
+  {
+    id: 'clm3', claim_number: 'CLM-2025-0035', policy_id: 'pol4', policy_number: 'POL-2024-1580',
+    insured_name: 'Summit Financial Group', status: 'open', severity: 'medium', loss_date: '2025-01-02',
+    reserve: 125_000, days_open: 13, fraud_score: 0.05, description: 'Securities class action — alleged misrepresentation in Q3 earnings', lob: 'dnol',
+    coverage_verification: { status: 'pending', policy_active: true, within_coverage: true, exclusions_checked: ['Prior knowledge', 'Fraud exclusion'], notes: 'Coverage likely applies but pending full legal review of allegations.' },
+    reserve_recommendation: { recommended_indemnity: 100_000, recommended_expense: 25_000, confidence: 0.38, basis: 'Insufficient data for full automated assessment — securities class actions highly variable.' },
+    comparable_claims: [
+      { claim_number: 'CLM-2024-0078', type: 'Securities Class Action', settled_amount: 850_000, duration_days: 365 },
+      { claim_number: 'CLM-2023-0189', type: 'D&O Claim', settled_amount: 220_000, duration_days: 210 },
+    ],
+    fraud_indicators: [
+      { indicator: 'Claim Timing', severity: 'low', description: 'Claim filed shortly after earnings restatement — typical pattern' },
+    ],
+    timeline: [
+      { timestamp: '2025-01-02T00:00:00Z', event: 'Loss Date', actor: 'System', details: 'Q3 earnings restatement announced', is_agent: false },
+      { timestamp: '2025-01-03T11:00:00Z', event: 'FNOL Filed', actor: 'Summit Financial', details: 'Class action lawsuit served', is_agent: false },
+      { timestamp: '2025-01-03T11:30:00Z', event: 'Claim Created', actor: 'claims_agent', details: 'Automated assessment — low confidence, human review required', is_agent: true },
+      { timestamp: '2025-01-04T09:00:00Z', event: 'Assigned', actor: 'System', details: 'Assigned to Lisa Park — D&O specialist', is_agent: false },
+    ],
+    claim_documents: [
+      { id: 'cd7', name: 'Class_Action_Complaint.pdf', type: 'application/pdf', uploaded_at: '2025-01-03T11:00:00Z', category: 'legal' },
+      { id: 'cd8', name: 'Initial_Assessment.pdf', type: 'application/pdf', uploaded_at: '2025-01-03T11:30:00Z', category: 'adjuster_notes' },
+    ],
+    financials: { indemnity_reserve: 100_000, expense_reserve: 25_000, indemnity_paid: 0, expense_paid: 0, total_incurred: 125_000, recovery: 0 },
+  },
+  {
+    id: 'clm6', claim_number: 'CLM-2025-0045', policy_id: 'pol1', policy_number: 'POL-2025-1847',
+    insured_name: 'GreenTech Solutions', status: 'open', severity: 'low', loss_date: '2025-01-14',
+    reserve: 35_000, days_open: 1, fraud_score: 0.03, description: 'Wrongful termination claim by former employee', lob: 'epli',
+    coverage_verification: { status: 'verified', policy_active: true, within_coverage: true, exclusions_checked: ['Intentional violation of law', 'Contractual liability'], notes: 'EPLI policy covers wrongful termination allegations.' },
+    reserve_recommendation: { recommended_indemnity: 25_000, recommended_expense: 10_000, confidence: 0.88, basis: 'Single-plaintiff EPLI claims in this jurisdiction typically settle $20K-$50K.' },
+    comparable_claims: [
+      { claim_number: 'CLM-2024-0201', type: 'Wrongful Termination', settled_amount: 32_000, duration_days: 90 },
+      { claim_number: 'CLM-2024-0178', type: 'Wrongful Termination', settled_amount: 28_000, duration_days: 75 },
+    ],
+    fraud_indicators: [],
+    timeline: [
+      { timestamp: '2025-01-14T09:00:00Z', event: 'FNOL Filed', actor: 'GreenTech Solutions', details: 'Former employee filed wrongful termination complaint', is_agent: false },
+      { timestamp: '2025-01-14T09:15:00Z', event: 'Claim Created', actor: 'claims_agent', details: 'Standard EPLI claim — low severity', is_agent: true },
+      { timestamp: '2025-01-14T10:00:00Z', event: 'Assigned', actor: 'System', details: 'Assigned to Lisa Park', is_agent: false },
+    ],
+    claim_documents: [
+      { id: 'cd9', name: 'FNOL_Termination.pdf', type: 'application/pdf', uploaded_at: '2025-01-14T09:00:00Z', category: 'fnol' },
+    ],
+    financials: { indemnity_reserve: 25_000, expense_reserve: 10_000, indemnity_paid: 0, expense_paid: 0, total_incurred: 35_000, recovery: 0 },
+  },
+];
+
+// ── Compliance Workbench — Decision Audit ──
+export const mockDecisionAudit: DecisionAuditItem[] = [
+  { id: 'DA-001', agent: 'Triage Agent', decision_type: 'Triage', confidence: 0.94, input_summary: 'Cyber application from Acme Corp — $25M revenue, 200 employees, Technology sector', output: 'Triaged to underwriting queue — priority medium', reasoning_chain: ['Application complete', 'Cyber LOB identified', 'Revenue within appetite range', 'Technology sector — standard risk'], timestamp: '2025-01-15T14:32:00Z', reviewed: false, flagged: false },
+  { id: 'DA-002', agent: 'Underwriting Agent', decision_type: 'Quote', confidence: 0.87, input_summary: 'Professional liability for TechStart Inc — $8M revenue, 55 employees, Software', output: 'Quote generated — $45,000 premium, $2M limit', reasoning_chain: ['Clean loss history', 'Industry within appetite', 'Revenue appropriate', 'Strong financials'], timestamp: '2025-01-15T13:45:00Z', reviewed: true, flagged: false },
+  { id: 'DA-003', agent: 'Claims Agent', decision_type: 'Claim Assessment', confidence: 0.72, input_summary: 'Medical malpractice claim CLM-2025-0042 — Meridian Healthcare', output: 'Escalated to senior adjuster — complex liability assessment', reasoning_chain: ['Complex liability', 'Initial documents suggest merit', 'Reserve $250K recommended', 'Senior adjuster needed'], timestamp: '2025-01-15T13:55:00Z', reviewed: false, flagged: false },
+  { id: 'DA-004', agent: 'Fraud Detection', decision_type: 'Fraud Screening', confidence: 0.91, input_summary: 'Ransomware claim CLM-2025-0038 — DataFlow Systems', output: 'No fraud detected — proceed with claim', reasoning_chain: ['Third-party forensics corroborate', 'Timeline consistent', 'No fraud indicators', 'Strong claims history'], timestamp: '2025-01-15T12:30:00Z', reviewed: true, flagged: false },
+  { id: 'DA-005', agent: 'Triage Agent', decision_type: 'Decline', confidence: 0.95, input_summary: 'D&O application from CryptoVault Exchange — $200M revenue, Cryptocurrency', output: 'Submission declined — outside appetite', reasoning_chain: ['Cryptocurrency exchange', 'Regulatory uncertainty', 'Coverage disproportionate to operations', 'Outside risk appetite'], timestamp: '2025-01-15T12:58:00Z', reviewed: false, flagged: false },
+  { id: 'DA-006', agent: 'Underwriting Agent', decision_type: 'Risk Assessment', confidence: 0.45, input_summary: 'GL application from Metro Construction — $45M revenue, 320 employees, Construction', output: 'Referred to senior underwriter — insufficient data for automation', reasoning_chain: ['Construction — elevated risk', 'Large workforce with field exposure', 'Insufficient data for automated scoring', 'Manual review recommended'], timestamp: '2025-01-15T10:20:00Z', reviewed: false, flagged: true },
+];
+
+// ── Compliance Workbench — Override Log ──
+export const mockOverrideLog: OverrideLogEntry[] = [
+  { id: 'OV-001', who: 'Sarah Chen', decision_type: 'Quote Terms', original_recommendation: 'Premium $45,000 / Deductible $25,000', override_to: 'Premium $42,000 / Deductible $25,000', reason: 'Adjusted premium down 7% to match competitive market conditions for renewal account', timestamp: '2025-01-15T11:30:00Z' },
+  { id: 'OV-002', who: 'James Wright', decision_type: 'Claim Reserve', original_recommendation: 'Reserve $250,000', override_to: 'Reserve $425,000', reason: 'Forensics report indicates broader impact than initially assessed — increased BI costs', timestamp: '2025-01-14T15:00:00Z' },
+  { id: 'OV-003', who: 'Mike Johnson', decision_type: 'Fraud Screening', original_recommendation: 'Flag for investigation — confidence 65%', override_to: 'Proceed with denial review', reason: 'Late reporting combined with policy exclusion clause — proceeding to coverage review', timestamp: '2025-01-14T11:30:00Z' },
+  { id: 'OV-004', who: 'Sarah Chen', decision_type: 'Triage Decision', original_recommendation: 'Auto-decline — outside appetite', override_to: 'Accept for manual review', reason: 'Client has existing relationship and is transitioning out of excluded sector', timestamp: '2025-01-13T09:45:00Z' },
+  { id: 'OV-005', who: 'James Wright', decision_type: 'Quote Terms', original_recommendation: 'Premium $72,000 / Limit $5M', override_to: 'Premium $68,000 / Limit $5M', reason: 'Multi-policy discount applied — insured also has D&O coverage with us', timestamp: '2025-01-12T14:20:00Z' },
+];
+
+// ── Compliance Workbench — Bias Chart Data ──
+export const mockBiasChartData: BiasChartData = {
+  approval_by_sector: [
+    { sector: 'Technology', rate: 0.78 },
+    { sector: 'Healthcare', rate: 0.72 },
+    { sector: 'Financial Services', rate: 0.75 },
+    { sector: 'Manufacturing', rate: 0.68 },
+    { sector: 'Construction', rate: 0.45 },
+    { sector: 'Retail', rate: 0.71 },
+    { sector: 'Energy', rate: 0.65 },
+  ],
+  premium_by_size: [
+    { size: '<$5M', min: 8_000, q1: 12_000, median: 18_000, q3: 25_000, max: 35_000 },
+    { size: '$5M-$25M', min: 15_000, q1: 28_000, median: 45_000, q3: 72_000, max: 95_000 },
+    { size: '$25M-$100M', min: 35_000, q1: 65_000, median: 95_000, q3: 140_000, max: 210_000 },
+    { size: '$100M-$500M', min: 80_000, q1: 130_000, median: 195_000, q3: 280_000, max: 450_000 },
+    { size: '>$500M', min: 150_000, q1: 250_000, median: 380_000, q3: 520_000, max: 800_000 },
+  ],
+  disparate_impact: [
+    { category: 'Industry Sector', ratio: 0.92, threshold: 0.8 },
+    { category: 'Company Size', ratio: 0.88, threshold: 0.8 },
+    { category: 'Geography', ratio: 0.79, threshold: 0.8 },
+    { category: 'Revenue Band', ratio: 0.85, threshold: 0.8 },
+    { category: 'Employee Count', ratio: 0.91, threshold: 0.8 },
+  ],
+};
+
+// ── Executive Dashboard ──
+export const mockExecutiveData: ExecutiveDashboardData = {
+  kpis: { gwp: 12_450_000, nwp: 10_875_000, loss_ratio: 0.58, combined_ratio: 0.92, growth_rate: 0.18 },
+  premium_trend: [
+    { month: 'Feb 2024', premium: 820_000 },
+    { month: 'Mar 2024', premium: 910_000 },
+    { month: 'Apr 2024', premium: 875_000 },
+    { month: 'May 2024', premium: 980_000 },
+    { month: 'Jun 2024', premium: 1_050_000 },
+    { month: 'Jul 2024', premium: 1_020_000 },
+    { month: 'Aug 2024', premium: 1_100_000 },
+    { month: 'Sep 2024', premium: 1_150_000 },
+    { month: 'Oct 2024', premium: 1_080_000 },
+    { month: 'Nov 2024', premium: 1_200_000 },
+    { month: 'Dec 2024', premium: 1_250_000 },
+    { month: 'Jan 2025', premium: 1_015_000 },
+  ],
+  loss_ratio_by_lob: [
+    { lob: 'Cyber', loss_ratio: 0.52 },
+    { lob: 'Prof Liability', loss_ratio: 0.48 },
+    { lob: 'D&O', loss_ratio: 0.65 },
+    { lob: 'EPLI', loss_ratio: 0.42 },
+    { lob: 'General Liability', loss_ratio: 0.71 },
+  ],
+  exposure_concentrations: [
+    { name: 'Technology', exposure: 4_200_000 },
+    { name: 'Financial Services', exposure: 3_100_000 },
+    { name: 'Healthcare', exposure: 2_800_000 },
+    { name: 'Manufacturing', exposure: 1_500_000 },
+    { name: 'Construction', exposure: 850_000 },
+  ],
+  pipeline: [
+    { stage: 'Received', count: 45 },
+    { stage: 'Triaging', count: 28 },
+    { stage: 'Underwriting', count: 18 },
+    { stage: 'Quoted', count: 12 },
+    { stage: 'Bound', count: 8 },
+  ],
+  agent_impact: { processing_time_reduction: 68, auto_bind_rate: 34, escalation_rate: 8 },
+};
+
+// ── Broker Portal ──
+export const mockBrokerSubmissions: BrokerSubmission[] = [
+  { id: 'SUB-2025-0248', applicant_name: 'CloudNine Security', lob: 'cyber', status: 'underwriting', submitted_date: '2025-01-15', last_update: '2025-01-15T12:30:00Z', status_timeline: [
+    { timestamp: '2025-01-15T12:00:00Z', status: 'Received', description: 'Application received and acknowledged' },
+    { timestamp: '2025-01-15T12:05:00Z', status: 'In Review', description: 'Your submission is being reviewed by our underwriting team' },
+  ]},
+  { id: 'SUB-2025-0245', applicant_name: 'TechStart Inc', lob: 'professional_liability', status: 'quoted', submitted_date: '2025-01-14', last_update: '2025-01-14T10:30:00Z', status_timeline: [
+    { timestamp: '2025-01-14T09:15:00Z', status: 'Received', description: 'Application received and acknowledged' },
+    { timestamp: '2025-01-14T09:20:00Z', status: 'In Review', description: 'Your submission is being reviewed' },
+    { timestamp: '2025-01-14T10:30:00Z', status: 'Quote Ready', description: 'A quote has been prepared for your review' },
+  ]},
+  { id: 'SUB-2025-0240', applicant_name: 'DataFlow Systems', lob: 'cyber', status: 'bound', submitted_date: '2025-01-13', last_update: '2025-01-13T16:00:00Z', status_timeline: [
+    { timestamp: '2025-01-13T11:00:00Z', status: 'Received', description: 'Application received' },
+    { timestamp: '2025-01-13T13:00:00Z', status: 'Quote Ready', description: 'Quote prepared' },
+    { timestamp: '2025-01-13T14:00:00Z', status: 'Quote Approved', description: 'Quote approved by underwriting' },
+    { timestamp: '2025-01-13T16:00:00Z', status: 'Bound', description: 'Policy bound — documents will follow' },
+  ]},
+  { id: 'SUB-2025-0235', applicant_name: 'GreenTech Solutions', lob: 'epli', status: 'bound', submitted_date: '2025-01-12', last_update: '2025-01-12T16:00:00Z', status_timeline: [
+    { timestamp: '2025-01-12T08:30:00Z', status: 'Received', description: 'Application received' },
+    { timestamp: '2025-01-12T12:00:00Z', status: 'Quote Ready', description: 'Quote prepared' },
+    { timestamp: '2025-01-12T16:00:00Z', status: 'Bound', description: 'Policy issued' },
+  ]},
+];
+
+export const mockBrokerPolicies: BrokerPolicy[] = [
+  { id: 'pol2', policy_number: 'POL-2025-1830', insured_name: 'DataFlow Systems', lob: 'cyber', effective_date: '2025-01-08', expiry_date: '2026-01-08', premium: 72_000 },
+  { id: 'pol1', policy_number: 'POL-2025-1847', insured_name: 'GreenTech Solutions', lob: 'epli', effective_date: '2025-01-12', expiry_date: '2026-01-12', premium: 28_000 },
+  { id: 'pol3', policy_number: 'POL-2024-1650', insured_name: 'Meridian Healthcare', lob: 'professional_liability', effective_date: '2024-06-01', expiry_date: '2025-06-01', premium: 95_000 },
+  { id: 'pol4', policy_number: 'POL-2024-1580', insured_name: 'Summit Financial Group', lob: 'dnol', effective_date: '2024-04-15', expiry_date: '2025-04-15', premium: 120_000 },
+];
+
+export const mockBrokerClaims: BrokerClaim[] = [
+  { id: 'clm2', claim_number: 'CLM-2025-0038', policy_number: 'POL-2025-1830', status: 'reserved', loss_date: '2025-01-05' },
+  { id: 'clm1', claim_number: 'CLM-2025-0042', policy_number: 'POL-2024-1650', status: 'investigating', loss_date: '2025-01-10' },
+  { id: 'clm6', claim_number: 'CLM-2025-0045', policy_number: 'POL-2025-1847', status: 'open', loss_date: '2025-01-14' },
 ];

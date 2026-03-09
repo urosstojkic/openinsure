@@ -7,6 +7,11 @@ import {
   AlertTriangle,
   Brain,
   ShieldCheck,
+  Briefcase,
+  Scale,
+  ShieldAlert,
+  BarChart3,
+  ExternalLink,
 } from 'lucide-react';
 
 const navItems = [
@@ -16,6 +21,17 @@ const navItems = [
   { to: '/claims',      label: 'Claims',          icon: AlertTriangle },
   { to: '/decisions',   label: 'Agent Decisions',  icon: Brain },
   { to: '/compliance',  label: 'Compliance',      icon: ShieldCheck },
+];
+
+const workbenchItems = [
+  { to: '/workbench/underwriting', label: 'Underwriter',  icon: Briefcase },
+  { to: '/workbench/claims',      label: 'Claims',        icon: Scale },
+  { to: '/workbench/compliance',   label: 'Compliance',   icon: ShieldAlert },
+];
+
+const extraItems = [
+  { to: '/executive',     label: 'Executive',     icon: BarChart3 },
+  { to: '/portal/broker', label: 'Broker Portal', icon: ExternalLink },
 ];
 
 const Layout: React.FC = () => (
@@ -37,6 +53,48 @@ const Layout: React.FC = () => (
             key={to}
             to={to}
             end={to === '/'}
+            className={({ isActive }) =>
+              `flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                isActive
+                  ? 'bg-blue-50 text-blue-700'
+                  : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+              }`
+            }
+          >
+            <Icon size={18} />
+            {label}
+          </NavLink>
+        ))}
+
+        {/* Workbenches section */}
+        <div className="pt-4 pb-1 px-3">
+          <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Workbenches</span>
+        </div>
+        {workbenchItems.map(({ to, label, icon: Icon }) => (
+          <NavLink
+            key={to}
+            to={to}
+            className={({ isActive }) =>
+              `flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                isActive
+                  ? 'bg-blue-50 text-blue-700'
+                  : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+              }`
+            }
+          >
+            <Icon size={18} />
+            {label}
+          </NavLink>
+        ))}
+
+        {/* Extra section */}
+        <div className="pt-4 pb-1 px-3">
+          <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Views</span>
+        </div>
+        {extraItems.map(({ to, label, icon: Icon }) => (
+          <NavLink
+            key={to}
+            to={to}
             className={({ isActive }) =>
               `flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
                 isActive

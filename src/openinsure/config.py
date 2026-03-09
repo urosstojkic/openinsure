@@ -56,6 +56,9 @@ class Settings(BaseSettings):
     api_key: str = ""
     require_auth: bool = False
 
+    # Deployment
+    deployment_type: str = "mga"  # "carrier" or "mga"
+
     # Test/Storage mode
     storage_mode: str = "memory"  # "memory" for local dev, "azure" for real Azure resources
 

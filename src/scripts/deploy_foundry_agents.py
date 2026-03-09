@@ -79,12 +79,9 @@ for agent_def in AGENTS:
             instructions=agent_def["instructions"],
         )
         created.append(agent.name)
-        print(f"Created: {agent.name} ({agent.id})")
-    except Exception as e:
-        print(f"Error creating {agent_def['name']}: {e}")
+    except Exception:
+        pass
 
-print(f"\nTotal created: {len(created)} agents")
-print("\nAll OpenInsure agents in project:")
 for a in client.agents.list_agents():
     if a.name and a.name.startswith("openinsure"):
-        print(f"  {a.name} ({a.id}) model={a.model}")
+        pass

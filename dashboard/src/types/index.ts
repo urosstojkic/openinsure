@@ -229,3 +229,242 @@ export interface Product {
   max_coverage: number;
   available: boolean;
 }
+
+// ── Underwriter Workbench ──
+
+export interface RiskFactor {
+  factor: string;
+  impact: 'positive' | 'negative' | 'neutral';
+  score: number;
+  description: string;
+}
+
+export interface ComparableAccount {
+  company: string;
+  industry: string;
+  premium: number;
+  limit: number;
+  loss_ratio: number;
+}
+
+export interface RecommendedTerms {
+  limit: number;
+  deductible: number;
+  premium: number;
+  conditions: string[];
+}
+
+export interface UnderwriterQueueItem {
+  id: string;
+  applicant_name: string;
+  company_name: string;
+  lob: LOB;
+  status: SubmissionStatus;
+  risk_score: number;
+  confidence: number;
+  agent_recommendation: string;
+  priority: 'low' | 'medium' | 'high' | 'urgent';
+  due_date: string;
+  received_date: string;
+  annual_revenue: number;
+  employee_count: number;
+  industry: string;
+  requested_coverage: number;
+  documents: Document[];
+  risk_factors: RiskFactor[];
+  comparable_accounts: ComparableAccount[];
+  recommended_terms: RecommendedTerms;
+  reasoning_chain: string[];
+  decision_history: DecisionEvent[];
+  cyber_risk_data?: CyberRiskData;
+}
+
+// ── Claims Workbench ──
+
+export interface CoverageVerification {
+  status: 'verified' | 'pending' | 'issue';
+  policy_active: boolean;
+  within_coverage: boolean;
+  exclusions_checked: string[];
+  notes: string;
+}
+
+export interface ReserveRecommendation {
+  recommended_indemnity: number;
+  recommended_expense: number;
+  confidence: number;
+  basis: string;
+}
+
+export interface ComparableClaim {
+  claim_number: string;
+  type: string;
+  settled_amount: number;
+  duration_days: number;
+}
+
+export interface FraudIndicator {
+  indicator: string;
+  severity: 'low' | 'medium' | 'high';
+  description: string;
+}
+
+export interface ClaimTimelineEvent {
+  timestamp: string;
+  event: string;
+  actor: string;
+  details: string;
+  is_agent: boolean;
+}
+
+export interface ClaimDocument {
+  id: string;
+  name: string;
+  type: string;
+  uploaded_at: string;
+  category: 'fnol' | 'adjuster_notes' | 'invoice' | 'correspondence' | 'legal';
+}
+
+export interface ClaimFinancials {
+  indemnity_reserve: number;
+  expense_reserve: number;
+  indemnity_paid: number;
+  expense_paid: number;
+  total_incurred: number;
+  recovery: number;
+}
+
+export interface ClaimsQueueItem {
+  id: string;
+  claim_number: string;
+  policy_id: string;
+  policy_number: string;
+  insured_name: string;
+  status: ClaimStatus;
+  severity: ClaimSeverity;
+  loss_date: string;
+  reserve: number;
+  days_open: number;
+  fraud_score: number;
+  description: string;
+  lob: LOB;
+  coverage_verification: CoverageVerification;
+  reserve_recommendation: ReserveRecommendation;
+  comparable_claims: ComparableClaim[];
+  fraud_indicators: FraudIndicator[];
+  timeline: ClaimTimelineEvent[];
+  claim_documents: ClaimDocument[];
+  financials: ClaimFinancials;
+}
+
+// ── Compliance Workbench ──
+
+export interface DecisionAuditItem {
+  id: string;
+  agent: string;
+  decision_type: string;
+  confidence: number;
+  input_summary: string;
+  output: string;
+  reasoning_chain: string[];
+  timestamp: string;
+  reviewed: boolean;
+  flagged: boolean;
+}
+
+export interface OverrideLogEntry {
+  id: string;
+  who: string;
+  decision_type: string;
+  original_recommendation: string;
+  override_to: string;
+  reason: string;
+  timestamp: string;
+}
+
+export interface BiasChartData {
+  approval_by_sector: { sector: string; rate: number }[];
+  premium_by_size: { size: string; min: number; q1: number; median: number; q3: number; max: number }[];
+  disparate_impact: { category: string; ratio: number; threshold: number }[];
+}
+
+// ── Executive Dashboard ──
+
+export interface ExecutiveKPIs {
+  gwp: number;
+  nwp: number;
+  loss_ratio: number;
+  combined_ratio: number;
+  growth_rate: number;
+}
+
+export interface PremiumTrendPoint {
+  month: string;
+  premium: number;
+}
+
+export interface LossRatioByLOB {
+  lob: string;
+  loss_ratio: number;
+}
+
+export interface ExposureConcentration {
+  name: string;
+  exposure: number;
+}
+
+export interface PipelineStage {
+  stage: string;
+  count: number;
+}
+
+export interface AgentImpactMetrics {
+  processing_time_reduction: number;
+  auto_bind_rate: number;
+  escalation_rate: number;
+}
+
+export interface ExecutiveDashboardData {
+  kpis: ExecutiveKPIs;
+  premium_trend: PremiumTrendPoint[];
+  loss_ratio_by_lob: LossRatioByLOB[];
+  exposure_concentrations: ExposureConcentration[];
+  pipeline: PipelineStage[];
+  agent_impact: AgentImpactMetrics;
+}
+
+// ── Broker Portal ──
+
+export interface BrokerTimelineEvent {
+  timestamp: string;
+  status: string;
+  description: string;
+}
+
+export interface BrokerSubmission {
+  id: string;
+  applicant_name: string;
+  lob: LOB;
+  status: SubmissionStatus;
+  submitted_date: string;
+  last_update: string;
+  status_timeline: BrokerTimelineEvent[];
+}
+
+export interface BrokerPolicy {
+  id: string;
+  policy_number: string;
+  insured_name: string;
+  lob: LOB;
+  effective_date: string;
+  expiry_date: string;
+  premium: number;
+}
+
+export interface BrokerClaim {
+  id: string;
+  claim_number: string;
+  policy_number: string;
+  status: ClaimStatus;
+  loss_date: string;
+}
