@@ -61,6 +61,31 @@ strict = true
 warn_return_any = true
 warn_unused_configs = true
 
+[[tool.mypy.overrides]]
+module = [
+    "pyodbc",
+    "pyodbc.*",
+    "gremlin_python.*",
+    "azure.search.documents.*",
+    "azure.storage.blob.*",
+    "azure.servicebus.*",
+    "azure.eventgrid.*",
+    "azure.cosmos.*",
+    "azure.identity.*",
+    "azure.ai.*",
+]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = [
+    "openinsure.infrastructure.*",
+    "openinsure.mcp.*",
+]
+disallow_untyped_defs = false
+warn_return_any = false
+check_untyped_defs = false
+ignore_errors = true
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]

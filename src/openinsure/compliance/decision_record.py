@@ -21,7 +21,7 @@ class DecisionRecordStore:
 
     async def store(self, record: dict[str, Any]) -> UUID:
         """Store a decision record immutably."""
-        record_id = record.get("decision_id")
+        record_id: UUID | None = record.get("decision_id")
         if record_id is None:
             raise ValueError("Decision record must have a decision_id")
         self._records[record_id] = {

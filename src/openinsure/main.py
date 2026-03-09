@@ -38,11 +38,11 @@ def create_app() -> FastAPI:
     app.include_router(api_router)
 
     @app.on_event("startup")
-    async def startup():
+    async def startup() -> None:
         logger.info("openinsure.startup", version=settings.app_version)
 
     @app.on_event("shutdown")
-    async def shutdown():
+    async def shutdown() -> None:
         logger.info("openinsure.shutdown")
 
     return app

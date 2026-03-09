@@ -378,4 +378,4 @@ class SubmissionAgent(InsuranceAgent):
         completeness = validation.get("completeness_pct", 0) / 100.0
         triage_conf = 0.9 if triage.get("appetite_match") else 0.5
 
-        return round((doc_conf * 0.3 + completeness * 0.4 + triage_conf * 0.3), 4)
+        return float(round((doc_conf * 0.3 + completeness * 0.4 + triage_conf * 0.3), 4))
