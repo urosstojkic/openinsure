@@ -5,15 +5,15 @@ type Variant =
   | 'cyan' | 'indigo';
 
 const classes: Record<Variant, string> = {
-  blue:   'bg-blue-100 text-blue-800',
-  yellow: 'bg-yellow-100 text-yellow-800',
-  orange: 'bg-orange-100 text-orange-800',
-  green:  'bg-green-100 text-green-800',
-  purple: 'bg-purple-100 text-purple-800',
-  red:    'bg-red-100 text-red-800',
-  gray:   'bg-gray-100 text-gray-800',
-  cyan:   'bg-cyan-100 text-cyan-800',
-  indigo: 'bg-indigo-100 text-indigo-800',
+  blue:   'bg-blue-50 text-blue-700 ring-1 ring-blue-600/10',
+  yellow: 'bg-amber-50 text-amber-700 ring-1 ring-amber-600/10',
+  orange: 'bg-orange-50 text-orange-700 ring-1 ring-orange-600/10',
+  green:  'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-600/10',
+  purple: 'bg-purple-50 text-purple-700 ring-1 ring-purple-600/10',
+  red:    'bg-red-50 text-red-700 ring-1 ring-red-600/10',
+  gray:   'bg-slate-50 text-slate-700 ring-1 ring-slate-600/10',
+  cyan:   'bg-cyan-50 text-cyan-700 ring-1 ring-cyan-600/10',
+  indigo: 'bg-indigo-50 text-indigo-700 ring-1 ring-indigo-600/10',
 };
 
 interface Props {
@@ -24,7 +24,7 @@ interface Props {
 
 const StatusBadge: React.FC<Props> = ({ label, variant, className = '' }) => (
   <span
-    className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${classes[variant]} ${className}`}
+    className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-medium ${classes[variant]} ${className}`}
   >
     {label}
   </span>
