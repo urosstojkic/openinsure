@@ -49,6 +49,13 @@ class Settings(BaseSettings):
     foundry_project_endpoint: str = ""
     foundry_model_deployment: str = "gpt-5.2"
 
+    # CORS
+    cors_origins: str = ""
+
+    # Authentication
+    api_key: str = ""
+    require_auth: bool = False
+
     # Server
     host: str = "0.0.0.0"  # nosec B104 — bind-all is intentional for container deployment
     port: int = 8000

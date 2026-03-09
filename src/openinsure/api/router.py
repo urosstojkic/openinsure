@@ -1,7 +1,8 @@
 """Root API router for OpenInsure."""
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
+from openinsure.api.auth import verify_api_key
 from openinsure.api.billing import router as billing_router
 from openinsure.api.claims import router as claims_router
 from openinsure.api.compliance import router as compliance_router
@@ -12,9 +13,14 @@ from openinsure.api.submissions import router as submissions_router
 
 api_router = APIRouter()
 api_router.include_router(health_router, tags=["health"])
-api_router.include_router(submissions_router, prefix="/api/v1/submissions", tags=["submissions"])
-api_router.include_router(policies_router, prefix="/api/v1/policies", tags=["policies"])
-api_router.include_router(claims_router, prefix="/api/v1/claims", tags=["claims"])
-api_router.include_router(products_router, prefix="/api/v1/products", tags=["products"])
-api_router.include_router(billing_router, prefix="/api/v1/billing", tags=["billing"])
-api_router.include_router(compliance_router, prefix="/api/v1/compliance", tags=["compliance"])
+
+# All /api/v1/* endpoints require API key authentication
+api_v1_router = APIRouter(prefix="/api/v1", dependencies=[Depends(verify_api_key)])
+api_v1_router.include_router(submissions_router, prefix="/submissions", tags=["submissions"])
+api_v1_router.include_router(policies_router, prefix="/policies", tags=["policies"])
+api_v1_router.include_router(claims_router, prefix="/claims", tags=["claims"])
+api_v1_router.include_router(products_router, prefix="/products", tags=["products"])
+api_v1_router.include_router(billing_router, prefix="/billing", tags=["billing"])
+api_v1_router.include_router(compliance_router, prefix="/compliance", tags=["compliance"])
+
+api_router.include_router(api_v1_router)

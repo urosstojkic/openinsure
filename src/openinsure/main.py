@@ -25,15 +25,17 @@ def create_app() -> FastAPI:
         openapi_url="/openapi.json",
     )
 
-    # CORS middleware — allow the dashboard (port 3000) and any local origin
+    # CORS middleware — environment-aware origin list (no wildcard)
+    allowed_origins = ["http://localhost:3000", "http://127.0.0.1:3000"]
+    if settings.debug:
+        allowed_origins.append("http://localhost:8000")
+    # In production, the dashboard URL would be set via OPENINSURE_CORS_ORIGINS env var
+    if hasattr(settings, "cors_origins") and settings.cors_origins:
+        allowed_origins.extend(settings.cors_origins.split(","))
+
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=[
-            "http://localhost:3000",
-            "http://127.0.0.1:3000",
-            "http://localhost:8000",
-            "*",  # Fallback for other dev tools; restrict in production
-        ],
+        allow_origins=allowed_origins,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
