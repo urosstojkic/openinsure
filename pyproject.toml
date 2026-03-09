@@ -1,0 +1,67 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "openinsure"
+version = "0.1.0"
+description = "AI-native open-source core insurance platform built on Microsoft Foundry + Azure"
+license = "AGPL-3.0-only"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn>=0.34.0",
+    "pydantic>=2.10.0",
+    "pydantic-settings>=2.7.0",
+    "azure-identity>=1.19.0",
+    "azure-cosmos>=4.9.0",
+    "azure-storage-blob>=12.24.0",
+    "azure-search-documents>=11.6.0",
+    "azure-servicebus>=7.13.0",
+    "azure-eventgrid>=4.20.0",
+    "azure-ai-projects>=1.0.0b11",
+    "pyodbc>=5.2.0",
+    "httpx>=0.28.0",
+    "structlog>=24.4.0",
+    "tenacity>=9.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.24.0",
+    "pytest-cov>=6.0.0",
+    "ruff>=0.8.0",
+    "mypy>=1.13.0",
+    "bandit>=1.8.0",
+    "pre-commit>=4.0.0",
+]
+
+[project.scripts]
+openinsure = "openinsure.main:app"
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP", "S", "B", "A", "C4", "DTZ", "T20", "ICN", "PIE", "PT", "RSE", "RET", "SLF", "SIM", "TID", "TCH", "ARG", "ERA", "PGH", "PLC", "PLE", "PLW", "TRY", "FLY", "PERF", "RUF"]
+
+ignore = ["RUF002", "RUF003", "TRY003", "B008", "ERA001", "S104", "DTZ011", "N802", "SIM102", "TRY300", "PERF401"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101", "B017", "PT011", "ARG002"]
+"src/openinsure/agents/*" = ["ARG002", "ARG004"]
+"src/openinsure/infrastructure/*" = ["ARG002", "ARG004"]
+"src/openinsure/services/*" = ["ARG002", "ARG004"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+addopts = "--strict-markers -ra"

@@ -1,0 +1,49 @@
+name: Feature Request
+description: Propose a new feature for OpenInsure
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for suggesting a feature! Please provide details below.
+  - type: textarea
+    id: description
+    attributes:
+      label: Feature Description
+      description: Clearly describe the feature you'd like to see
+      placeholder: "As an [underwriter/broker/admin], I want to..."
+    validations:
+      required: true
+  - type: dropdown
+    id: module
+    attributes:
+      label: Module
+      description: Which module does this feature relate to?
+      options:
+        - Submission Intake
+        - Underwriting
+        - Policy Administration
+        - Claims Management
+        - Billing & Payments
+        - Compliance
+        - Agent Framework
+        - Knowledge Base
+        - API
+        - Infrastructure
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance Criteria
+      description: How will we know this feature is complete?
+      placeholder: |
+        - [ ] Criterion 1
+        - [ ] Criterion 2
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional Context
+      description: Any additional context, screenshots, or examples

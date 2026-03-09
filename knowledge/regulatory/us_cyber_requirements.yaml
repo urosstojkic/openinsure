@@ -1,0 +1,248 @@
+# US Regulatory Requirements for Cyber Insurance
+# Applicable to product CYBER-SMB-001
+
+regulatory_requirements:
+  version: 1
+  last_updated: "2025-01-01"
+
+  # ----------------------------------------------------------------
+  # State-by-state filing requirements (key states)
+  # ----------------------------------------------------------------
+  state_filings:
+    - state: "New York"
+      abbreviation: "NY"
+      regulator: "New York Department of Financial Services (NYDFS)"
+      rate_regulation_type: "prior_approval"
+      form_filing: "prior_approval"
+      notes: |
+        NY requires prior approval for all cyber liability rates and forms.
+        NYDFS Cybersecurity Regulation (23 NYCRR 500) imposes additional
+        requirements on covered entities. Cyber insurance products must
+        align with DFS guidance on cyber risk management.
+      special_requirements:
+        - "Must comply with NYDFS Circular Letter 2021-03 on cyber insurance risk"
+        - "Rate filings must include actuarial justification with cyber loss data"
+        - "Policy forms must be filed via SERFF"
+      filing_lead_time_days: 60
+
+    - state: "California"
+      abbreviation: "CA"
+      regulator: "California Department of Insurance (CDI)"
+      rate_regulation_type: "prior_approval"
+      form_filing: "prior_approval"
+      notes: |
+        California requires prior approval for rates and forms.
+        California Consumer Privacy Act (CCPA) and California Privacy Rights
+        Act (CPRA) create specific cyber liability exposures that must be
+        addressed in policy language.
+      special_requirements:
+        - "Rate filings must comply with Proposition 103 requirements"
+        - "Forms must address CCPA/CPRA liability exposures"
+        - "Unfair discrimination analysis required in rate filings"
+      filing_lead_time_days: 90
+
+    - state: "Texas"
+      abbreviation: "TX"
+      regulator: "Texas Department of Insurance (TDI)"
+      rate_regulation_type: "file_and_use"
+      form_filing: "file_and_use"
+      notes: |
+        Texas uses a file-and-use system for surplus lines and most
+        commercial lines. Rates and forms can be used upon filing
+        unless disapproved by TDI.
+      special_requirements:
+        - "Must file rates and forms before first use"
+        - "Texas Insurance Data Security Act compliance required"
+      filing_lead_time_days: 30
+
+    - state: "Florida"
+      abbreviation: "FL"
+      regulator: "Florida Office of Insurance Regulation (OIR)"
+      rate_regulation_type: "file_and_use"
+      form_filing: "file_and_use"
+      notes: |
+        Florida uses file-and-use for commercial lines. The Florida
+        Information Protection Act (FIPA) governs data breach notification.
+      special_requirements:
+        - "Rate filings via SERFF"
+        - "Must comply with FIPA breach notification timelines (30 days)"
+      filing_lead_time_days: 30
+
+    - state: "Illinois"
+      abbreviation: "IL"
+      regulator: "Illinois Department of Insurance (IDOI)"
+      rate_regulation_type: "file_and_use"
+      form_filing: "file_and_use"
+      notes: |
+        Illinois uses file-and-use. The Illinois Personal Information
+        Protection Act (PIPA) and Biometric Information Privacy Act (BIPA)
+        create significant cyber liability exposures.
+      special_requirements:
+        - "Policy language should address BIPA exposure"
+        - "Rate filings must be actuarially justified"
+      filing_lead_time_days: 30
+
+    - state: "Pennsylvania"
+      abbreviation: "PA"
+      regulator: "Pennsylvania Insurance Department (PID)"
+      rate_regulation_type: "file_and_use"
+      form_filing: "file_and_use"
+      notes: |
+        Pennsylvania uses file-and-use for commercial lines. The Breach
+        of Personal Information Notification Act applies.
+      special_requirements:
+        - "File rates and forms via SERFF"
+        - "Annual data call participation required"
+      filing_lead_time_days: 30
+
+  # ----------------------------------------------------------------
+  # Rate regulation types (reference)
+  # ----------------------------------------------------------------
+  rate_regulation_types:
+    prior_approval:
+      description: |
+        Rates and/or forms must be filed with and approved by the state
+        regulator before they can be used. The insurer may not use the
+        rates or forms until explicit approval is received.
+      states_using: ["NY", "CA"]
+
+    file_and_use:
+      description: |
+        Rates and forms are filed with the regulator and may be used
+        immediately upon filing (or after a short waiting period).
+        The regulator retains the right to disapprove after the fact.
+      states_using: ["TX", "FL", "IL", "PA"]
+
+    use_and_file:
+      description: |
+        Rates and forms may be used immediately, with a filing made
+        within a specified period after first use. Common in
+        competitive-rated commercial lines.
+      states_using: ["MO", "GA", "VA"]
+
+    no_filing:
+      description: |
+        No rate or form filing required for commercial lines. Applies
+        to large commercial risks in certain states or surplus lines.
+      states_using: ["Surplus lines in most states"]
+
+  # ----------------------------------------------------------------
+  # Form filing requirements
+  # ----------------------------------------------------------------
+  form_filing_requirements:
+    policy_forms:
+      - "Declarations page"
+      - "Insuring agreement"
+      - "Definitions section"
+      - "Conditions section"
+      - "Exclusions section"
+      - "Coverage-specific endorsements"
+    endorsements:
+      - "Ransomware sublimit endorsement"
+      - "Business interruption waiting period endorsement"
+      - "Social engineering fraud endorsement"
+      - "Regulatory defense carve-back endorsement"
+    certificates:
+      - "Certificate of insurance template"
+      - "Evidence of coverage letter"
+
+  # ----------------------------------------------------------------
+  # Data privacy notification requirements
+  # ----------------------------------------------------------------
+  data_privacy_notification:
+    federal:
+      - law: "HIPAA / HITECH"
+        applies_to: "Covered entities and business associates handling PHI"
+        notification_deadline: "60 days from discovery"
+        regulator_notification: "HHS Office for Civil Rights"
+        threshold: "500+ individuals affected requires media notice"
+
+    state_laws:
+      - state: "California (CCPA/CPRA)"
+        notification_deadline: "Expeditious, without unreasonable delay"
+        regulator_notification: "California AG if 500+ residents"
+        private_right_of_action: true
+        statutory_damages: "$100-$750 per consumer per incident"
+
+      - state: "New York (SHIELD Act)"
+        notification_deadline: "Expeditious, without unreasonable delay"
+        regulator_notification: "NY AG, DFS, and Division of State Police"
+        private_right_of_action: false
+        reasonable_security_requirement: true
+
+      - state: "Texas"
+        notification_deadline: "60 days from determination of breach"
+        regulator_notification: "TX AG if 250+ residents"
+        private_right_of_action: false
+
+      - state: "Florida (FIPA)"
+        notification_deadline: "30 days from determination of breach"
+        regulator_notification: "FL Department of Legal Affairs if 500+"
+        private_right_of_action: false
+
+      - state: "Illinois (PIPA/BIPA)"
+        notification_deadline: "Expeditious, without unreasonable delay"
+        regulator_notification: "IL AG"
+        private_right_of_action: true
+        notes: "BIPA provides private right of action for biometric data violations"
+
+  # ----------------------------------------------------------------
+  # EU AI Act applicability notes
+  # ----------------------------------------------------------------
+  eu_ai_act:
+    applicability: |
+      The EU AI Act (Regulation (EU) 2024/1689) applies to AI systems
+      used in insurance underwriting and claims handling. Under Art. 6
+      and Annex III, AI systems that evaluate creditworthiness or
+      insurance risk pricing are classified as HIGH-RISK.
+
+    key_requirements:
+      - article: "Art. 9 — Risk Management"
+        requirement: |
+          Maintain a risk management system throughout the AI lifecycle.
+          Identify and mitigate risks of bias, discrimination, and errors
+          in automated underwriting and claims decisions.
+
+      - article: "Art. 10 — Data Governance"
+        requirement: |
+          Training, validation, and testing datasets must be relevant,
+          representative, and free from errors. Bias examination must
+          address protected characteristics.
+
+      - article: "Art. 11 — Technical Documentation"
+        requirement: |
+          Maintain technical documentation sufficient for authorities
+          to assess compliance. Includes model architecture, training
+          data, performance metrics, and known limitations.
+
+      - article: "Art. 12 — Record-Keeping"
+        requirement: |
+          High-risk AI systems must automatically log events to enable
+          traceability. Logs must cover decision inputs, outputs,
+          reasoning chain, and human oversight actions.
+
+      - article: "Art. 13 — Transparency"
+        requirement: |
+          Provide clear information to deployers about the AI system's
+          capabilities, limitations, and intended use. Insurance
+          policyholders must be informed when AI is used in decisions.
+
+      - article: "Art. 14 — Human Oversight"
+        requirement: |
+          High-risk AI systems must allow effective human oversight.
+          Underwriting decisions above certain thresholds must include
+          human-in-the-loop review.
+
+    compliance_deadlines:
+      - milestone: "Prohibited AI practices"
+        date: "2025-02-02"
+      - milestone: "GPAI model obligations"
+        date: "2025-08-02"
+      - milestone: "High-risk AI system obligations (Annex III)"
+        date: "2026-08-02"
+        notes: "This is the primary deadline for insurance AI systems"
+
+    penalties:
+      max_fine_prohibited: "35M EUR or 7% of global annual turnover"
+      max_fine_high_risk: "15M EUR or 3% of global annual turnover"
+      max_fine_misinformation: "7.5M EUR or 1.5% of global annual turnover"

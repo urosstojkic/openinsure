@@ -1,0 +1,91 @@
+product:
+  code: "CYBER-SMB-001"
+  name: "Cyber Liability — Small & Medium Business"
+  line_of_business: "cyber"
+  version: 1
+  description: "Comprehensive cyber insurance for businesses with revenue under $50M"
+
+  coverages:
+    - code: "BREACH-RESP"
+      name: "First-Party Breach Response"
+      description: "Covers costs of responding to a data breach"
+      default_limit: 1000000
+      min_limit: 100000
+      max_limit: 5000000
+      default_deductible: 10000
+      available_deductibles: [5000, 10000, 25000, 50000]
+
+    - code: "THIRD-PARTY"
+      name: "Third-Party Liability"
+      description: "Covers claims from affected third parties"
+      default_limit: 1000000
+      min_limit: 250000
+      max_limit: 10000000
+      default_deductible: 25000
+      available_deductibles: [10000, 25000, 50000, 100000]
+
+    - code: "REG-DEFENSE"
+      name: "Regulatory Defense & Penalties"
+      description: "Covers regulatory investigation costs and penalties where insurable"
+      default_limit: 500000
+      min_limit: 100000
+      max_limit: 2000000
+      default_deductible: 10000
+      available_deductibles: [5000, 10000, 25000]
+
+    - code: "BUS-INTERRUPT"
+      name: "Business Interruption"
+      description: "Covers lost income during cyber incident recovery"
+      default_limit: 500000
+      min_limit: 50000
+      max_limit: 2000000
+      default_deductible: 25000
+      available_deductibles: [10000, 25000, 50000]
+
+    - code: "RANSOMWARE"
+      name: "Ransomware & Extortion"
+      description: "Covers ransom payments and extortion response"
+      default_limit: 500000
+      min_limit: 100000
+      max_limit: 2000000
+      default_deductible: 10000
+      available_deductibles: [5000, 10000, 25000]
+
+  rating_factors:
+    - name: "annual_revenue"
+      type: "numeric"
+      weight: 0.25
+      description: "Annual revenue of the insured business"
+    - name: "employee_count"
+      type: "numeric"
+      weight: 0.10
+      description: "Number of employees"
+    - name: "industry_sic_code"
+      type: "categorical"
+      weight: 0.20
+      description: "SIC code determining industry risk"
+    - name: "security_maturity_score"
+      type: "numeric"
+      weight: 0.30
+      description: "Security posture score (1-10)"
+    - name: "prior_incidents"
+      type: "numeric"
+      weight: 0.15
+      description: "Number of prior cyber incidents"
+
+  exclusions:
+    - code: "WAR"
+      description: "Acts of war, terrorism, or state-sponsored attacks"
+    - code: "KNOWN-VULN"
+      description: "Losses from known unpatched vulnerabilities after 90-day notification"
+    - code: "INSIDER-FRAUD"
+      description: "Deliberate acts by directors/officers"
+    - code: "INFRASTRUCTURE"
+      description: "Failure of internet infrastructure, power grid, or telecoms"
+
+  pricing:
+    min_premium: 2500
+    max_premium: 500000
+    base_rate_per_1000_revenue: 1.50
+
+  territories: ["US-ALL-EXCEPT-NY-CA"]

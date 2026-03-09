@@ -1,0 +1,338 @@
+"""Submission API endpoints for OpenInsure.
+
+Handles the full submission lifecycle: intake → triage → quote → bind.
+Uses in-memory storage as a placeholder until the database adapter is wired in.
+"""
+
+from __future__ import annotations
+
+import uuid
+from datetime import UTC, datetime
+from enum import StrEnum
+from typing import Any
+
+from fastapi import APIRouter, File, HTTPException, Query, UploadFile
+from pydantic import BaseModel, Field
+
+router = APIRouter()
+
+# ---------------------------------------------------------------------------
+# In-memory store (replaced by database adapter later)
+# ---------------------------------------------------------------------------
+_submissions: dict[str, dict[str, Any]] = {}
+
+
+# ---------------------------------------------------------------------------
+# Enums
+# ---------------------------------------------------------------------------
+
+
+class SubmissionStatus(StrEnum):
+    """Lifecycle states for a submission."""
+
+    DRAFT = "draft"
+    SUBMITTED = "submitted"
+    IN_TRIAGE = "in_triage"
+    TRIAGED = "triaged"
+    QUOTING = "quoting"
+    QUOTED = "quoted"
+    BINDING = "binding"
+    BOUND = "bound"
+    DECLINED = "declined"
+    WITHDRAWN = "withdrawn"
+
+
+class SubmissionChannel(StrEnum):
+    """Intake channel for a submission."""
+
+    PORTAL = "portal"
+    API = "api"
+    EMAIL = "email"
+    BROKER = "broker"
+    AGENT = "agent"
+
+
+class LineOfBusiness(StrEnum):
+    """Supported lines of business."""
+
+    CYBER = "cyber"
+    TECH_EO = "tech_eo"
+    MPL = "mpl"
+
+
+# ---------------------------------------------------------------------------
+# Request / Response models
+# ---------------------------------------------------------------------------
+
+
+class SubmissionCreate(BaseModel):
+    """Payload for creating a new submission."""
+
+    applicant_name: str = Field(..., min_length=1, max_length=200)
+    applicant_email: str | None = None
+    channel: SubmissionChannel = SubmissionChannel.API
+    line_of_business: LineOfBusiness = LineOfBusiness.CYBER
+    risk_data: dict[str, Any] = Field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class SubmissionUpdate(BaseModel):
+    """Payload for updating an existing submission."""
+
+    applicant_name: str | None = None
+    applicant_email: str | None = None
+    risk_data: dict[str, Any] | None = None
+    metadata: dict[str, Any] | None = None
+
+
+class SubmissionResponse(BaseModel):
+    """Public representation of a submission."""
+
+    id: str
+    applicant_name: str
+    applicant_email: str | None = None
+    status: SubmissionStatus
+    channel: SubmissionChannel
+    line_of_business: LineOfBusiness
+    risk_data: dict[str, Any]
+    metadata: dict[str, Any]
+    documents: list[str]
+    created_at: str
+    updated_at: str
+
+
+class SubmissionList(BaseModel):
+    """Paginated list of submissions."""
+
+    items: list[SubmissionResponse]
+    total: int
+    skip: int
+    limit: int
+
+
+class TriageResult(BaseModel):
+    """Result of AI-driven triage."""
+
+    submission_id: str
+    status: SubmissionStatus
+    risk_score: float
+    recommendation: str
+    flags: list[str]
+
+
+class QuoteResponse(BaseModel):
+    """Generated quote details."""
+
+    submission_id: str
+    quote_id: str
+    premium: float
+    currency: str = "USD"
+    coverages: list[dict[str, Any]]
+    valid_until: str
+
+
+class BindResponse(BaseModel):
+    """Result of binding a submission to a policy."""
+
+    submission_id: str
+    policy_id: str
+    status: SubmissionStatus
+    bound_at: str
+
+
+class DocumentUploadResponse(BaseModel):
+    """Result of a document upload."""
+
+    submission_id: str
+    document_ids: list[str]
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+def _get_submission(submission_id: str) -> dict[str, Any]:
+    """Retrieve a submission or raise 404."""
+    sub = _submissions.get(submission_id)
+    if sub is None:
+        raise HTTPException(status_code=404, detail=f"Submission {submission_id} not found")
+    return sub
+
+
+def _now() -> str:
+    return datetime.now(UTC).isoformat()
+
+
+# ---------------------------------------------------------------------------
+# Endpoints
+# ---------------------------------------------------------------------------
+
+
+@router.post("", response_model=SubmissionResponse, status_code=201)
+async def create_submission(body: SubmissionCreate) -> SubmissionResponse:
+    """Create a new insurance submission."""
+    sid = str(uuid.uuid4())
+    now = _now()
+    record: dict[str, Any] = {
+        "id": sid,
+        "applicant_name": body.applicant_name,
+        "applicant_email": body.applicant_email,
+        "status": SubmissionStatus.SUBMITTED,
+        "channel": body.channel,
+        "line_of_business": body.line_of_business,
+        "risk_data": body.risk_data,
+        "metadata": body.metadata,
+        "documents": [],
+        "created_at": now,
+        "updated_at": now,
+    }
+    _submissions[sid] = record
+    return SubmissionResponse(**record)
+
+
+@router.get("", response_model=SubmissionList)
+async def list_submissions(
+    status: SubmissionStatus | None = Query(None, description="Filter by status"),
+    channel: SubmissionChannel | None = Query(None, description="Filter by intake channel"),
+    lob: LineOfBusiness | None = Query(None, alias="line_of_business", description="Filter by line of business"),
+    created_after: str | None = Query(None, description="ISO-8601 date lower bound"),
+    created_before: str | None = Query(None, description="ISO-8601 date upper bound"),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+) -> SubmissionList:
+    """List submissions with optional filtering and pagination."""
+    results = list(_submissions.values())
+
+    if status is not None:
+        results = [s for s in results if s["status"] == status]
+    if channel is not None:
+        results = [s for s in results if s["channel"] == channel]
+    if lob is not None:
+        results = [s for s in results if s["line_of_business"] == lob]
+    if created_after is not None:
+        results = [s for s in results if s["created_at"] >= created_after]
+    if created_before is not None:
+        results = [s for s in results if s["created_at"] <= created_before]
+
+    total = len(results)
+    page = results[skip : skip + limit]
+    return SubmissionList(
+        items=[SubmissionResponse(**r) for r in page],
+        total=total,
+        skip=skip,
+        limit=limit,
+    )
+
+
+@router.get("/{submission_id}", response_model=SubmissionResponse)
+async def get_submission(submission_id: str) -> SubmissionResponse:
+    """Retrieve a single submission by ID."""
+    return SubmissionResponse(**_get_submission(submission_id))
+
+
+@router.put("/{submission_id}", response_model=SubmissionResponse)
+async def update_submission(submission_id: str, body: SubmissionUpdate) -> SubmissionResponse:
+    """Update a submission's mutable fields."""
+    record = _get_submission(submission_id)
+    if record["status"] in {SubmissionStatus.BOUND, SubmissionStatus.DECLINED}:
+        raise HTTPException(status_code=409, detail="Cannot update a submission that is bound or declined")
+
+    updates = body.model_dump(exclude_unset=True)
+    if "risk_data" in updates and updates["risk_data"] is not None:
+        record["risk_data"].update(updates.pop("risk_data"))
+    if "metadata" in updates and updates["metadata"] is not None:
+        record["metadata"].update(updates.pop("metadata"))
+    for key, val in updates.items():
+        if val is not None:
+            record[key] = val
+
+    record["updated_at"] = _now()
+    return SubmissionResponse(**record)
+
+
+@router.post("/{submission_id}/triage", response_model=TriageResult)
+async def triage_submission(submission_id: str) -> TriageResult:
+    """Trigger AI triage on a submission.
+
+    In the real implementation this dispatches to the triage agent; here
+    we return a deterministic stub result.
+    """
+    record = _get_submission(submission_id)
+    if record["status"] not in {SubmissionStatus.SUBMITTED, SubmissionStatus.IN_TRIAGE}:
+        raise HTTPException(status_code=409, detail="Submission is not in a triageable state")
+
+    record["status"] = SubmissionStatus.TRIAGED
+    record["updated_at"] = _now()
+
+    return TriageResult(
+        submission_id=submission_id,
+        status=SubmissionStatus.TRIAGED,
+        risk_score=0.42,
+        recommendation="proceed_to_quote",
+        flags=[],
+    )
+
+
+@router.post("/{submission_id}/quote", response_model=QuoteResponse)
+async def generate_quote(submission_id: str) -> QuoteResponse:
+    """Generate a quote for the submission.
+
+    Stub implementation — the real version calls the rating engine.
+    """
+    record = _get_submission(submission_id)
+    if record["status"] not in {SubmissionStatus.TRIAGED, SubmissionStatus.QUOTING}:
+        raise HTTPException(status_code=409, detail="Submission must be triaged before quoting")
+
+    record["status"] = SubmissionStatus.QUOTED
+    record["updated_at"] = _now()
+    valid_until = datetime(2099, 12, 31, tzinfo=UTC).isoformat()
+
+    return QuoteResponse(
+        submission_id=submission_id,
+        quote_id=str(uuid.uuid4()),
+        premium=5000.00,
+        currency="USD",
+        coverages=[{"name": "Cyber Liability", "limit": 1_000_000, "deductible": 10_000}],
+        valid_until=valid_until,
+    )
+
+
+@router.post("/{submission_id}/bind", response_model=BindResponse)
+async def bind_submission(submission_id: str) -> BindResponse:
+    """Bind the submission, creating a policy.
+
+    Stub implementation — the real version orchestrates policy issuance.
+    """
+    record = _get_submission(submission_id)
+    if record["status"] != SubmissionStatus.QUOTED:
+        raise HTTPException(status_code=409, detail="Submission must be quoted before binding")
+
+    record["status"] = SubmissionStatus.BOUND
+    record["updated_at"] = _now()
+
+    return BindResponse(
+        submission_id=submission_id,
+        policy_id=str(uuid.uuid4()),
+        status=SubmissionStatus.BOUND,
+        bound_at=_now(),
+    )
+
+
+@router.post("/{submission_id}/documents", response_model=DocumentUploadResponse)
+async def upload_documents(
+    submission_id: str,
+    files: list[UploadFile] = File(...),
+) -> DocumentUploadResponse:
+    """Upload one or more documents to a submission."""
+    record = _get_submission(submission_id)
+    doc_ids: list[str] = []
+    for f in files:
+        doc_id = str(uuid.uuid4())
+        doc_ids.append(doc_id)
+        record["documents"].append(doc_id)
+        # In real implementation: persist file to object storage
+        await f.read()  # consume stream
+
+    record["updated_at"] = _now()
+    return DocumentUploadResponse(submission_id=submission_id, document_ids=doc_ids)

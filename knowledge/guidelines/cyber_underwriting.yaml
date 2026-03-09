@@ -1,0 +1,250 @@
+# Cyber Insurance Underwriting Guidelines
+# Product: CYBER-SMB-001 — Cyber Liability for Small & Medium Business
+
+underwriting_guidelines:
+  version: 1
+  effective_date: "2025-01-01"
+  product_code: "CYBER-SMB-001"
+
+  # ----------------------------------------------------------------
+  # Risk appetite
+  # ----------------------------------------------------------------
+  risk_appetite:
+    acceptable_risk_score:
+      min: 1
+      max: 7
+      description: "Risk scores 1-7 are within appetite. 8+ requires escalation."
+    target_industries:
+      preferred:
+        - "Technology (SIC 7371-7379)"
+        - "Professional Services (SIC 8711-8748)"
+        - "Retail Trade — non-PCI heavy (SIC 5200-5999)"
+        - "Manufacturing — light data (SIC 2000-3999)"
+      acceptable:
+        - "Healthcare — under 500 beds (SIC 8000-8099)"
+        - "Financial Services — non-bank (SIC 6100-6199)"
+        - "Education — private K-12 and higher ed (SIC 8200-8299)"
+      declined:
+        - "Cryptocurrency exchanges"
+        - "Adult content platforms"
+        - "Critical infrastructure operators (energy, water, nuclear)"
+        - "Gambling and online gaming (real-money)"
+    max_annual_revenue: 50000000
+    max_employee_count: 500
+    max_records_held: 5000000
+
+  # ----------------------------------------------------------------
+  # Referral triggers — conditions requiring human underwriter review
+  # ----------------------------------------------------------------
+  referral_triggers:
+    - trigger: "risk_score_above_7"
+      description: "Overall risk score ≥ 8 (out of 10)"
+      action: "Refer to senior underwriter for manual review"
+
+    - trigger: "prior_claims_3yr"
+      description: "Any cyber claim in the past 3 years"
+      action: "Refer to underwriter; request full incident report"
+
+    - trigger: "ransomware_payment_history"
+      description: "Applicant has previously paid a ransom"
+      action: "Refer to senior underwriter; may require sublimit"
+
+    - trigger: "revenue_above_25m"
+      description: "Annual revenue exceeds $25M"
+      action: "Refer for capacity and limit review"
+
+    - trigger: "pci_dss_non_compliant"
+      description: "Applicant handles card data but is not PCI DSS compliant"
+      action: "Decline or refer with mandatory remediation timeline"
+
+    - trigger: "no_mfa"
+      description: "Multi-factor authentication not deployed for remote access"
+      action: "Decline unless MFA implementation within 60 days is confirmed"
+
+    - trigger: "healthcare_phi"
+      description: "Applicant stores or processes protected health information"
+      action: "Refer to healthcare cyber specialist"
+
+    - trigger: "international_operations"
+      description: "Applicant has operations outside US/Canada"
+      action: "Refer for territory and regulatory review"
+
+  # ----------------------------------------------------------------
+  # Authority levels — what can be auto-bound without human review
+  # ----------------------------------------------------------------
+  authority_levels:
+    auto_bind:
+      max_premium: 25000
+      max_aggregate_limit: 2000000
+      conditions:
+        - "Risk score ≤ 5"
+        - "No referral triggers activated"
+        - "All required security controls met for the tier"
+        - "Standard territory (US except NY, CA)"
+      description: "Agent can auto-bind without human intervention"
+
+    underwriter_1:
+      max_premium: 100000
+      max_aggregate_limit: 5000000
+      conditions:
+        - "Risk score ≤ 7"
+        - "No more than 1 referral trigger"
+      description: "Junior underwriter authority"
+
+    underwriter_2:
+      max_premium: 250000
+      max_aggregate_limit: 10000000
+      conditions:
+        - "Risk score ≤ 9"
+        - "Senior underwriter sign-off"
+      description: "Senior underwriter authority"
+
+    committee:
+      max_premium: 500000
+      max_aggregate_limit: 10000000
+      conditions:
+        - "Any risk level"
+        - "Requires underwriting committee approval"
+      description: "Underwriting committee authority for large or complex risks"
+
+  # ----------------------------------------------------------------
+  # Red flags — fraud indicators and high-risk scenarios
+  # ----------------------------------------------------------------
+  red_flags:
+    fraud_indicators:
+      - indicator: "recent_incorporation"
+        description: "Business incorporated within the last 6 months"
+        severity: "medium"
+        action: "Request additional documentation; verify business legitimacy"
+
+      - indicator: "mismatched_revenue_employees"
+        description: "Reported revenue inconsistent with employee count for industry"
+        severity: "high"
+        action: "Request tax returns or audited financials"
+
+      - indicator: "frequent_applications"
+        description: "Multiple applications across carriers in short timeframe"
+        severity: "medium"
+        action: "Check industry loss databases; request explanation"
+
+      - indicator: "retroactive_date_request"
+        description: "Requesting retroactive date significantly before inception"
+        severity: "high"
+        action: "Request prior policy declarations; verify no known incidents"
+
+      - indicator: "abnormally_low_security_spend"
+        description: "IT security budget < 2% of revenue for data-intensive business"
+        severity: "medium"
+        action: "Require security assessment before binding"
+
+    high_risk_scenarios:
+      - scenario: "active_breach"
+        description: "Evidence of an ongoing or recent undisclosed breach"
+        action: "Immediate decline"
+
+      - scenario: "regulatory_investigation"
+        description: "Applicant under active regulatory investigation"
+        action: "Decline or exclude regulatory coverage"
+
+      - scenario: "critical_unpatched_systems"
+        description: "Known critical CVEs unpatched on internet-facing systems"
+        action: "Decline until remediation confirmed; 30-day window"
+
+  # ----------------------------------------------------------------
+  # Required security controls by tier
+  # ----------------------------------------------------------------
+  required_security_controls:
+    tier_1_basic:
+      applies_to: "All applicants"
+      controls:
+        - control: "mfa_remote_access"
+          description: "MFA for all remote access and email"
+          required: true
+        - control: "endpoint_protection"
+          description: "Endpoint detection and response (EDR) on all endpoints"
+          required: true
+        - control: "backup_strategy"
+          description: "Regular backups with offline/immutable copy"
+          required: true
+        - control: "patch_management"
+          description: "Critical patches applied within 30 days"
+          required: true
+        - control: "email_filtering"
+          description: "Email security gateway with anti-phishing"
+          required: true
+
+    tier_2_enhanced:
+      applies_to: "Revenue > $5M or employee count > 50"
+      controls:
+        - control: "siem_monitoring"
+          description: "SIEM or managed detection and response (MDR)"
+          required: true
+        - control: "incident_response_plan"
+          description: "Documented and tested incident response plan"
+          required: true
+        - control: "security_awareness_training"
+          description: "Annual security awareness training for all staff"
+          required: true
+        - control: "privileged_access_management"
+          description: "PAM solution for administrative accounts"
+          required: true
+
+    tier_3_advanced:
+      applies_to: "Revenue > $25M or handles PII/PHI > 100K records"
+      controls:
+        - control: "penetration_testing"
+          description: "Annual third-party penetration test"
+          required: true
+        - control: "network_segmentation"
+          description: "Critical systems on segmented networks"
+          required: true
+        - control: "zero_trust_architecture"
+          description: "Zero-trust network access for sensitive resources"
+          required: false
+        - control: "third_party_risk_management"
+          description: "Vendor risk assessment programme"
+          required: true
+
+  # ----------------------------------------------------------------
+  # Industry risk classifications
+  # ----------------------------------------------------------------
+  industry_risk_classifications:
+    low_risk:
+      base_rate_multiplier: 0.80
+      industries:
+        - sic_range: "5200-5999"
+          name: "Retail Trade (non-PCI heavy)"
+        - sic_range: "1500-1799"
+          name: "Construction"
+        - sic_range: "0100-0999"
+          name: "Agriculture"
+
+    standard_risk:
+      base_rate_multiplier: 1.00
+      industries:
+        - sic_range: "7371-7379"
+          name: "Computer Services"
+        - sic_range: "8711-8748"
+          name: "Professional Services"
+        - sic_range: "2000-3999"
+          name: "Manufacturing"
+
+    elevated_risk:
+      base_rate_multiplier: 1.40
+      industries:
+        - sic_range: "8000-8099"
+          name: "Healthcare"
+        - sic_range: "8200-8299"
+          name: "Education"
+        - sic_range: "4800-4899"
+          name: "Communications"
+
+    high_risk:
+      base_rate_multiplier: 1.80
+      industries:
+        - sic_range: "6000-6199"
+          name: "Financial Services"
+        - sic_range: "6300-6399"
+          name: "Insurance Carriers"
+        - sic_range: "9100-9199"
+          name: "Government (state/local)"
