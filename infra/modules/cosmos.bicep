@@ -1,7 +1,8 @@
 // ──────────────────────────────────────────────────────────────────────────────
-// OpenInsure — Cosmos DB with Gremlin API
-// Graph database for the insurance knowledge graph.
+// OpenInsure — Cosmos DB with NoSQL API
+// Document database for the insurance knowledge graph.
 // Key-based access disabled; Entra RBAC only.
+// Uses NoSQL API with JSON documents to model graph relationships.
 // ──────────────────────────────────────────────────────────────────────────────
 
 @description('Project name used for resource naming.')
@@ -24,11 +25,12 @@ param tags object
 
 var accountName = '${projectName}-${environmentName}-cosmos-${resourceToken}'
 var databaseName = 'openinsure-knowledge'
-var graphName = 'insurance-graph'
+var containerName = 'insurance-graph'
 
 // ─── Cosmos DB Account ────────────────────────────────────────────────────────
-// Gremlin API enabled via capability. Key-based auth disabled (disableLocalAuth).
-// Session consistency balances performance and read-your-writes for graph queries.
+// NoSQL API (default). Key-based auth disabled (disableLocalAuth).
+// Session consistency balances performance and read-your-writes.
+// Serverless capacity for dev to minimize cost.
 
 resource cosmosAccount 'Microsoft.DocumentDB/databaseAccounts@2024-05-15' = {
   name: accountName
@@ -43,10 +45,9 @@ resource cosmosAccount 'Microsoft.DocumentDB/databaseAccounts@2024-05-15' = {
     consistencyPolicy: {
       defaultConsistencyLevel: 'Session'
     }
-    // Gremlin API capability
-    capabilities: [
-      { name: 'EnableGremlin' }
-    ]
+    capabilities: environmentName == 'dev' ? [
+      { name: 'EnableServerless' }
+    ] : []
     // Disable key-based auth — Entra RBAC only
     disableLocalAuth: true
     // Single region for dev; add geo-replication entries for prod
@@ -64,9 +65,9 @@ resource cosmosAccount 'Microsoft.DocumentDB/databaseAccounts@2024-05-15' = {
   }
 }
 
-// ─── Gremlin Database ─────────────────────────────────────────────────────────
+// ─── NoSQL Database ───────────────────────────────────────────────────────────
 
-resource gremlinDatabase 'Microsoft.DocumentDB/databaseAccounts/gremlinDatabases@2024-05-15' = {
+resource sqlDatabase 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases@2024-05-15' = {
   parent: cosmosAccount
   name: databaseName
   properties: {
@@ -76,17 +77,18 @@ resource gremlinDatabase 'Microsoft.DocumentDB/databaseAccounts/gremlinDatabases
   }
 }
 
-// ─── Graph Container ──────────────────────────────────────────────────────────
-// Partition key /partitionKey enables scalable graph traversal across partitions.
+// ─── Knowledge Graph Container ────────────────────────────────────────────────
+// Partition key /entityType enables scalable queries across entity types.
+// Stores vertices and edges as JSON documents.
 
-resource graphContainer 'Microsoft.DocumentDB/databaseAccounts/gremlinDatabases/graphs@2024-05-15' = {
-  parent: gremlinDatabase
-  name: graphName
+resource graphContainer 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/containers@2024-05-15' = {
+  parent: sqlDatabase
+  name: containerName
   properties: {
     resource: {
-      id: graphName
+      id: containerName
       partitionKey: {
-        paths: ['/partitionKey']
+        paths: ['/entityType']
         kind: 'Hash'
       }
       indexingPolicy: {
@@ -102,4 +104,4 @@ resource graphContainer 'Microsoft.DocumentDB/databaseAccounts/gremlinDatabases/
 output accountId string = cosmosAccount.id
 output accountName string = cosmosAccount.name
 output accountEndpoint string = cosmosAccount.properties.documentEndpoint
-output databaseName string = gremlinDatabase.name
+output databaseName string = sqlDatabase.name
