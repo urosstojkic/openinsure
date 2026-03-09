@@ -49,7 +49,7 @@ class Settings(BaseSettings):
     foundry_model_deployment: str = "gpt-4o"
 
     # Server
-    host: str = "0.0.0.0"
+    host: str = "0.0.0.0"  # nosec B104 — bind-all is intentional for container deployment
     port: int = 8000
     workers: int = 4
 
