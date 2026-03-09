@@ -45,7 +45,7 @@ OpenInsure is an open-source, AI-native core insurance platform built on the Mic
 │                Microsoft Foundry                             │
 │  ┌──────────────┬──────────────┬───────────────────────┐    │
 │  │ Agent Service │  Foundry IQ  │   Foundry Models      │    │
-│  │ (Multi-agent  │ (Knowledge   │  (GPT-5.x, Claude,   │    │
+│  │ (Multi-agent  │ (Knowledge   │  (GPT-5.2, Claude,   │    │
 │  │  orchestration)│  retrieval) │   Phi, Mistral)       │    │
 │  └──────────────┴──────────────┴───────────────────────┘    │
 ├─────────────────────────────────────────────────────────────┤
@@ -150,7 +150,7 @@ Every agent decision produces a **Decision Record** for EU AI Act compliance:
 {
   "decision_id": "uuid",
   "agent_id": "underwriting-agent-v0.1",
-  "model_used": "gpt-5.3-chat",
+  "model_used": "gpt-5.2",
   "decision_type": "underwriting_recommendation",
   "confidence": 0.82,
   "reasoning": { "chain_of_thought": "...", "key_factors": [...] },

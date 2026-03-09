@@ -61,7 +61,7 @@ class AgentConfig(BaseModel):
 
     agent_id: str
     agent_version: str = "0.1.0"
-    model_deployment: str = "gpt-4o"
+    model_deployment: str = "gpt-5.2"
     temperature: float = 0.1
     max_tokens: int = 4096
     authority_limit: Decimal = Decimal("0")  # Max value agent can authorize

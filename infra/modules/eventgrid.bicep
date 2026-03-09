@@ -46,7 +46,7 @@ resource eventGridTopic 'Microsoft.EventGrid/topics@2024-06-01-preview' = {
 
 resource systemTopic 'Microsoft.EventGrid/systemTopics@2024-06-01-preview' = {
   name: systemTopicName
-  location: location
+  location: 'global'
   tags: tags
   identity: {
     type: 'SystemAssigned'

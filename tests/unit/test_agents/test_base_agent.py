@@ -74,7 +74,7 @@ class TestAgentConfig:
 
     def test_agent_config_defaults(self):
         config = AgentConfig(agent_id="minimal-agent")
-        assert config.model_deployment == "gpt-4o"
+        assert config.model_deployment == "gpt-5.2"
         assert config.temperature == 0.1
         assert config.max_tokens == 4096
         assert config.auto_execute is False
@@ -82,12 +82,12 @@ class TestAgentConfig:
     def test_agent_config_custom(self):
         config = AgentConfig(
             agent_id="custom-agent",
-            model_deployment="gpt-4o-mini",
+            model_deployment="gpt-5.2-mini",
             temperature=0.5,
             max_tokens=8192,
             escalation_threshold=0.8,
         )
-        assert config.model_deployment == "gpt-4o-mini"
+        assert config.model_deployment == "gpt-5.2-mini"
         assert config.temperature == 0.5
         assert config.escalation_threshold == 0.8
 
@@ -99,7 +99,7 @@ class TestDecisionRecordCreation:
         record = DecisionRecord(
             agent_id="test-agent",
             agent_version="0.1.0",
-            model_used="gpt-4o",
+            model_used="gpt-5.2",
             model_version="2026-03-01",
             decision_type="test_decision",
             confidence=0.85,
@@ -113,7 +113,7 @@ class TestDecisionRecordCreation:
         record = DecisionRecord(
             agent_id="test",
             agent_version="0.1.0",
-            model_used="gpt-4o",
+            model_used="gpt-5.2",
             model_version="2026-03-01",
             decision_type="test",
             confidence=0.5,

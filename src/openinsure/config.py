@@ -46,7 +46,7 @@ class Settings(BaseSettings):
 
     # Azure AI / Foundry
     foundry_project_endpoint: str = ""
-    foundry_model_deployment: str = "gpt-4o"
+    foundry_model_deployment: str = "gpt-5.2"
 
     # Server
     host: str = "0.0.0.0"  # nosec B104 — bind-all is intentional for container deployment

@@ -19,7 +19,7 @@ param tags object
 
 // ─── Variables ────────────────────────────────────────────────────────────────
 
-var namespaceName = '${projectName}-${environmentName}-sb'
+var namespaceName = '${projectName}-${environmentName}-servicebus'
 
 // ─── Service Bus Namespace ────────────────────────────────────────────────────
 // Standard tier supports queues, topics, and sessions.
