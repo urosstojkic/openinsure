@@ -139,7 +139,11 @@ async def search_knowledge_endpoint(
                 id=doc.get("id", ""),
                 entityType=doc.get("entityType", ""),
                 content=doc.get("content", ""),
-                extra={k: v for k, v in doc.items() if k not in ("id", "entityType", "content") and k not in _COSMOS_META_KEYS},
+                extra={
+                    k: v
+                    for k, v in doc.items()
+                    if k not in ("id", "entityType", "content") and k not in _COSMOS_META_KEYS
+                },
             )
             for doc in raw
         ]
@@ -150,9 +154,7 @@ async def search_knowledge_endpoint(
             if q.lower() in str(gl).lower():
                 if type and type != "guideline":
                     continue
-                results.append(
-                    KnowledgeSearchResult(id=f"guideline-{lob}", entityType="guideline", content=str(gl))
-                )
+                results.append(KnowledgeSearchResult(id=f"guideline-{lob}", entityType="guideline", content=str(gl)))
     return KnowledgeSearchResponse(query=q, entity_type=type, results=results, total=len(results))
 
 

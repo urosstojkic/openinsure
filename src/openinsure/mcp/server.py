@@ -336,8 +336,7 @@ class OpenInsureMCPServer:
             "payment_method": args.get("paymentMethod", "invoice"),
             "bound_at": _now_iso(),
         }
-        result = await repo.create(policy_data)
-        return result
+        return await repo.create(policy_data)
 
     async def _handle_reportClaim(self, args: dict[str, Any]) -> dict[str, Any]:
         """Report a claim via the repository."""
@@ -354,8 +353,7 @@ class OpenInsureMCPServer:
             "cause_of_loss": args.get("cause_of_loss", "other"),
             "status": "fnol",
         }
-        result = await repo.create(claim_data)
-        return result
+        return await repo.create(claim_data)
 
     async def _handle_getPortfolioMetrics(self, args: dict[str, Any]) -> dict[str, Any]:
         """Get real portfolio metrics from repositories."""

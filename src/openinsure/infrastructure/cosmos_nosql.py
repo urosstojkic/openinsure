@@ -9,7 +9,7 @@ from __future__ import annotations
 from typing import Any
 
 import structlog
-from azure.cosmos import CosmosClient, PartitionKey
+from azure.cosmos import CosmosClient
 from azure.identity import DefaultAzureCredential
 
 logger = structlog.get_logger()
@@ -81,10 +81,7 @@ class CosmosKnowledgeStore:
     ) -> list[dict[str, Any]]:
         """Simple text search across knowledge documents."""
         if entity_type:
-            sql = (
-                "SELECT * FROM c WHERE c.entityType = @type"
-                " AND CONTAINS(LOWER(c.content), LOWER(@q))"
-            )
+            sql = "SELECT * FROM c WHERE c.entityType = @type AND CONTAINS(LOWER(c.content), LOWER(@q))"
             params: list[dict[str, Any]] = [
                 {"name": "@type", "value": entity_type},
                 {"name": "@q", "value": query_text},

@@ -15,7 +15,7 @@ from typing import Any
 from fastapi import APIRouter, File, HTTPException, Query, UploadFile
 from pydantic import BaseModel, Field
 
-from openinsure.infrastructure.factory import get_submission_repository
+from openinsure.infrastructure.factory import get_blob_storage, get_submission_repository
 
 router = APIRouter()
 
@@ -328,13 +328,26 @@ async def upload_documents(
 ) -> DocumentUploadResponse:
     """Upload one or more documents to a submission."""
     record = await _get_submission(submission_id)
+    storage = get_blob_storage()
     doc_ids: list[str] = []
     for f in files:
         doc_id = str(uuid.uuid4())
         doc_ids.append(doc_id)
         record["documents"].append(doc_id)
-        # In real implementation: persist file to object storage
-        await f.read()  # consume stream
+
+        content = await f.read()
+        if storage:
+            blob_name = f"submission/{submission_id}/{doc_id}/{f.filename}"
+            await storage.upload_document(
+                blob_name=blob_name,
+                data=content,
+                content_type=f.content_type or "application/octet-stream",
+                metadata={
+                    "submission_id": submission_id,
+                    "document_id": doc_id,
+                    "original_filename": f.filename or "",
+                },
+            )
 
     record["updated_at"] = _now()
     return DocumentUploadResponse(submission_id=submission_id, document_ids=doc_ids)

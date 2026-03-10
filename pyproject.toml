@@ -49,13 +49,14 @@ target-version = "py312"
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W", "UP", "S", "B", "A", "C4", "DTZ", "T20", "ICN", "PIE", "PT", "RSE", "RET", "SLF", "SIM", "TID", "TCH", "ARG", "ERA", "PGH", "PLC", "PLE", "PLW", "TRY", "FLY", "PERF", "RUF"]
 
-ignore = ["RUF002", "RUF003", "TRY003", "B008", "ERA001", "S104", "DTZ011", "N802", "SIM102", "TRY300", "PERF401", "PLC0415"]
+ignore = ["RUF002", "RUF003", "TRY003", "B008", "ERA001", "S104", "DTZ011", "N802", "SIM102", "TRY300", "PERF401", "PLC0415", "RUF001", "N815", "A002", "B904"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["S101", "B017", "PT011", "ARG002"]
 "src/openinsure/agents/*" = ["ARG002", "ARG004"]
 "src/openinsure/infrastructure/*" = ["ARG002", "ARG004"]
 "src/openinsure/services/*" = ["ARG002", "ARG004"]
+"src/openinsure/mcp/*" = ["ARG002", "ARG004"]
 "src/scripts/*" = ["E501", "S110", "T201"]
 
 [tool.mypy]

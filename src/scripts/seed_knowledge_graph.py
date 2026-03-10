@@ -1,8 +1,8 @@
 """Seed the Cosmos DB knowledge graph with insurance knowledge from YAML files."""
 
-import yaml
 from pathlib import Path
 
+import yaml
 from azure.cosmos import CosmosClient
 from azure.identity import DefaultAzureCredential
 
