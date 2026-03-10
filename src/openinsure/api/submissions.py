@@ -6,6 +6,7 @@ Uses in-memory storage as a placeholder until the database adapter is wired in.
 
 from __future__ import annotations
 
+import json
 import uuid
 from datetime import UTC, datetime
 from enum import StrEnum
@@ -337,3 +338,42 @@ async def upload_documents(
 
     record["updated_at"] = _now()
     return DocumentUploadResponse(submission_id=submission_id, document_ids=doc_ids)
+
+
+@router.post("/{submission_id}/process")
+async def process_submission(submission_id: str):
+    """Trigger the full multi-agent new business workflow via Foundry agents."""
+    from openinsure.agents.foundry_client import get_foundry_client
+
+    foundry = get_foundry_client()
+
+    submission = await _repo.get_by_id(submission_id)
+    if not submission:
+        raise HTTPException(status_code=404, detail="Submission not found")
+
+    results: dict[str, Any] = {}
+
+    # Step 1: Triage
+    triage = await foundry.invoke(
+        "openinsure-submission",
+        f"Triage this submission: {json.dumps(submission, default=str)[:1000]}",
+    )
+    results["triage"] = triage
+
+    # Step 2: Underwriting (if appetite matched)
+    uw = await foundry.invoke(
+        "openinsure-underwriting",
+        f"Assess and price: {json.dumps(submission, default=str)[:500]} "
+        f"Triage: {json.dumps(triage.get('response', {}), default=str)[:300]}",
+    )
+    results["underwriting"] = uw
+
+    # Step 3: Compliance
+    comp = await foundry.invoke(
+        "openinsure-compliance",
+        f"Audit this workflow: Triage={json.dumps(triage.get('response', {}), default=str)[:200]} "
+        f"UW={json.dumps(uw.get('response', {}), default=str)[:200]}",
+    )
+    results["compliance"] = comp
+
+    return {"submission_id": submission_id, "workflow": "new_business", "steps": results}

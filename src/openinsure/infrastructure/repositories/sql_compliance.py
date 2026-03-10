@@ -140,6 +140,55 @@ class SqlComplianceRepository:
     async def clear_audit_events(self) -> None:
         await self.db.execute_query("DELETE FROM audit_events")
 
+    # -- agent-level persistence (wired from agents.base → Foundry flow) ------
+
+    async def store_decision(self, record: dict[str, Any]) -> str:
+        """Persist an agent DecisionRecord to the decision_records table."""
+        record_id = str(record.get("decision_id", record.get("id", "")))
+        await self.db.execute_query(
+            """INSERT INTO decision_records (id, decision_type, entity_id, entity_type,
+               model_id, model_version, input_summary, output_summary, confidence,
+               explanation, human_override, override_reason, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            [
+                record_id,
+                record.get("decision_type"),
+                record.get("entity_id", record.get("agent_id", "")),
+                record.get("entity_type", "agent"),
+                record.get("model_used", record.get("model_id", "")),
+                record.get("model_version"),
+                json.dumps(record.get("input_summary", {})),
+                json.dumps(record.get("output", record.get("output_summary", {}))),
+                record.get("confidence", 0),
+                json.dumps(record.get("reasoning", {})),
+                bool(record.get("human_override", False)),
+                record.get("override_reason"),
+                record.get("created_at", record.get("timestamp", "")),
+            ],
+        )
+        return record_id
+
+    async def store_audit_event(self, event: dict[str, Any]) -> str:
+        """Persist an audit event from the agent workflow."""
+        from uuid import uuid4
+
+        event_id = str(event.get("id", uuid4()))
+        await self.db.execute_query(
+            """INSERT INTO audit_events (id, timestamp, actor, action,
+               entity_type, entity_id, details)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            [
+                event_id,
+                event.get("timestamp", event.get("created_at", "")),
+                event.get("actor", event.get("actor_id", "agent")),
+                event.get("action", ""),
+                event.get("entity_type", event.get("resource_type", "")),
+                event.get("entity_id", event.get("resource_id", "")),
+                json.dumps(event.get("details", {})),
+            ],
+        )
+        return event_id
+
 
 def _deserialize_decision(row: dict[str, Any]) -> dict[str, Any]:
     for col in ("input_summary", "output_summary"):

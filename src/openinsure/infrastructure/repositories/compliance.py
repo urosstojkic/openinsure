@@ -59,3 +59,45 @@ class InMemoryComplianceRepository:
 
     async def clear_audit_events(self) -> None:
         self._audit_events.clear()
+
+    # -- agent-level persistence (wired from agents.base → Foundry flow) ------
+
+    async def store_decision(self, record: dict[str, Any]) -> str:
+        """Persist an agent DecisionRecord to the in-memory store."""
+        from uuid import uuid4
+
+        record_id = str(record.get("decision_id", record.get("id", uuid4())))
+        entry = {
+            "id": record_id,
+            "decision_type": record.get("decision_type", ""),
+            "entity_id": record.get("entity_id", record.get("agent_id", "")),
+            "entity_type": record.get("entity_type", "agent"),
+            "model_id": record.get("model_used", record.get("model_id", "")),
+            "model_version": record.get("model_version", ""),
+            "input_summary": record.get("input_summary", {}),
+            "output_summary": record.get("output", record.get("output_summary", {})),
+            "confidence": record.get("confidence", 0),
+            "explanation": str(record.get("reasoning", "")),
+            "human_override": bool(record.get("human_override", False)),
+            "override_reason": record.get("override_reason"),
+            "created_at": record.get("created_at", record.get("timestamp", "")),
+        }
+        self._decisions[record_id] = entry
+        return record_id
+
+    async def store_audit_event(self, event: dict[str, Any]) -> str:
+        """Persist an audit event from the agent workflow."""
+        from uuid import uuid4
+
+        event_id = str(event.get("id", uuid4()))
+        entry = {
+            "id": event_id,
+            "timestamp": event.get("timestamp", event.get("created_at", "")),
+            "actor": event.get("actor", event.get("actor_id", "agent")),
+            "action": event.get("action", ""),
+            "entity_type": event.get("entity_type", event.get("resource_type", "")),
+            "entity_id": event.get("entity_id", event.get("resource_id", "")),
+            "details": event.get("details", {}),
+        }
+        self._audit_events.append(entry)
+        return event_id

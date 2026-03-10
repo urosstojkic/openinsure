@@ -165,6 +165,57 @@ class InsuranceAgent(ABC):
 
         return result, decision
 
+    async def execute_with_foundry(self, task: dict[str, Any]) -> tuple[dict[str, Any], DecisionRecord]:
+        """Execute via Foundry if available, otherwise local."""
+        from openinsure.agents.foundry_client import get_foundry_client
+
+        foundry = get_foundry_client()
+
+        if foundry.is_available and self.config.model_deployment:
+            # Build prompt from task
+            prompt = self._build_prompt(task)
+            foundry_result = await foundry.invoke(
+                f"openinsure-{self.config.agent_id.split('-')[0]}",
+                prompt,
+            )
+            if foundry_result.get("source") == "foundry":
+                # Wrap Foundry response in standard format
+                result = foundry_result.get("response", {})
+                if isinstance(result, str):
+                    result = {"output": result}
+                result["source"] = "foundry"
+                result["confidence"] = result.get("confidence", 0.8)
+                # Create decision record
+                decision = DecisionRecord(
+                    agent_id=self.config.agent_id,
+                    agent_version=self.config.agent_version,
+                    model_used=self.config.model_deployment,
+                    model_version="2026-03-01",
+                    decision_type=self._get_decision_type(task),
+                    input_summary=self._summarize_input(task),
+                    output=self._summarize_output(result),
+                    confidence=result.get("confidence", 0.8),
+                    reasoning={"source": "foundry", "raw": foundry_result.get("raw", "")[:500]},
+                )
+                decision.human_oversight = {
+                    "required": decision.confidence < self.config.escalation_threshold,
+                    "reason": "foundry_assessment",
+                    "overridden": False,
+                }
+                self.decision_history.append(decision)
+                return result, decision
+
+        # Fallback to local processing
+        return await self.execute(task)
+
+    def _build_prompt(self, task: dict[str, Any]) -> str:
+        """Build a prompt string from the task dict."""
+        parts = [f"Process this {task.get('type', 'unknown')} task. Respond with JSON."]
+        for key, val in task.items():
+            if key != "raw_data" and val is not None:
+                parts.append(f"{key}: {val}")
+        return "\n".join(parts)
+
     def _get_decision_type(self, task: dict[str, Any]) -> str:
         """Derive decision type from task."""
         return f"{self.config.agent_id}_{task.get('type', 'unknown')}"
