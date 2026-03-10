@@ -69,17 +69,16 @@ class PolicyResponse(BaseModel):
 
     id: str
     submission_id: str = ""
-    product_id: str = ""
-    policy_number: str = ""
-    policyholder_name: str = ""
-    insured_name: str = ""
-    status: str = "pending"
-    effective_date: str = ""
-    expiration_date: str = ""
-    premium: float = 0
+    product_id: str
+    policy_number: str
+    policyholder_name: str
+    status: str
+    effective_date: str
+    expiration_date: str
+    premium: float
     total_premium: float = 0
     written_premium: float = 0
-    coverages: list[dict[str, Any]] = Field(default_factory=list)
+    coverages: list[dict[str, Any]]
     endorsements: list[dict[str, Any]] = Field(default_factory=list)
     metadata: dict[str, Any] = Field(default_factory=dict)
     documents: list[str] = Field(default_factory=list)

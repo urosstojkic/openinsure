@@ -26,6 +26,103 @@ _repo = get_submission_repository()
 
 
 # ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+def _build_policy_data(
+    submission: dict[str, Any],
+    premium: float,
+    *,
+    policy_id: str | None = None,
+    policy_number: str | None = None,
+) -> dict[str, Any]:
+    """Build a complete policy record from a submission.
+
+    Ensures all business-required fields are populated:
+    policyholder_name, coverages, effective/expiration dates, premium.
+    """
+    now = _now()
+    pid = policy_id or str(uuid.uuid4())
+    pnum = policy_number or f"POL-{datetime.now(UTC).strftime('%Y')}-{uuid.uuid4().hex[:6].upper()}"
+    applicant = submission.get("applicant_name", "") or submission.get("insured_name", "Unknown Insured")
+    lob = submission.get("line_of_business", "cyber")
+
+    # Build default cyber coverages from the submission
+    cyber_data = submission.get("cyber_risk_data", {})
+    if isinstance(cyber_data, str):
+        try:
+            cyber_data = json.loads(cyber_data)
+        except (json.JSONDecodeError, TypeError):
+            cyber_data = {}
+
+    limit = float(cyber_data.get("requested_limit", 1000000) if cyber_data else 1000000)
+    deductible = float(cyber_data.get("requested_deductible", 10000) if cyber_data else 10000)
+
+    coverages = [
+        {
+            "coverage_code": "BREACH-RESP",
+            "coverage_name": "First-Party Breach Response",
+            "limit": limit,
+            "deductible": deductible,
+            "premium": round(premium * 0.30, 2),
+        },
+        {
+            "coverage_code": "THIRD-PARTY",
+            "coverage_name": "Third-Party Liability",
+            "limit": limit,
+            "deductible": deductible,
+            "premium": round(premium * 0.30, 2),
+        },
+        {
+            "coverage_code": "REG-DEFENSE",
+            "coverage_name": "Regulatory Defense & Penalties",
+            "limit": limit * 0.5,
+            "deductible": deductible,
+            "premium": round(premium * 0.15, 2),
+        },
+        {
+            "coverage_code": "BUS-INTERRUPT",
+            "coverage_name": "Business Interruption",
+            "limit": limit * 0.5,
+            "deductible": deductible,
+            "premium": round(premium * 0.15, 2),
+        },
+        {
+            "coverage_code": "RANSOMWARE",
+            "coverage_name": "Ransomware & Extortion",
+            "limit": limit * 0.5,
+            "deductible": deductible,
+            "premium": round(premium * 0.10, 2),
+        },
+    ]
+
+    return {
+        "id": pid,
+        "policy_number": pnum,
+        "policyholder_name": applicant,
+        "status": "active",
+        "product_id": submission.get("product_id", f"{lob}-smb"),
+        "submission_id": submission.get("id", ""),
+        "insured_name": applicant,
+        "effective_date": str(submission.get("requested_effective_date", now)),
+        "expiration_date": str(submission.get("requested_expiration_date", now)),
+        "premium": premium,
+        "total_premium": premium,
+        "written_premium": premium,
+        "earned_premium": 0,
+        "unearned_premium": premium,
+        "coverages": coverages,
+        "endorsements": [],
+        "metadata": {"lob": lob, "source": "workflow"},
+        "documents": [],
+        "bound_at": now,
+        "created_at": now,
+        "updated_at": now,
+    }
+
+
+# ---------------------------------------------------------------------------
 # Enums
 # ---------------------------------------------------------------------------
 
@@ -317,24 +414,7 @@ async def bind_submission(submission_id: str) -> BindResponse:
 
     # Create the actual policy record
     policy_repo = get_policy_repository()
-    policy_data = {
-        "id": policy_id,
-        "policy_number": policy_number,
-        "status": "active",
-        "product_id": record.get("product_id", "cyber-smb"),
-        "submission_id": submission_id,
-        "insured_id": record.get("applicant_id", record.get("applicant_name", "unknown")),
-        "insured_name": record.get("applicant_name", ""),
-        "effective_date": record.get("requested_effective_date", now),
-        "expiration_date": record.get("requested_expiration_date", now),
-        "total_premium": premium,
-        "written_premium": premium,
-        "earned_premium": 0,
-        "unearned_premium": premium,
-        "bound_at": now,
-        "created_at": now,
-        "updated_at": now,
-    }
+    policy_data = _build_policy_data(record, premium, policy_id=policy_id, policy_number=policy_number)
     await policy_repo.create(policy_data)
 
     # Create billing account
@@ -494,25 +574,8 @@ async def process_submission(submission_id: str):
         policy_id = str(uuid.uuid4())
         policy_number = f"POL-{datetime.now(UTC).strftime('%Y')}-{uuid.uuid4().hex[:6].upper()}"
         policy_repo = get_policy_repository()
-        await policy_repo.create(
-            {
-                "id": policy_id,
-                "policy_number": policy_number,
-                "status": "active",
-                "product_id": submission.get("product_id", "cyber-smb"),
-                "submission_id": submission_id,
-                "insured_name": submission.get("applicant_name", ""),
-                "effective_date": submission.get("requested_effective_date", now),
-                "expiration_date": submission.get("requested_expiration_date", now),
-                "total_premium": premium,
-                "written_premium": premium,
-                "earned_premium": 0,
-                "unearned_premium": premium,
-                "bound_at": now,
-                "created_at": now,
-                "updated_at": now,
-            }
-        )
+        policy_data = _build_policy_data(submission, premium, policy_id=policy_id, policy_number=policy_number)
+        await policy_repo.create(policy_data)
 
         billing_repo = get_billing_repository()
         await billing_repo.create(
