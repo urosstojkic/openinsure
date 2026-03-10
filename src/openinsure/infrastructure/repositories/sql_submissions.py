@@ -92,7 +92,7 @@ class SqlSubmissionRepository(BaseRepository):
         params.append(datetime.now(UTC).isoformat())
         params.append(str(entity_id))
         await self.db.execute_query(
-            f"UPDATE submissions SET {', '.join(sets)} WHERE id = ?",  # noqa: S608
+            f"UPDATE submissions SET {', '.join(sets)} WHERE id = ?",  # noqa: S608  # nosec B608 — parameterized query, sets built from validated keys
             params,
         )
         return await self.get_by_id(entity_id)
@@ -119,3 +119,4 @@ class SqlSubmissionRepository(BaseRepository):
             query += " WHERE " + " AND ".join(where_clauses)
         result = await self.db.fetch_one(query, params)
         return result.get("cnt", 0) if result else 0
+

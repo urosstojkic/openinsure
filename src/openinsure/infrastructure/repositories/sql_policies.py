@@ -98,7 +98,7 @@ class SqlPolicyRepository(BaseRepository):
         params.append(datetime.now(UTC).isoformat())
         params.append(str(entity_id))
         await self.db.execute_query(
-            f"UPDATE policies SET {', '.join(sets)} WHERE id = ?",  # noqa: S608
+            f"UPDATE policies SET {', '.join(sets)} WHERE id = ?",  # noqa: S608  # nosec B608 — parameterized query, sets built from validated keys
             params,
         )
         return await self.get_by_id(entity_id)
@@ -133,3 +133,4 @@ def _deserialize_policy(row: dict[str, Any]) -> dict[str, Any]:
         if col in row and isinstance(row[col], str):
             row[col] = json.loads(row[col])
     return row
+
