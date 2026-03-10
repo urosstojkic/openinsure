@@ -47,9 +47,10 @@ def create_app() -> FastAPI:
     @app.on_event("startup")
     async def startup() -> None:
         logger.info("openinsure.startup", version=settings.app_version)
+        logger.info("openinsure.storage_mode", mode=settings.storage_mode)
 
-        # Seed sample data in debug / local-dev mode
-        if settings.debug:
+        # Seed sample data only in debug / local-dev mode with in-memory storage
+        if settings.debug and settings.storage_mode == "memory":
             from openinsure.infrastructure.seed_data import seed_sample_data
 
             await seed_sample_data()

@@ -14,14 +14,14 @@ from typing import Any
 from fastapi import APIRouter, File, HTTPException, Query, UploadFile
 from pydantic import BaseModel, Field
 
-from openinsure.infrastructure.repositories.submissions import InMemorySubmissionRepository
+from openinsure.infrastructure.factory import get_submission_repository
 
 router = APIRouter()
 
 # ---------------------------------------------------------------------------
-# Repository (in-memory for local dev; swap for SqlRepository in prod)
+# Repository — resolved by factory (in-memory or SQL depending on config)
 # ---------------------------------------------------------------------------
-_repo = InMemorySubmissionRepository()
+_repo = get_submission_repository()
 
 
 # ---------------------------------------------------------------------------

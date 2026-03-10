@@ -15,13 +15,14 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
+from openinsure.infrastructure.factory import get_compliance_repository
+
 router = APIRouter()
 
 # ---------------------------------------------------------------------------
-# In-memory stores
+# Compliance repository — resolved by factory (in-memory or SQL)
 # ---------------------------------------------------------------------------
-_decisions: dict[str, dict[str, Any]] = {}
-_audit_events: list[dict[str, Any]] = []
+_compliance_repo = get_compliance_repository()
 
 
 # ---------------------------------------------------------------------------
@@ -169,47 +170,6 @@ def _now() -> str:
     return datetime.now(UTC).isoformat()
 
 
-# Seed demo data so endpoints are useful out of the box
-def _seed_demo_data() -> None:
-    if _decisions or _audit_events:
-        return
-
-    now = _now()
-    # Demo decision
-    did = str(uuid.uuid4())
-    _decisions[did] = {
-        "id": did,
-        "decision_type": DecisionType.TRIAGE,
-        "entity_id": "demo-submission-1",
-        "entity_type": "submission",
-        "model_id": "triage-agent-v1",
-        "model_version": "0.1.0",
-        "input_summary": {"applicant": "Acme Corp", "industry": "technology"},
-        "output_summary": {"risk_score": 0.35, "recommendation": "proceed_to_quote"},
-        "confidence": 0.92,
-        "explanation": "Low risk profile based on industry benchmarks and security posture.",
-        "human_override": False,
-        "override_reason": None,
-        "created_at": now,
-    }
-
-    # Demo audit event
-    _audit_events.append(
-        {
-            "id": str(uuid.uuid4()),
-            "timestamp": now,
-            "actor": "system",
-            "action": "decision.recorded",
-            "entity_type": "submission",
-            "entity_id": "demo-submission-1",
-            "details": {"decision_id": did},
-        }
-    )
-
-
-_seed_demo_data()
-
-
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
@@ -224,17 +184,15 @@ async def list_decisions(
     limit: int = Query(20, ge=1, le=100),
 ) -> DecisionList:
     """List AI decision records with optional filtering."""
-    results = list(_decisions.values())
-
+    filters: dict[str, Any] = {}
     if decision_type is not None:
-        results = [d for d in results if d["decision_type"] == decision_type]
+        filters["decision_type"] = decision_type
     if entity_type is not None:
-        results = [d for d in results if d["entity_type"] == entity_type]
+        filters["entity_type"] = entity_type
     if entity_id is not None:
-        results = [d for d in results if d["entity_id"] == entity_id]
+        filters["entity_id"] = entity_id
 
-    total = len(results)
-    page = results[skip : skip + limit]
+    page, total = await _compliance_repo.list_decisions(filters=filters, skip=skip, limit=limit)
     return DecisionList(
         items=[DecisionRecord(**r) for r in page],
         total=total,
@@ -246,7 +204,7 @@ async def list_decisions(
 @router.get("/decisions/{decision_id}", response_model=DecisionRecord)
 async def get_decision(decision_id: str) -> DecisionRecord:
     """Retrieve a single decision record by ID."""
-    record = _decisions.get(decision_id)
+    record = await _compliance_repo.get_decision(decision_id)
     if record is None:
         raise HTTPException(status_code=404, detail=f"Decision {decision_id} not found")
     return DecisionRecord(**record)
@@ -262,19 +220,17 @@ async def get_audit_trail(
     limit: int = Query(50, ge=1, le=200),
 ) -> AuditTrailResponse:
     """Retrieve audit trail events with optional filtering."""
-    results = list(_audit_events)
-
+    filters: dict[str, Any] = {}
     if entity_type is not None:
-        results = [e for e in results if e["entity_type"] == entity_type]
+        filters["entity_type"] = entity_type
     if entity_id is not None:
-        results = [e for e in results if e["entity_id"] == entity_id]
+        filters["entity_id"] = entity_id
     if actor is not None:
-        results = [e for e in results if e["actor"] == actor]
+        filters["actor"] = actor
     if action is not None:
-        results = [e for e in results if e["action"] == action]
+        filters["action"] = action
 
-    total = len(results)
-    page = results[skip : skip + limit]
+    page, total = await _compliance_repo.list_audit_events(filters=filters, skip=skip, limit=limit)
     return AuditTrailResponse(
         items=[AuditEvent(**e) for e in page],
         total=total,
@@ -291,11 +247,13 @@ async def generate_bias_report(body: BiasReportRequest) -> BiasReportResponse:
     across protected attributes.
     """
     # Filter decisions in date range
+    all_decisions, _ = await _compliance_repo.list_decisions(
+        filters={"decision_type": body.decision_type}, skip=0, limit=10000
+    )
     decisions_in_range = [
         d
-        for d in _decisions.values()
-        if d["decision_type"] == body.decision_type
-        and d["created_at"] >= body.date_from
+        for d in all_decisions
+        if d["created_at"] >= body.date_from
         and d["created_at"] <= body.date_to
     ]
 

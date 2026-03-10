@@ -14,14 +14,14 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from openinsure.infrastructure.repositories.policies import InMemoryPolicyRepository
+from openinsure.infrastructure.factory import get_policy_repository
 
 router = APIRouter()
 
 # ---------------------------------------------------------------------------
-# Repository (in-memory for local dev; swap for SqlRepository in prod)
+# Repository — resolved by factory (in-memory or SQL depending on config)
 # ---------------------------------------------------------------------------
-_repo = InMemoryPolicyRepository()
+_repo = get_policy_repository()
 
 
 # ---------------------------------------------------------------------------

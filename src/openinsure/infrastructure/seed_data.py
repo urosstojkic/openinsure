@@ -391,14 +391,14 @@ def _sample_audit_events() -> list[dict[str, Any]]:
 
 
 async def seed_sample_data() -> None:
-    """Populate the module-level in-memory repositories with sample data.
+    """Populate the factory-provided repositories with sample data.
 
-    This imports the singleton repos from the API modules and writes
-    into them, so the API endpoints immediately return useful data.
+    Uses the same singleton repos that the API endpoints consume, so
+    seeded data is immediately visible via the REST API.
     """
     from openinsure.api.billing import _repo as billing_repo
     from openinsure.api.claims import _repo as claims_repo
-    from openinsure.api.compliance import _audit_events, _decisions
+    from openinsure.api.compliance import _compliance_repo as compliance_repo
     from openinsure.api.policies import _repo as policies_repo
     from openinsure.api.products import _repo as products_repo
     from openinsure.api.submissions import _repo as submissions_repo
@@ -449,9 +449,10 @@ async def seed_sample_data() -> None:
         }
     )
 
-    # Compliance — decisions & audit events (these are plain dicts/lists)
+    # Compliance — decisions & audit events
     for dec in _sample_decisions():
-        _decisions[dec["id"]] = dec
+        await compliance_repo.add_decision(dec)
 
-    _audit_events.clear()
-    _audit_events.extend(_sample_audit_events())
+    await compliance_repo.clear_audit_events()
+    for evt in _sample_audit_events():
+        await compliance_repo.add_audit_event(evt)
