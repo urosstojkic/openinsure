@@ -27,7 +27,7 @@ class Settings(BaseSettings):
     sql_connection_string: str = ""
     sql_database_name: str = "openinsure"
 
-    # Azure Cosmos DB (Gremlin API)
+    # Azure Cosmos DB (NoSQL API)
     cosmos_endpoint: str = ""
     cosmos_database_name: str = "openinsure-knowledge"
     cosmos_graph_name: str = "insurance-graph"

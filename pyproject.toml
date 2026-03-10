@@ -23,6 +23,7 @@ dependencies = [
     "azure-ai-projects>=1.0.0b11",
     "pyodbc>=5.2.0",
     "httpx>=0.28.0",
+    "pyyaml>=6.0",
     "structlog>=24.4.0",
     "tenacity>=9.0.0",
 ]

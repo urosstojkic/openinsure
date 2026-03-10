@@ -216,6 +216,14 @@ class KnowledgeAgent(InsuranceAgent):
     # ------------------------------------------------------------------
 
     async def process(self, task: dict[str, Any]) -> dict[str, Any]:
+        # Try Cosmos DB knowledge store first
+        from openinsure.infrastructure.factory import get_knowledge_store
+
+        store = get_knowledge_store()
+        if store:
+            return await self._process_with_store(store, task)
+
+        # Fall back to static dict logic
         task_type = task.get("type", "query")
         handler = {
             "query": self._query,
@@ -230,6 +238,84 @@ class KnowledgeAgent(InsuranceAgent):
 
         self.logger.info("knowledge.task.dispatch", task_type=task_type)
         return await handler(task)
+
+    # ------------------------------------------------------------------
+    # Cosmos DB store dispatch
+    # ------------------------------------------------------------------
+
+    async def _process_with_store(self, store, task: dict[str, Any]) -> dict[str, Any]:
+        """Process task using the Cosmos DB knowledge store."""
+        task_type = task.get("type", "query")
+        self.logger.info("knowledge.task.dispatch", task_type=task_type, backend="cosmos")
+
+        if task_type == "get_guidelines":
+            lob = task.get("line_of_business", "")
+            docs = store.query_guidelines(lob)
+            found = bool(docs)
+            return {
+                "found": found,
+                "line_of_business": lob,
+                "guidelines": docs[0] if docs else None,
+                "confidence": 0.95 if found else 0.3,
+                "reasoning": {"step": "get_guidelines", "lob": lob, "found": found},
+                "data_sources": ["cosmos_knowledge_graph"],
+                "knowledge_queries": [f"guidelines/{lob}"],
+            }
+
+        if task_type == "get_regulatory":
+            jurisdiction = task.get("jurisdiction", "")
+            docs = store.query_regulatory(jurisdiction)
+            found = bool(docs)
+            return {
+                "found": found,
+                "jurisdiction": jurisdiction,
+                "requirements": docs[0] if docs else None,
+                "confidence": 0.95 if found else 0.3,
+                "reasoning": {"step": "get_regulatory", "jurisdiction": jurisdiction, "found": found},
+                "data_sources": ["cosmos_knowledge_graph"],
+                "knowledge_queries": [f"regulatory/{jurisdiction}"],
+            }
+
+        if task_type == "query":
+            query = task.get("query", "")
+            entity_type = task.get("entity_type")
+            results = store.search_knowledge(query, entity_type=entity_type)
+            return {
+                "query": query,
+                "results": results,
+                "result_count": len(results),
+                "confidence": 0.9 if results else 0.3,
+                "reasoning": {"step": "query", "query": query, "stores_searched": ["cosmos"]},
+                "data_sources": ["cosmos_knowledge_graph"],
+                "knowledge_queries": [query],
+            }
+
+        if task_type == "update":
+            entity_type = task.get("entity_type")
+            entity_data = task.get("entity_data", {})
+            if not entity_type:
+                raise ValueError("entity_type is required for knowledge updates")
+            doc = {"entityType": entity_type, **entity_data}
+            if "id" not in doc:
+                doc["id"] = f"{entity_type}-{hash(str(entity_data))}"
+            store.upsert_document(doc)
+            return {
+                "updated": True,
+                "entity_type": entity_type,
+                "fields_updated": list(entity_data.keys()),
+                "confidence": 0.90,
+                "reasoning": {"step": "update", "entity_type": entity_type},
+                "data_sources": ["cosmos_knowledge_graph"],
+                "knowledge_queries": [f"update/{entity_type}"],
+            }
+
+        # For get_coverage_rules or unknown types, fall through to static logic
+        handler = {
+            "get_coverage_rules": self._get_coverage_rules,
+        }.get(task_type)
+        if handler:
+            return await handler(task)
+        raise ValueError(f"Unknown knowledge task type: {task_type}")
 
     # ------------------------------------------------------------------
     # Query

@@ -111,6 +111,21 @@ def get_blob_storage():
 
 
 @lru_cache
+def get_knowledge_store():
+    """Return a CosmosKnowledgeStore, or ``None`` when Cosmos DB is not configured."""
+    settings = get_settings()
+    if settings.storage_mode == "azure" and settings.cosmos_endpoint:
+        from openinsure.infrastructure.cosmos_nosql import CosmosKnowledgeStore
+
+        return CosmosKnowledgeStore(
+            settings.cosmos_endpoint,
+            settings.cosmos_database_name,
+            settings.cosmos_graph_name,
+        )
+    return None  # Fall back to static dicts in KnowledgeAgent
+
+
+@lru_cache
 def get_compliance_repository():
     """Return decision/audit repositories for the compliance module."""
     settings = get_settings()
