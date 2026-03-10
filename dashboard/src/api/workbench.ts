@@ -1,3 +1,4 @@
+import client from './client';
 import type {
   UnderwriterQueueItem,
   ClaimsQueueItem,
@@ -23,54 +24,114 @@ import {
   mockCompliance,
 } from '../data/mock';
 
-const USE_MOCK = true;
+const USE_MOCK = import.meta.env.VITE_USE_MOCK !== 'false';
 
 export async function getUnderwriterQueue(): Promise<UnderwriterQueueItem[]> {
   if (USE_MOCK) return mockUnderwriterQueue;
-  return [];
+  try {
+    const { data } = await client.get('/underwriter/queue');
+    return Array.isArray(data) ? data : (data.items || []);
+  } catch (error) {
+    console.warn('API call failed, falling back to mock:', error);
+    return mockUnderwriterQueue;
+  }
 }
 
 export async function getClaimsQueue(): Promise<ClaimsQueueItem[]> {
   if (USE_MOCK) return mockClaimsQueue;
-  return [];
+  try {
+    const { data } = await client.get('/claims/queue');
+    return Array.isArray(data) ? data : (data.items || []);
+  } catch (error) {
+    console.warn('API call failed, falling back to mock:', error);
+    return mockClaimsQueue;
+  }
 }
 
 export async function getDecisionAudit(): Promise<DecisionAuditItem[]> {
   if (USE_MOCK) return mockDecisionAudit;
-  return [];
+  try {
+    const { data } = await client.get('/decisions/audit');
+    return Array.isArray(data) ? data : (data.items || []);
+  } catch (error) {
+    console.warn('API call failed, falling back to mock:', error);
+    return mockDecisionAudit;
+  }
 }
 
 export async function getOverrideLog(): Promise<OverrideLogEntry[]> {
   if (USE_MOCK) return mockOverrideLog;
-  return [];
+  try {
+    const { data } = await client.get('/decisions/overrides');
+    return Array.isArray(data) ? data : (data.items || []);
+  } catch (error) {
+    console.warn('API call failed, falling back to mock:', error);
+    return mockOverrideLog;
+  }
 }
 
 export async function getBiasChartData(): Promise<BiasChartData> {
   if (USE_MOCK) return mockBiasChartData;
-  return { approval_by_sector: [], premium_by_size: [], disparate_impact: [] };
+  try {
+    const { data } = await client.get<BiasChartData>('/compliance/bias');
+    return data;
+  } catch (error) {
+    console.warn('API call failed, falling back to mock:', error);
+    return mockBiasChartData;
+  }
 }
 
 export async function getComplianceWorkbenchData(): Promise<ComplianceSummary> {
   if (USE_MOCK) return mockCompliance;
-  return {} as ComplianceSummary;
+  try {
+    const { data } = await client.get<ComplianceSummary>('/compliance/summary');
+    return data;
+  } catch (error) {
+    console.warn('API call failed, falling back to mock:', error);
+    return mockCompliance;
+  }
 }
 
 export async function getExecutiveDashboard(): Promise<ExecutiveDashboardData> {
   if (USE_MOCK) return mockExecutiveData;
-  return {} as ExecutiveDashboardData;
+  try {
+    const { data } = await client.get<ExecutiveDashboardData>('/dashboard/executive');
+    return data;
+  } catch (error) {
+    console.warn('API call failed, falling back to mock:', error);
+    return mockExecutiveData;
+  }
 }
 
 export async function getBrokerSubmissions(): Promise<BrokerSubmission[]> {
   if (USE_MOCK) return mockBrokerSubmissions;
-  return [];
+  try {
+    const { data } = await client.get('/broker/submissions');
+    return Array.isArray(data) ? data : (data.items || []);
+  } catch (error) {
+    console.warn('API call failed, falling back to mock:', error);
+    return mockBrokerSubmissions;
+  }
 }
 
 export async function getBrokerPolicies(): Promise<BrokerPolicy[]> {
   if (USE_MOCK) return mockBrokerPolicies;
-  return [];
+  try {
+    const { data } = await client.get('/broker/policies');
+    return Array.isArray(data) ? data : (data.items || []);
+  } catch (error) {
+    console.warn('API call failed, falling back to mock:', error);
+    return mockBrokerPolicies;
+  }
 }
 
 export async function getBrokerClaims(): Promise<BrokerClaim[]> {
   if (USE_MOCK) return mockBrokerClaims;
-  return [];
+  try {
+    const { data } = await client.get('/broker/claims');
+    return Array.isArray(data) ? data : (data.items || []);
+  } catch (error) {
+    console.warn('API call failed, falling back to mock:', error);
+    return mockBrokerClaims;
+  }
 }

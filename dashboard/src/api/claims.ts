@@ -2,18 +2,28 @@ import client from './client';
 import type { Claim } from '../types';
 import { mockClaims } from '../data/mock';
 
-const USE_MOCK = true;
+const USE_MOCK = import.meta.env.VITE_USE_MOCK !== 'false';
 
 export async function getClaims(): Promise<Claim[]> {
   if (USE_MOCK) return mockClaims;
-  const { data } = await client.get<Claim[]>('/claims');
-  return data;
+  try {
+    const { data } = await client.get('/claims');
+    return Array.isArray(data) ? data : (data.items || []);
+  } catch (error) {
+    console.warn('API call failed, falling back to mock:', error);
+    return mockClaims;
+  }
 }
 
 export async function getClaim(id: string): Promise<Claim | undefined> {
   if (USE_MOCK) return mockClaims.find((c) => c.id === id);
-  const { data } = await client.get<Claim>(`/claims/${id}`);
-  return data;
+  try {
+    const { data } = await client.get<Claim>(`/claims/${id}`);
+    return data;
+  } catch (error) {
+    console.warn('API call failed, falling back to mock:', error);
+    return mockClaims.find((c) => c.id === id);
+  }
 }
 
 export async function createClaim(payload: Record<string, unknown>): Promise<Claim> {
