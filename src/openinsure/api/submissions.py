@@ -302,22 +302,75 @@ async def generate_quote(submission_id: str) -> QuoteResponse:
 
 @router.post("/{submission_id}/bind", response_model=BindResponse)
 async def bind_submission(submission_id: str) -> BindResponse:
-    """Bind the submission, creating a policy.
+    """Bind the submission, creating a real policy and billing account."""
+    from openinsure.infrastructure.factory import get_billing_repository, get_policy_repository
+    from openinsure.services.event_publisher import publish_domain_event
 
-    Stub implementation — the real version orchestrates policy issuance.
-    """
     record = await _get_submission(submission_id)
     if record["status"] != SubmissionStatus.QUOTED:
         raise HTTPException(status_code=409, detail="Submission must be quoted before binding")
 
+    now = _now()
+    policy_id = str(uuid.uuid4())
+    policy_number = f"POL-{datetime.now(UTC).strftime('%Y')}-{uuid.uuid4().hex[:6].upper()}"
+    premium = record.get("quoted_premium", 0) or record.get("total_premium", 10000)
+
+    # Create the actual policy record
+    policy_repo = get_policy_repository()
+    policy_data = {
+        "id": policy_id,
+        "policy_number": policy_number,
+        "status": "active",
+        "product_id": record.get("product_id", "cyber-smb"),
+        "submission_id": submission_id,
+        "insured_id": record.get("applicant_id", record.get("applicant_name", "unknown")),
+        "insured_name": record.get("applicant_name", ""),
+        "effective_date": record.get("requested_effective_date", now),
+        "expiration_date": record.get("requested_expiration_date", now),
+        "total_premium": premium,
+        "written_premium": premium,
+        "earned_premium": 0,
+        "unearned_premium": premium,
+        "bound_at": now,
+        "created_at": now,
+        "updated_at": now,
+    }
+    await policy_repo.create(policy_data)
+
+    # Create billing account
+    billing_repo = get_billing_repository()
+    billing_data = {
+        "id": str(uuid.uuid4()),
+        "policy_id": policy_id,
+        "billing_plan": "direct_bill",
+        "total_premium": premium,
+        "balance_due": premium,
+        "created_at": now,
+        "updated_at": now,
+    }
+    await billing_repo.create(billing_data)
+
+    # Update submission status
     record["status"] = SubmissionStatus.BOUND
-    record["updated_at"] = _now()
+    record["updated_at"] = now
+
+    # Publish domain event
+    await publish_domain_event(
+        event_type="policy.bound",
+        subject=f"/policies/{policy_id}",
+        data={
+            "policy_id": policy_id,
+            "policy_number": policy_number,
+            "premium": str(premium),
+            "submission_id": submission_id,
+        },
+    )
 
     return BindResponse(
         submission_id=submission_id,
-        policy_id=str(uuid.uuid4()),
+        policy_id=policy_id,
         status=SubmissionStatus.BOUND,
-        bound_at=_now(),
+        bound_at=now,
     )
 
 
@@ -355,8 +408,21 @@ async def upload_documents(
 
 @router.post("/{submission_id}/process")
 async def process_submission(submission_id: str):
-    """Trigger the full multi-agent new business workflow via Foundry agents."""
+    """Run the full multi-agent new business workflow via Foundry agents.
+
+    This is the real end-to-end pipeline:
+    1. Triage (AI) → updates submission status
+    2. Underwriting (AI) → sets quoted premium
+    3. Policy bind → creates policy + billing records
+    4. Compliance audit → logs decision records
+    """
     from openinsure.agents.foundry_client import get_foundry_client
+    from openinsure.infrastructure.factory import (
+        get_billing_repository,
+        get_compliance_repository,
+        get_policy_repository,
+    )
+    from openinsure.services.event_publisher import publish_domain_event
 
     foundry = get_foundry_client()
 
@@ -365,28 +431,143 @@ async def process_submission(submission_id: str):
         raise HTTPException(status_code=404, detail="Submission not found")
 
     results: dict[str, Any] = {}
+    now = _now()
 
     # Step 1: Triage
     triage = await foundry.invoke(
         "openinsure-submission",
-        f"Triage this submission: {json.dumps(submission, default=str)[:1000]}",
+        f"Triage this submission. Respond with JSON including appetite_match (yes/no), risk_score (1-10), priority, confidence.\n{json.dumps(submission, default=str)[:1000]}",
     )
     results["triage"] = triage
 
-    # Step 2: Underwriting (if appetite matched)
+    # Update submission with triage results
+    triage_resp = triage.get("response", {})
+    appetite = "yes"
+    if isinstance(triage_resp, dict):
+        appetite = str(triage_resp.get("appetite_match", "yes")).lower()
+    await _repo.update(
+        submission_id,
+        {
+            "status": "triaged",
+            "triage_result": json.dumps(triage_resp) if isinstance(triage_resp, dict) else str(triage_resp),
+            "updated_at": now,
+        },
+    )
+    await publish_domain_event("submission.triaged", f"/submissions/{submission_id}", {"submission_id": submission_id})
+
+    # Step 2: Underwriting & Pricing
+    if appetite in ("no", "decline", "false"):
+        await _repo.update(submission_id, {"status": "declined", "updated_at": now})
+        await publish_domain_event(
+            "submission.declined",
+            f"/submissions/{submission_id}",
+            {"submission_id": submission_id, "reason": "outside_appetite"},
+        )
+        return {
+            "submission_id": submission_id,
+            "workflow": "new_business",
+            "outcome": "declined",
+            "reason": "outside_appetite",
+            "steps": results,
+        }
+
     uw = await foundry.invoke(
         "openinsure-underwriting",
-        f"Assess and price: {json.dumps(submission, default=str)[:500]} "
-        f"Triage: {json.dumps(triage.get('response', {}), default=str)[:300]}",
+        f"Assess and price. Respond with JSON including risk_score, recommended_premium, confidence.\n{json.dumps(submission, default=str)[:500]}\nTriage: {json.dumps(triage_resp, default=str)[:300]}",
     )
     results["underwriting"] = uw
 
-    # Step 3: Compliance
+    # Extract premium from AI response
+    uw_resp = uw.get("response", {})
+    premium = 10000  # fallback
+    if isinstance(uw_resp, dict):
+        premium = float(uw_resp.get("recommended_premium", uw_resp.get("premium", 10000)))
+    await _repo.update(submission_id, {"status": "quoted", "quoted_premium": premium, "updated_at": now})
+    await publish_domain_event(
+        "submission.quoted", f"/submissions/{submission_id}", {"submission_id": submission_id, "premium": premium}
+    )
+
+    # Step 3: Auto-bind if premium within authority (<$100K)
+    policy_id = None
+    policy_number = None
+    if premium < 100000:
+        policy_id = str(uuid.uuid4())
+        policy_number = f"POL-{datetime.now(UTC).strftime('%Y')}-{uuid.uuid4().hex[:6].upper()}"
+        policy_repo = get_policy_repository()
+        await policy_repo.create(
+            {
+                "id": policy_id,
+                "policy_number": policy_number,
+                "status": "active",
+                "product_id": submission.get("product_id", "cyber-smb"),
+                "submission_id": submission_id,
+                "insured_name": submission.get("applicant_name", ""),
+                "effective_date": submission.get("requested_effective_date", now),
+                "expiration_date": submission.get("requested_expiration_date", now),
+                "total_premium": premium,
+                "written_premium": premium,
+                "earned_premium": 0,
+                "unearned_premium": premium,
+                "bound_at": now,
+                "created_at": now,
+                "updated_at": now,
+            }
+        )
+
+        billing_repo = get_billing_repository()
+        await billing_repo.create(
+            {
+                "id": str(uuid.uuid4()),
+                "policy_id": policy_id,
+                "billing_plan": "direct_bill",
+                "total_premium": premium,
+                "balance_due": premium,
+                "created_at": now,
+                "updated_at": now,
+            }
+        )
+
+        await _repo.update(submission_id, {"status": "bound", "updated_at": now})
+        await publish_domain_event(
+            "policy.bound",
+            f"/policies/{policy_id}",
+            {
+                "policy_id": policy_id,
+                "policy_number": policy_number,
+                "premium": premium,
+                "submission_id": submission_id,
+            },
+        )
+
+    # Step 4: Compliance audit
     comp = await foundry.invoke(
         "openinsure-compliance",
-        f"Audit this workflow: Triage={json.dumps(triage.get('response', {}), default=str)[:200]} "
-        f"UW={json.dumps(uw.get('response', {}), default=str)[:200]}",
+        f"Audit this workflow for EU AI Act compliance.\nTriage={json.dumps(triage_resp, default=str)[:200]}\nUW={json.dumps(uw_resp, default=str)[:200]}",
     )
     results["compliance"] = comp
 
-    return {"submission_id": submission_id, "workflow": "new_business", "steps": results}
+    # Store decision record
+    compliance_repo = get_compliance_repository()
+    if compliance_repo:
+        await compliance_repo.store_decision(
+            {
+                "decision_id": str(uuid.uuid4()),
+                "agent_id": "openinsure-orchestrator",
+                "decision_type": "new_business_workflow",
+                "input_summary": {"submission_id": submission_id},
+                "output": {"premium": premium, "policy_id": policy_id, "outcome": "bound" if policy_id else "quoted"},
+                "confidence": float(uw_resp.get("confidence", 0.8)) if isinstance(uw_resp, dict) else 0.8,
+                "model_used": "gpt-5.1",
+            }
+        )
+
+    outcome = "bound" if policy_id else "quoted_pending_approval"
+    return {
+        "submission_id": submission_id,
+        "workflow": "new_business",
+        "outcome": outcome,
+        "policy_id": policy_id,
+        "policy_number": policy_number,
+        "premium": premium,
+        "steps": results,
+    }
