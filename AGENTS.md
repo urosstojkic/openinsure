@@ -8,11 +8,13 @@ OpenInsure is an AI-native open-source core insurance platform built on Microsof
 
 ## Project Priorities
 
-1. **Quality over speed**: Every change must pass all quality gates before merge
-2. **TDD-first**: Write tests before implementation — lights-out codebase principle
-3. **Small, testable diffs**: Target ~150 lines per PR for reviewability
-4. **Security-first**: Managed identity, no hardcoded credentials, Key Vault for secrets
-5. **Compliance-by-design**: Every AI decision must produce a Decision Record (EU AI Act)
+1. **Enterprise grade, no mocking**: Every operation must use real Azure services and Foundry agents. No stubs, no fake data, no in-memory shortcuts in production code paths. Local fallbacks exist ONLY for when Azure services are unreachable.
+2. **Quality over speed**: Every change must pass all quality gates before merge
+3. **TDD-first**: Write tests before implementation — lights-out codebase principle
+4. **Small, testable diffs**: Target ~150 lines per PR for reviewability
+5. **Security-first**: Managed identity, no hardcoded credentials, Key Vault for secrets
+6. **Compliance-by-design**: Every AI decision must produce a Decision Record (EU AI Act)
+7. **Foundry-first**: Every operation involving AI judgment (triage, risk assessment, reserve estimation, fraud detection, compliance checking, coverage analysis) MUST call the deployed Foundry agents. Local Python logic is ONLY a fallback when Foundry is unavailable.
 
 ## Foundational Principles
 

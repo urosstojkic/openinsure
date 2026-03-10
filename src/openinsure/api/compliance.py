@@ -7,6 +7,7 @@ Uses in-memory storage as a placeholder until the database adapter is wired in.
 
 from __future__ import annotations
 
+import json
 import uuid
 from datetime import UTC, datetime
 from enum import StrEnum
@@ -239,13 +240,14 @@ async def get_audit_trail(
     )
 
 
-@router.post("/bias-report", response_model=BiasReportResponse, status_code=201)
-async def generate_bias_report(body: BiasReportRequest) -> BiasReportResponse:
+@router.post("/bias-report", status_code=201)
+async def generate_bias_report(body: BiasReportRequest):
     """Generate a bias monitoring report for AI decisions.
 
-    Stub implementation — the real version analyses decision distributions
-    across protected attributes.
+    Uses Foundry compliance agent when available, falls back to local stub.
     """
+    from openinsure.agents.foundry_client import get_foundry_client
+
     # Filter decisions in date range
     all_decisions, _ = await _compliance_repo.list_decisions(
         filters={"decision_type": body.decision_type}, skip=0, limit=10000
@@ -254,6 +256,21 @@ async def generate_bias_report(body: BiasReportRequest) -> BiasReportResponse:
         d for d in all_decisions if d["created_at"] >= body.date_from and d["created_at"] <= body.date_to
     ]
 
+    # Foundry-powered bias analysis
+    foundry = get_foundry_client()
+    if foundry.is_available:
+        result = await foundry.invoke(
+            "openinsure-compliance",
+            "Analyze these insurance decisions for potential bias. Apply the 4/5ths rule.\n"
+            "Check for disparate impact across industry sectors and company sizes.\n"
+            'Respond with JSON: {"bias_detected": false, "metrics": [...], "recommendations": [...]}\n\n'
+            f"Decision sample: {json.dumps(decisions_in_range, default=str)[:800]}",
+        )
+        resp = result.get("response", {})
+        if isinstance(resp, dict) and result.get("source") == "foundry":
+            return {"report": resp, "source": "foundry", "generated_at": _now()}
+
+    # Existing local fallback
     metrics: list[BiasMetric] = []
     for attr in body.protected_attributes:
         metrics.append(

@@ -293,10 +293,42 @@ async def update_claim(claim_id: str, body: ClaimUpdate) -> ClaimResponse:
 
 @router.post("/{claim_id}/reserve", response_model=ReserveResponse, status_code=201)
 async def set_reserve(claim_id: str, body: ReserveRequest) -> ReserveResponse:
-    """Set or update reserves on a claim."""
+    """Set or update reserves on a claim.
+
+    When Foundry is available, an AI recommendation is logged alongside the
+    human-set reserve amount.  The human value always takes precedence.
+    """
     record = await _get_claim(claim_id)
     if record["status"] == ClaimStatus.CLOSED:
         raise HTTPException(status_code=409, detail="Cannot set reserves on a closed claim")
+
+    # AI-assisted reserve recommendation (advisory only)
+    from openinsure.agents.foundry_client import get_foundry_client
+
+    foundry = get_foundry_client()
+    if foundry.is_available:
+        ai_result = await foundry.invoke(
+            "openinsure-claims",
+            "Estimate appropriate reserve for this claim. Consider severity, "
+            "coverage, and comparable claims.\n"
+            'Respond with JSON: {"recommended_reserve": 50000, '
+            '"confidence": 0.8, "reasoning": "..."}\n\n'
+            f"Claim: {json.dumps(record, default=str)[:600]}\n"
+            f"Requested reserve: {body.amount}",
+        )
+        from openinsure.services.event_publisher import publish_domain_event
+
+        resp = ai_result.get("response", {})
+        await publish_domain_event(
+            "claim.reserve.ai_recommendation",
+            f"/claims/{claim_id}",
+            {
+                "claim_id": claim_id,
+                "human_reserve": body.amount,
+                "ai_recommended": resp.get("recommended_reserve") if isinstance(resp, dict) else None,
+                "source": ai_result.get("source", "unknown"),
+            },
+        )
 
     rid = str(uuid.uuid4())
     now = _now()

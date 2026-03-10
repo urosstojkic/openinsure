@@ -354,13 +354,56 @@ async def update_submission(submission_id: str, body: SubmissionUpdate) -> Submi
 async def triage_submission(submission_id: str) -> TriageResult:
     """Trigger AI triage on a submission.
 
-    In the real implementation this dispatches to the triage agent; here
-    we return a deterministic stub result.
+    Calls the Foundry triage agent when available, falling back to
+    deterministic local logic.
     """
+    from openinsure.agents.foundry_client import get_foundry_client
+
     record = await _get_submission(submission_id)
     if record["status"] not in {SubmissionStatus.SUBMITTED, SubmissionStatus.IN_TRIAGE}:
         raise HTTPException(status_code=409, detail="Submission is not in a triageable state")
 
+    foundry = get_foundry_client()
+
+    if foundry.is_available:
+        result = await foundry.invoke(
+            "openinsure-submission",
+            "You are triaging a cyber insurance submission. Our appetite accepts:\n"
+            "- IT/Tech (SIC 7xxx), Financial (SIC 6xxx), Professional Services\n"
+            "- Revenue $500K to $50M\n"
+            "- Security maturity score 4+ out of 10\n"
+            "- Max 3 prior incidents\n\n"
+            "Respond ONLY with JSON:\n"
+            '{"appetite_match": "yes", "risk_score": 5, "priority": "medium", '
+            '"confidence": 0.9, "reasoning": "..."}\n\n'
+            f"Submission:\n{json.dumps(record, default=str)[:1000]}",
+        )
+        resp = result.get("response", {})
+        if isinstance(resp, dict) and result.get("source") == "foundry":
+            record["status"] = SubmissionStatus.TRIAGED
+            record["triage_result"] = resp
+            record["updated_at"] = _now()
+            from openinsure.services.event_publisher import publish_domain_event
+
+            await publish_domain_event(
+                "submission.triaged",
+                f"/submissions/{submission_id}",
+                {"submission_id": submission_id},
+            )
+            appetite = str(resp.get("appetite_match", "yes")).lower()
+            recommendation = "decline" if appetite in ("no", "decline") else "proceed_to_quote"
+            flags: list[str] = []
+            if resp.get("reasoning"):
+                flags.append(str(resp["reasoning"]))
+            return TriageResult(
+                submission_id=submission_id,
+                status=SubmissionStatus.TRIAGED,
+                risk_score=float(resp.get("risk_score", 5)),
+                recommendation=recommendation,
+                flags=flags,
+            )
+
+    # Local fallback
     record["status"] = SubmissionStatus.TRIAGED
     record["updated_at"] = _now()
 
@@ -377,12 +420,49 @@ async def triage_submission(submission_id: str) -> TriageResult:
 async def generate_quote(submission_id: str) -> QuoteResponse:
     """Generate a quote for the submission.
 
-    Stub implementation — the real version calls the rating engine.
+    Calls the Foundry underwriting agent when available, falling back to
+    deterministic local logic.
     """
+    from openinsure.agents.foundry_client import get_foundry_client
+
     record = await _get_submission(submission_id)
     if record["status"] not in {SubmissionStatus.TRIAGED, SubmissionStatus.QUOTING}:
         raise HTTPException(status_code=409, detail="Submission must be triaged before quoting")
 
+    foundry = get_foundry_client()
+
+    if foundry.is_available:
+        result = await foundry.invoke(
+            "openinsure-underwriting",
+            "Price this cyber insurance submission. Calculate premium.\n"
+            "Base: $1.50 per $1000 revenue. Adjust for industry, security, incidents.\n"
+            "Respond ONLY with JSON:\n"
+            '{"risk_score": 35, "recommended_premium": 12500, "confidence": 0.85}\n\n'
+            f"Submission:\n{json.dumps(record, default=str)[:800]}",
+        )
+        resp = result.get("response", {})
+        if isinstance(resp, dict) and "recommended_premium" in resp:
+            premium = float(resp["recommended_premium"])
+            record["status"] = SubmissionStatus.QUOTED
+            record["quoted_premium"] = premium
+            record["updated_at"] = _now()
+            from openinsure.services.event_publisher import publish_domain_event
+
+            await publish_domain_event(
+                "submission.quoted",
+                f"/submissions/{submission_id}",
+                {"submission_id": submission_id, "premium": premium},
+            )
+            return QuoteResponse(
+                submission_id=submission_id,
+                quote_id=str(uuid.uuid4()),
+                premium=premium,
+                currency="USD",
+                coverages=[{"name": "Cyber Liability", "limit": 1_000_000, "deductible": 10_000}],
+                valid_until=_now(),
+            )
+
+    # Local fallback
     record["status"] = SubmissionStatus.QUOTED
     record["updated_at"] = _now()
     valid_until = datetime(2099, 12, 31, tzinfo=UTC).isoformat()

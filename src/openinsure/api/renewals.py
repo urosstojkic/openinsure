@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import uuid
 from datetime import UTC, datetime
 from typing import Any
@@ -96,54 +97,131 @@ async def list_upcoming_renewals(
     )
 
 
-@router.post("/{policy_id}/generate", response_model=RenewalTerms)
-async def generate_terms(policy_id: str) -> RenewalTerms:
+@router.post("/{policy_id}/generate")
+async def generate_terms(policy_id: str):
     """Generate renewal terms for a policy."""
+    from openinsure.agents.foundry_client import get_foundry_client
+
     policy = await _repo.get_by_id(policy_id)
     if policy is None:
         raise HTTPException(status_code=404, detail=f"Policy {policy_id} not found")
+
+    foundry = get_foundry_client()
+    if foundry.is_available:
+        result = await foundry.invoke(
+            "openinsure-underwriting",
+            "Generate renewal terms for this expiring cyber policy.\n"
+            "Consider: claims history, market conditions, expiring premium.\n"
+            "Respond with JSON:\n"
+            '{"renewal_premium": 15000, "rate_change_pct": 5.0, "confidence": 0.85, '
+            '"conditions": ["annual pen test required"], "recommendation": "renew_as_is"}\n\n'
+            f"Expiring policy: {json.dumps(policy, default=str)[:600]}",
+        )
+        resp = result.get("response", {})
+        if isinstance(resp, dict) and result.get("source") == "foundry":
+            from openinsure.services.event_publisher import publish_domain_event
+
+            await publish_domain_event(
+                "renewal.terms_generated",
+                f"/policies/{policy_id}",
+                {"policy_id": policy_id, "source": "foundry"},
+            )
+            return {
+                "policy_id": policy_id,
+                "original_policy": policy.get("policy_number"),
+                "expiring_premium": policy.get("total_premium", policy.get("premium", 0)),
+                "renewal_premium": resp.get("renewal_premium"),
+                "rate_change_pct": resp.get("rate_change_pct"),
+                "conditions": resp.get("conditions", []),
+                "recommendation": resp.get("recommendation", "review_required"),
+                "confidence": resp.get("confidence", 0.8),
+                "source": "foundry",
+            }
+
+    # Existing local fallback
     terms = await generate_renewal_terms(policy)
     return RenewalTerms(**terms)
 
 
-@router.post("/{policy_id}/process", response_model=RenewalResult)
-async def process_renewal(policy_id: str) -> RenewalResult:
+@router.post("/{policy_id}/process")
+async def process_renewal(policy_id: str):
     """Process renewal — generate terms and create the renewal policy."""
+    from openinsure.agents.foundry_client import get_foundry_client
+    from openinsure.services.event_publisher import publish_domain_event
+
     policy = await _repo.get_by_id(policy_id)
     if policy is None:
         raise HTTPException(status_code=404, detail=f"Policy {policy_id} not found")
 
-    terms = await generate_renewal_terms(policy)
+    foundry = get_foundry_client()
+    results: dict[str, Any] = {}
 
-    new_pid = str(uuid.uuid4())
-    now = datetime.now(UTC).isoformat()
-    new_effective = policy.get("expiration_date", "")
-    # Add 1 year
-    new_expiration = (
-        str(new_effective).replace(str(new_effective)[:4], str(int(str(new_effective)[:4]) + 1), 1)
-        if new_effective
-        else ""
-    )
+    # Step 1: AI renewal assessment
+    if foundry.is_available:
+        uw = await foundry.invoke(
+            "openinsure-underwriting",
+            "Assess this renewal. Price the renewal policy.\n"
+            'Respond with JSON: {"renewal_premium": X, "recommendation": "renew"/"non_renew", "confidence": 0.85}\n\n'
+            f"Policy: {json.dumps(policy, default=str)[:600]}",
+        )
+        results["underwriting"] = uw
 
-    renewal_record: dict[str, Any] = {
-        **policy,
-        "id": new_pid,
-        "policy_number": f"POL-{uuid.uuid4().hex[:8].upper()}",
-        "status": "active",
-        "effective_date": new_effective,
-        "expiration_date": new_expiration,
-        "premium": terms["renewal_premium"],
-        "endorsements": [],
-        "documents": [],
-        "created_at": now,
-        "updated_at": now,
+    # Step 2: Create renewal policy (if recommended)
+    uw_resp = results.get("underwriting", {}).get("response", {})
+    recommendation = "renew"
+    renewal_premium = float(policy.get("total_premium", policy.get("premium", 10000))) * 1.05
+    if isinstance(uw_resp, dict) and uw_resp:
+        recommendation = uw_resp.get("recommendation", "renew")
+        renewal_premium = float(uw_resp.get("renewal_premium", renewal_premium))
+
+    new_policy_id = None
+    if recommendation != "non_renew":
+        new_policy_id = str(uuid.uuid4())
+        now = datetime.now(UTC).isoformat()
+        new_effective = str(policy.get("expiration_date", ""))
+        new_expiration = (
+            new_effective.replace(new_effective[:4], str(int(new_effective[:4]) + 1), 1) if new_effective else ""
+        )
+        new_policy: dict[str, Any] = {
+            "id": new_policy_id,
+            "policy_number": f"POL-{datetime.now(UTC).strftime('%Y')}-{uuid.uuid4().hex[:6].upper()}",
+            "policyholder_name": policy.get("policyholder_name", policy.get("insured_name", "")),
+            "status": "active",
+            "product_id": policy.get("product_id", "cyber-smb"),
+            "submission_id": "",
+            "effective_date": new_effective,
+            "expiration_date": new_expiration,
+            "premium": renewal_premium,
+            "total_premium": renewal_premium,
+            "written_premium": renewal_premium,
+            "coverages": policy.get("coverages", []),
+            "endorsements": [],
+            "metadata": {"renewal_of": policy_id, "source": "renewal_workflow"},
+            "documents": [],
+            "created_at": now,
+            "updated_at": now,
+        }
+        await _repo.create(new_policy)
+        await publish_domain_event(
+            "policy.renewed",
+            f"/policies/{new_policy_id}",
+            {"new_policy_id": new_policy_id, "original_policy_id": policy_id, "premium": renewal_premium},
+        )
+
+    # Step 3: Compliance
+    if foundry.is_available:
+        comp = await foundry.invoke(
+            "openinsure-compliance",
+            f"Audit this renewal workflow.\nOriginal: {json.dumps(policy, default=str)[:200]}\n"
+            f"Renewal premium: {renewal_premium}\nRecommendation: {recommendation}",
+        )
+        results["compliance"] = comp
+
+    return {
+        "policy_id": policy_id,
+        "workflow": "renewal",
+        "outcome": recommendation,
+        "new_policy_id": new_policy_id,
+        "renewal_premium": renewal_premium,
+        "steps": results,
     }
-    await _repo.create(renewal_record)
-
-    return RenewalResult(
-        policy_id=policy_id,
-        renewal_policy_id=new_pid,
-        status="renewed",
-        terms=RenewalTerms(**terms),
-        message="Renewal processed successfully",
-    )
