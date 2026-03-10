@@ -4,8 +4,6 @@ from datetime import date
 from decimal import Decimal
 from enum import StrEnum
 
-from pydantic import Field
-
 from openinsure.domain.common import DomainEntity, Money
 
 

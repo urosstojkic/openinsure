@@ -38,9 +38,7 @@ def generate_loss_triangle(
         ay = int(claim["accident_year"])
         dm = int(claim["development_month"])
         amt = Decimal(str(claim["incurred_amount"]))
-        triangle.setdefault(ay, {})[dm] = (
-            triangle.get(ay, {}).get(dm, Decimal("0")) + amt
-        )
+        triangle.setdefault(ay, {})[dm] = triangle.get(ay, {}).get(dm, Decimal("0")) + amt
 
     logger.info("actuarial.triangle_generated", lob=lob, rows=len(triangle))
     return triangle
@@ -63,9 +61,7 @@ def _age_to_age_factors(triangle: Triangle) -> dict[int, Decimal]:
                 sum_curr += row[curr_period]
                 sum_next += row[next_period]
         if sum_curr > 0:
-            factors[curr_period] = (sum_next / sum_curr).quantize(
-                Decimal("0.0001"), rounding=ROUND_HALF_UP
-            )
+            factors[curr_period] = (sum_next / sum_curr).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
     return factors
 
 
@@ -108,17 +104,11 @@ def estimate_ibnr(
         latest_period = max(row.keys())
         current_incurred = row[latest_period]
         cdf = cdfs.get(latest_period, Decimal("1"))
-        ultimate = (current_incurred * cdf).quantize(
-            Decimal("0.01"), rounding=ROUND_HALF_UP
-        )
+        ultimate = (current_incurred * cdf).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
         ultimates[ay] = ultimate
-        ibnr_by_year[ay] = (ultimate - current_incurred).quantize(
-            Decimal("0.01"), rounding=ROUND_HALF_UP
-        )
+        ibnr_by_year[ay] = (ultimate - current_incurred).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
-    total_ibnr = sum(ibnr_by_year.values(), Decimal("0")).quantize(
-        Decimal("0.01"), rounding=ROUND_HALF_UP
-    )
+    total_ibnr = sum(ibnr_by_year.values(), Decimal("0")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
     logger.info(
         "actuarial.ibnr_estimated",
@@ -150,9 +140,7 @@ def calculate_rate_adequacy(
     for segment, current in current_rates.items():
         indicated = loss_data.get(segment, current)
         adequacy = (
-            (indicated / current).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
-            if current > 0
-            else Decimal("0")
+            (indicated / current).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP) if current > 0 else Decimal("0")
         )
         results.append(
             {

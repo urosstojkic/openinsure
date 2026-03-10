@@ -49,40 +49,36 @@ def calculate_cession(
         if treaty.treaty_type == TreatyType.QUOTA_SHARE:
             # Cede a fixed percentage of premium and limit
             cession_rate = treaty.rate / Decimal("100") if treaty.rate > 1 else treaty.rate
-            ceded_premium = (policy_premium * cession_rate).quantize(
-                Decimal("0.01"), rounding=ROUND_HALF_UP
-            )
-            ceded_limit = (policy_limit * cession_rate).quantize(
-                Decimal("0.01"), rounding=ROUND_HALF_UP
-            )
+            ceded_premium = (policy_premium * cession_rate).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+            ceded_limit = (policy_limit * cession_rate).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
         elif treaty.treaty_type == TreatyType.EXCESS_OF_LOSS:
             # Cede the portion above retention, up to treaty limit
             excess = policy_limit - treaty.retention
             if excess > 0:
                 ceded_limit = min(excess, treaty.limit)
-                ceded_premium = (policy_premium * (ceded_limit / policy_limit)).quantize(
-                    Decimal("0.01"), rounding=ROUND_HALF_UP
-                ) if policy_limit > 0 else Decimal("0")
+                ceded_premium = (
+                    (policy_premium * (ceded_limit / policy_limit)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+                    if policy_limit > 0
+                    else Decimal("0")
+                )
 
         elif treaty.treaty_type == TreatyType.SURPLUS:
             # Cede lines above retention
             excess = policy_limit - treaty.retention
             if excess > 0:
                 ceded_limit = min(excess, treaty.limit)
-                ceded_premium = (policy_premium * (ceded_limit / policy_limit)).quantize(
-                    Decimal("0.01"), rounding=ROUND_HALF_UP
-                ) if policy_limit > 0 else Decimal("0")
+                ceded_premium = (
+                    (policy_premium * (ceded_limit / policy_limit)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+                    if policy_limit > 0
+                    else Decimal("0")
+                )
 
         elif treaty.treaty_type == TreatyType.FACULTATIVE:
             # Facultative: cede at the treaty rate
             cession_rate = treaty.rate / Decimal("100") if treaty.rate > 1 else treaty.rate
-            ceded_premium = (policy_premium * cession_rate).quantize(
-                Decimal("0.01"), rounding=ROUND_HALF_UP
-            )
-            ceded_limit = (policy_limit * cession_rate).quantize(
-                Decimal("0.01"), rounding=ROUND_HALF_UP
-            )
+            ceded_premium = (policy_premium * cession_rate).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+            ceded_limit = (policy_limit * cession_rate).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
         if ceded_premium > 0:
             cession = CessionRecord(
@@ -129,22 +125,16 @@ def calculate_recovery(
 
         if treaty.treaty_type == TreatyType.QUOTA_SHARE:
             cession_rate = treaty.rate / Decimal("100") if treaty.rate > 1 else treaty.rate
-            recovery_amount = (claim_amount * cession_rate).quantize(
-                Decimal("0.01"), rounding=ROUND_HALF_UP
-            )
+            recovery_amount = (claim_amount * cession_rate).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
         elif treaty.treaty_type in (TreatyType.EXCESS_OF_LOSS, TreatyType.SURPLUS):
             excess = claim_amount - treaty.retention
             if excess > 0:
-                recovery_amount = min(excess, treaty.limit).quantize(
-                    Decimal("0.01"), rounding=ROUND_HALF_UP
-                )
+                recovery_amount = min(excess, treaty.limit).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
         elif treaty.treaty_type == TreatyType.FACULTATIVE:
             cession_rate = treaty.rate / Decimal("100") if treaty.rate > 1 else treaty.rate
-            recovery_amount = (claim_amount * cession_rate).quantize(
-                Decimal("0.01"), rounding=ROUND_HALF_UP
-            )
+            recovery_amount = (claim_amount * cession_rate).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
         if recovery_amount > 0:
             recovery = RecoveryRecord(
@@ -180,44 +170,26 @@ def generate_bordereau(
     specified treaty and period.
     """
     # Filter cessions for this treaty
-    treaty_cessions = [
-        c for c in cessions
-        if str(c.get("treaty_id")) == str(treaty.id)
-    ]
-    treaty_recoveries = [
-        r for r in recoveries
-        if str(r.get("treaty_id")) == str(treaty.id)
-    ]
+    treaty_cessions = [c for c in cessions if str(c.get("treaty_id")) == str(treaty.id)]
+    treaty_recoveries = [r for r in recoveries if str(r.get("treaty_id")) == str(treaty.id)]
 
     # Apply period filter if provided
     if period_start:
         treaty_cessions = [
-            c for c in treaty_cessions
-            if c.get("cession_date") and c["cession_date"] >= str(period_start)
+            c for c in treaty_cessions if c.get("cession_date") and c["cession_date"] >= str(period_start)
         ]
         treaty_recoveries = [
-            r for r in treaty_recoveries
-            if r.get("recovery_date") and r["recovery_date"] >= str(period_start)
+            r for r in treaty_recoveries if r.get("recovery_date") and r["recovery_date"] >= str(period_start)
         ]
     if period_end:
-        treaty_cessions = [
-            c for c in treaty_cessions
-            if c.get("cession_date") and c["cession_date"] <= str(period_end)
-        ]
+        treaty_cessions = [c for c in treaty_cessions if c.get("cession_date") and c["cession_date"] <= str(period_end)]
         treaty_recoveries = [
-            r for r in treaty_recoveries
-            if r.get("recovery_date") and r["recovery_date"] <= str(period_end)
+            r for r in treaty_recoveries if r.get("recovery_date") and r["recovery_date"] <= str(period_end)
         ]
 
-    total_ceded_premium = sum(
-        Decimal(str(c.get("ceded_premium", 0))) for c in treaty_cessions
-    )
-    total_ceded_limit = sum(
-        Decimal(str(c.get("ceded_limit", 0))) for c in treaty_cessions
-    )
-    total_recoveries = sum(
-        Decimal(str(r.get("recovery_amount", 0))) for r in treaty_recoveries
-    )
+    total_ceded_premium = sum(Decimal(str(c.get("ceded_premium", 0))) for c in treaty_cessions)
+    total_ceded_limit = sum(Decimal(str(c.get("ceded_limit", 0))) for c in treaty_cessions)
+    total_recoveries = sum(Decimal(str(r.get("recovery_amount", 0))) for r in treaty_recoveries)
 
     bordereau = {
         "treaty_id": str(treaty.id),

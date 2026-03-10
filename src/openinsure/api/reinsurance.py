@@ -8,7 +8,7 @@ Uses in-memory storage as a placeholder until the database adapter is wired in.
 from __future__ import annotations
 
 import uuid
-from datetime import UTC, datetime, date
+from datetime import UTC, date, datetime
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query
@@ -267,10 +267,7 @@ async def get_treaty_utilization(treaty_id: str) -> UtilizationResponse:
     treaty = await _get_treaty(treaty_id)
 
     # Count cessions for this treaty
-    treaty_cessions = [
-        c for c in _cession_store.values()
-        if c.get("treaty_id") == treaty_id
-    ]
+    treaty_cessions = [c for c in _cession_store.values() if c.get("treaty_id") == treaty_id]
 
     capacity_total = treaty.get("capacity_total", 0)
     capacity_used = treaty.get("capacity_used", 0)
@@ -413,33 +410,19 @@ async def get_bordereau(
     treaty = await _get_treaty(treaty_id)
 
     # Collect cessions and recoveries for this treaty
-    treaty_cessions = [
-        c for c in _cession_store.values()
-        if c.get("treaty_id") == treaty_id
-    ]
-    treaty_recoveries = [
-        r for r in _recovery_store.values()
-        if r.get("treaty_id") == treaty_id
-    ]
+    treaty_cessions = [c for c in _cession_store.values() if c.get("treaty_id") == treaty_id]
+    treaty_recoveries = [r for r in _recovery_store.values() if r.get("treaty_id") == treaty_id]
 
     # Apply period filter if provided
     if period_start:
-        treaty_cessions = [
-            c for c in treaty_cessions
-            if c.get("cession_date") and c["cession_date"] >= period_start
-        ]
+        treaty_cessions = [c for c in treaty_cessions if c.get("cession_date") and c["cession_date"] >= period_start]
         treaty_recoveries = [
-            r for r in treaty_recoveries
-            if r.get("recovery_date") and r["recovery_date"] >= period_start
+            r for r in treaty_recoveries if r.get("recovery_date") and r["recovery_date"] >= period_start
         ]
     if period_end:
-        treaty_cessions = [
-            c for c in treaty_cessions
-            if c.get("cession_date") and c["cession_date"] <= period_end
-        ]
+        treaty_cessions = [c for c in treaty_cessions if c.get("cession_date") and c["cession_date"] <= period_end]
         treaty_recoveries = [
-            r for r in treaty_recoveries
-            if r.get("recovery_date") and r["recovery_date"] <= period_end
+            r for r in treaty_recoveries if r.get("recovery_date") and r["recovery_date"] <= period_end
         ]
 
     total_ceded_premium = sum(c.get("ceded_premium", 0) for c in treaty_cessions)

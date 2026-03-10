@@ -12,11 +12,10 @@ from decimal import Decimal
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from openinsure.services.actuarial import (
     Triangle,
-    calculate_rate_adequacy,
     estimate_ibnr,
     generate_loss_triangle,
 )
@@ -117,30 +116,170 @@ _SEED_RESERVES: list[dict[str, Any]] = [
 
 _SEED_TRIANGLE_CYBER: list[dict[str, Any]] = [
     # Cyber triangle — accident years 2021-2024, dev months 12-60
-    {"accident_year": 2021, "development_month": 12, "incurred_amount": 1_200_000, "paid_amount": 600_000, "case_reserve": 600_000, "claim_count": 15},
-    {"accident_year": 2021, "development_month": 24, "incurred_amount": 2_100_000, "paid_amount": 1_400_000, "case_reserve": 700_000, "claim_count": 18},
-    {"accident_year": 2021, "development_month": 36, "incurred_amount": 2_600_000, "paid_amount": 2_000_000, "case_reserve": 600_000, "claim_count": 19},
-    {"accident_year": 2021, "development_month": 48, "incurred_amount": 2_800_000, "paid_amount": 2_500_000, "case_reserve": 300_000, "claim_count": 19},
-    {"accident_year": 2021, "development_month": 60, "incurred_amount": 2_850_000, "paid_amount": 2_700_000, "case_reserve": 150_000, "claim_count": 19},
-    {"accident_year": 2022, "development_month": 12, "incurred_amount": 1_500_000, "paid_amount": 700_000, "case_reserve": 800_000, "claim_count": 20},
-    {"accident_year": 2022, "development_month": 24, "incurred_amount": 2_500_000, "paid_amount": 1_600_000, "case_reserve": 900_000, "claim_count": 24},
-    {"accident_year": 2022, "development_month": 36, "incurred_amount": 3_100_000, "paid_amount": 2_400_000, "case_reserve": 700_000, "claim_count": 25},
-    {"accident_year": 2022, "development_month": 48, "incurred_amount": 3_400_000, "paid_amount": 3_000_000, "case_reserve": 400_000, "claim_count": 25},
-    {"accident_year": 2023, "development_month": 12, "incurred_amount": 1_800_000, "paid_amount": 800_000, "case_reserve": 1_000_000, "claim_count": 25},
-    {"accident_year": 2023, "development_month": 24, "incurred_amount": 3_000_000, "paid_amount": 1_900_000, "case_reserve": 1_100_000, "claim_count": 30},
-    {"accident_year": 2023, "development_month": 36, "incurred_amount": 3_800_000, "paid_amount": 2_800_000, "case_reserve": 1_000_000, "claim_count": 32},
-    {"accident_year": 2024, "development_month": 12, "incurred_amount": 2_000_000, "paid_amount": 900_000, "case_reserve": 1_100_000, "claim_count": 28},
-    {"accident_year": 2024, "development_month": 24, "incurred_amount": 3_400_000, "paid_amount": 2_100_000, "case_reserve": 1_300_000, "claim_count": 34},
+    {
+        "accident_year": 2021,
+        "development_month": 12,
+        "incurred_amount": 1_200_000,
+        "paid_amount": 600_000,
+        "case_reserve": 600_000,
+        "claim_count": 15,
+    },
+    {
+        "accident_year": 2021,
+        "development_month": 24,
+        "incurred_amount": 2_100_000,
+        "paid_amount": 1_400_000,
+        "case_reserve": 700_000,
+        "claim_count": 18,
+    },
+    {
+        "accident_year": 2021,
+        "development_month": 36,
+        "incurred_amount": 2_600_000,
+        "paid_amount": 2_000_000,
+        "case_reserve": 600_000,
+        "claim_count": 19,
+    },
+    {
+        "accident_year": 2021,
+        "development_month": 48,
+        "incurred_amount": 2_800_000,
+        "paid_amount": 2_500_000,
+        "case_reserve": 300_000,
+        "claim_count": 19,
+    },
+    {
+        "accident_year": 2021,
+        "development_month": 60,
+        "incurred_amount": 2_850_000,
+        "paid_amount": 2_700_000,
+        "case_reserve": 150_000,
+        "claim_count": 19,
+    },
+    {
+        "accident_year": 2022,
+        "development_month": 12,
+        "incurred_amount": 1_500_000,
+        "paid_amount": 700_000,
+        "case_reserve": 800_000,
+        "claim_count": 20,
+    },
+    {
+        "accident_year": 2022,
+        "development_month": 24,
+        "incurred_amount": 2_500_000,
+        "paid_amount": 1_600_000,
+        "case_reserve": 900_000,
+        "claim_count": 24,
+    },
+    {
+        "accident_year": 2022,
+        "development_month": 36,
+        "incurred_amount": 3_100_000,
+        "paid_amount": 2_400_000,
+        "case_reserve": 700_000,
+        "claim_count": 25,
+    },
+    {
+        "accident_year": 2022,
+        "development_month": 48,
+        "incurred_amount": 3_400_000,
+        "paid_amount": 3_000_000,
+        "case_reserve": 400_000,
+        "claim_count": 25,
+    },
+    {
+        "accident_year": 2023,
+        "development_month": 12,
+        "incurred_amount": 1_800_000,
+        "paid_amount": 800_000,
+        "case_reserve": 1_000_000,
+        "claim_count": 25,
+    },
+    {
+        "accident_year": 2023,
+        "development_month": 24,
+        "incurred_amount": 3_000_000,
+        "paid_amount": 1_900_000,
+        "case_reserve": 1_100_000,
+        "claim_count": 30,
+    },
+    {
+        "accident_year": 2023,
+        "development_month": 36,
+        "incurred_amount": 3_800_000,
+        "paid_amount": 2_800_000,
+        "case_reserve": 1_000_000,
+        "claim_count": 32,
+    },
+    {
+        "accident_year": 2024,
+        "development_month": 12,
+        "incurred_amount": 2_000_000,
+        "paid_amount": 900_000,
+        "case_reserve": 1_100_000,
+        "claim_count": 28,
+    },
+    {
+        "accident_year": 2024,
+        "development_month": 24,
+        "incurred_amount": 3_400_000,
+        "paid_amount": 2_100_000,
+        "case_reserve": 1_300_000,
+        "claim_count": 34,
+    },
 ]
 
 _SEED_RATE_ADEQUACY: list[dict[str, Any]] = [
-    {"line_of_business": "cyber", "segment": "smb-technology", "current_rate": "1.50", "indicated_rate": "1.72", "adequacy_ratio": "1.1467"},
-    {"line_of_business": "cyber", "segment": "smb-healthcare", "current_rate": "2.20", "indicated_rate": "2.85", "adequacy_ratio": "1.2955"},
-    {"line_of_business": "cyber", "segment": "smb-financial", "current_rate": "1.80", "indicated_rate": "1.95", "adequacy_ratio": "1.0833"},
-    {"line_of_business": "cyber", "segment": "mid-market-technology", "current_rate": "1.20", "indicated_rate": "1.35", "adequacy_ratio": "1.1250"},
-    {"line_of_business": "cyber", "segment": "mid-market-retail", "current_rate": "0.90", "indicated_rate": "0.82", "adequacy_ratio": "0.9111"},
-    {"line_of_business": "professional_liability", "segment": "law-firms", "current_rate": "3.10", "indicated_rate": "3.45", "adequacy_ratio": "1.1129"},
-    {"line_of_business": "professional_liability", "segment": "accounting", "current_rate": "2.50", "indicated_rate": "2.30", "adequacy_ratio": "0.9200"},
+    {
+        "line_of_business": "cyber",
+        "segment": "smb-technology",
+        "current_rate": "1.50",
+        "indicated_rate": "1.72",
+        "adequacy_ratio": "1.1467",
+    },
+    {
+        "line_of_business": "cyber",
+        "segment": "smb-healthcare",
+        "current_rate": "2.20",
+        "indicated_rate": "2.85",
+        "adequacy_ratio": "1.2955",
+    },
+    {
+        "line_of_business": "cyber",
+        "segment": "smb-financial",
+        "current_rate": "1.80",
+        "indicated_rate": "1.95",
+        "adequacy_ratio": "1.0833",
+    },
+    {
+        "line_of_business": "cyber",
+        "segment": "mid-market-technology",
+        "current_rate": "1.20",
+        "indicated_rate": "1.35",
+        "adequacy_ratio": "1.1250",
+    },
+    {
+        "line_of_business": "cyber",
+        "segment": "mid-market-retail",
+        "current_rate": "0.90",
+        "indicated_rate": "0.82",
+        "adequacy_ratio": "0.9111",
+    },
+    {
+        "line_of_business": "professional_liability",
+        "segment": "law-firms",
+        "current_rate": "3.10",
+        "indicated_rate": "3.45",
+        "adequacy_ratio": "1.1129",
+    },
+    {
+        "line_of_business": "professional_liability",
+        "segment": "accounting",
+        "current_rate": "2.50",
+        "indicated_rate": "2.30",
+        "adequacy_ratio": "0.9200",
+    },
 ]
 
 
@@ -315,11 +454,7 @@ async def generate_triangle(lob: str) -> TriangleResponse:
         for dm, amt in row.items():
             # Pull matching seed row for paid/case/count if available
             match = next(
-                (
-                    e
-                    for e in entries
-                    if e["accident_year"] == ay and e["development_month"] == dm
-                ),
+                (e for e in entries if e["accident_year"] == ay and e["development_month"] == dm),
                 {},
             )
             generated.append(

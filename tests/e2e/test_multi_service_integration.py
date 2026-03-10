@@ -218,9 +218,7 @@ class TestMCPServer:
         from openinsure.mcp.server import OpenInsureMCPServer
 
         server = OpenInsureMCPServer()
-        result = asyncio.get_event_loop().run_until_complete(
-            server.call_tool("getPortfolioMetrics", {})
-        )
+        result = asyncio.get_event_loop().run_until_complete(server.call_tool("getPortfolioMetrics", {}))
         assert isinstance(result, dict)
         assert "content" in result
 
@@ -229,7 +227,5 @@ class TestMCPServer:
         from openinsure.mcp.server import OpenInsureMCPServer
 
         server = OpenInsureMCPServer()
-        result = asyncio.get_event_loop().run_until_complete(
-            server.call_tool("nonExistentTool", {})
-        )
+        result = asyncio.get_event_loop().run_until_complete(server.call_tool("nonExistentTool", {}))
         assert isinstance(result, dict)
