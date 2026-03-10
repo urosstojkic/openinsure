@@ -57,7 +57,7 @@ def test_create_submission(client: TestClient):
     assert resp.status_code == 201
     data = resp.json()
     assert data["applicant_name"] == "Acme Cyber Corp"
-    assert data["status"] == "submitted"
+    assert data["status"] == "received"
     assert "id" in data
 
 
@@ -81,11 +81,11 @@ def test_list_submissions_with_status_filter(client: TestClient):
         "/api/v1/submissions",
         json={"applicant_name": "Filter Test Corp"},
     )
-    resp = client.get("/api/v1/submissions", params={"status": "submitted"})
+    resp = client.get("/api/v1/submissions", params={"status": "received"})
     assert resp.status_code == 200
     data = resp.json()
     for item in data["items"]:
-        assert item["status"] == "submitted"
+        assert item["status"] == "received"
 
 
 def test_list_submissions_pagination(client: TestClient):

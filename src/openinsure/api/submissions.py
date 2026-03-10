@@ -131,18 +131,18 @@ def _build_policy_data(
 
 
 class SubmissionStatus(StrEnum):
-    """Lifecycle states for a submission."""
+    """Lifecycle states for a submission.
 
-    DRAFT = "draft"
-    SUBMITTED = "submitted"
-    IN_TRIAGE = "in_triage"
-    TRIAGED = "triaged"
-    QUOTING = "quoting"
+    Must match the CHECK constraint in SQL schema (001_initial_schema.sql).
+    """
+
+    RECEIVED = "received"
+    TRIAGING = "triaging"
+    UNDERWRITING = "underwriting"
     QUOTED = "quoted"
-    BINDING = "binding"
     BOUND = "bound"
     DECLINED = "declined"
-    WITHDRAWN = "withdrawn"
+    EXPIRED = "expired"
 
 
 class SubmissionChannel(StrEnum):
@@ -283,7 +283,7 @@ async def create_submission(body: SubmissionCreate) -> SubmissionResponse:
         "id": sid,
         "applicant_name": body.applicant_name,
         "applicant_email": body.applicant_email,
-        "status": SubmissionStatus.SUBMITTED,
+        "status": SubmissionStatus.RECEIVED,
         "channel": body.channel,
         "line_of_business": body.line_of_business,
         "risk_data": body.risk_data,
@@ -365,7 +365,7 @@ async def triage_submission(submission_id: str) -> TriageResult:
     from openinsure.agents.foundry_client import get_foundry_client
 
     record = await _get_submission(submission_id)
-    if record["status"] not in {SubmissionStatus.SUBMITTED, SubmissionStatus.IN_TRIAGE}:
+    if record["status"] not in {SubmissionStatus.RECEIVED, SubmissionStatus.TRIAGING}:
         raise HTTPException(status_code=409, detail="Submission is not in a triageable state")
 
     foundry = get_foundry_client()
@@ -385,7 +385,7 @@ async def triage_submission(submission_id: str) -> TriageResult:
         )
         resp = result.get("response", {})
         if isinstance(resp, dict) and result.get("source") == "foundry":
-            record["status"] = SubmissionStatus.TRIAGED
+            record["status"] = SubmissionStatus.UNDERWRITING
             record["triage_result"] = resp
             record["updated_at"] = _now()
             from openinsure.services.event_publisher import publish_domain_event
@@ -402,19 +402,19 @@ async def triage_submission(submission_id: str) -> TriageResult:
                 flags.append(str(resp["reasoning"]))
             return TriageResult(
                 submission_id=submission_id,
-                status=SubmissionStatus.TRIAGED,
+                status=SubmissionStatus.UNDERWRITING,
                 risk_score=float(resp.get("risk_score", 5)),
                 recommendation=recommendation,
                 flags=flags,
             )
 
     # Local fallback
-    record["status"] = SubmissionStatus.TRIAGED
+    record["status"] = SubmissionStatus.UNDERWRITING
     record["updated_at"] = _now()
 
     return TriageResult(
         submission_id=submission_id,
-        status=SubmissionStatus.TRIAGED,
+        status=SubmissionStatus.UNDERWRITING,
         risk_score=0.42,
         recommendation="proceed_to_quote",
         flags=[],
@@ -431,7 +431,7 @@ async def generate_quote(submission_id: str, user: CurrentUser = Depends(get_cur
     from openinsure.agents.foundry_client import get_foundry_client
 
     record = await _get_submission(submission_id)
-    if record["status"] not in {SubmissionStatus.TRIAGED, SubmissionStatus.QUOTING}:
+    if record["status"] not in {SubmissionStatus.UNDERWRITING, SubmissionStatus.UNDERWRITING}:
         raise HTTPException(status_code=409, detail="Submission must be triaged before quoting")
 
     foundry = get_foundry_client()

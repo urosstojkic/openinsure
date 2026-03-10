@@ -53,7 +53,7 @@ class TestSubmissionToBindWorkflow:
         sub_id = sub_data["id"]
         assert sub_id is not None
         assert sub_data["applicant_name"] == "E2E Test Corp"
-        assert sub_data["status"] == "submitted"
+        assert sub_data["status"] == "received"
 
         # Step 2: Verify submission exists via GET
         get_sub = client.get(f"/api/v1/submissions/{sub_id}")

@@ -60,6 +60,7 @@ class DatabaseAdapter:
             cs = connection_string_or_server
             # Remove Authentication=... segments since we use access token
             import re
+
             cs = re.sub(r"Authentication=[^;]*;?", "", cs)
             self._connection_string = cs
         else:

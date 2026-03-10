@@ -1,6 +1,7 @@
 """Create Azure SQL contained user for the Container App managed identity."""
 
 import struct
+
 import pyodbc
 from azure.identity import AzureCliCredential
 
