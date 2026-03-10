@@ -10,6 +10,10 @@ import type {
   BrokerPolicy,
   BrokerClaim,
   ComplianceSummary,
+  ActuarialReserve,
+  TriangleData,
+  IBNRResult,
+  RateAdequacyItem,
 } from '../types';
 import {
   mockUnderwriterQueue,
@@ -22,6 +26,10 @@ import {
   mockBrokerPolicies,
   mockBrokerClaims,
   mockCompliance,
+  mockActuarialReserves,
+  mockTriangleData,
+  mockIBNR,
+  mockRateAdequacy,
 } from '../data/mock';
 
 const USE_MOCK = import.meta.env.VITE_USE_MOCK !== 'false';
@@ -133,5 +141,51 @@ export async function getBrokerClaims(): Promise<BrokerClaim[]> {
   } catch (error) {
     console.warn('API call failed, falling back to mock:', error);
     return mockBrokerClaims;
+  }
+}
+
+// ── Actuarial Workbench ──
+
+export async function getActuarialReserves(): Promise<ActuarialReserve[]> {
+  if (USE_MOCK) return mockActuarialReserves;
+  try {
+    const { data } = await client.get('/actuarial/reserves');
+    return Array.isArray(data) ? data : (data.items || []);
+  } catch (error) {
+    console.warn('API call failed, falling back to mock:', error);
+    return mockActuarialReserves;
+  }
+}
+
+export async function getTriangleData(lob = 'cyber'): Promise<TriangleData> {
+  if (USE_MOCK) return mockTriangleData;
+  try {
+    const { data } = await client.get<TriangleData>(`/actuarial/triangles/${lob}`);
+    return data;
+  } catch (error) {
+    console.warn('API call failed, falling back to mock:', error);
+    return mockTriangleData;
+  }
+}
+
+export async function getIBNR(lob = 'cyber'): Promise<IBNRResult> {
+  if (USE_MOCK) return mockIBNR;
+  try {
+    const { data } = await client.get<IBNRResult>(`/actuarial/ibnr/${lob}`);
+    return data;
+  } catch (error) {
+    console.warn('API call failed, falling back to mock:', error);
+    return mockIBNR;
+  }
+}
+
+export async function getRateAdequacy(): Promise<RateAdequacyItem[]> {
+  if (USE_MOCK) return mockRateAdequacy;
+  try {
+    const { data } = await client.get('/actuarial/rate-adequacy');
+    return Array.isArray(data) ? data : (data.items || []);
+  } catch (error) {
+    console.warn('API call failed, falling back to mock:', error);
+    return mockRateAdequacy;
   }
 }

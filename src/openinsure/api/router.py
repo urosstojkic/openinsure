@@ -2,6 +2,7 @@
 
 from fastapi import APIRouter, Depends
 
+from openinsure.api.actuarial import router as actuarial_router
 from openinsure.api.billing import router as billing_router
 from openinsure.api.claims import router as claims_router
 from openinsure.api.compliance import router as compliance_router
@@ -32,5 +33,6 @@ api_v1_router.include_router(knowledge_router, prefix="/knowledge", tags=["knowl
 
 # Carrier-only module — disabled in MGA deployments via deployment profile
 api_v1_router.include_router(reinsurance_router, prefix="/reinsurance", tags=["reinsurance"])
+api_v1_router.include_router(actuarial_router, prefix="/actuarial", tags=["actuarial"])
 
 api_router.include_router(api_v1_router)
