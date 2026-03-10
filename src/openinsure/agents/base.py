@@ -100,13 +100,58 @@ class InsuranceAgent(ABC):
         ...
 
     async def execute(self, task: dict[str, Any]) -> tuple[dict[str, Any], DecisionRecord]:
-        """Execute a task with full decision record logging.
+        """Execute via Foundry if available, otherwise fall back to local.
 
-        This is the main entry point. It wraps process() with:
-        - Timing
-        - Decision record creation
-        - Error handling
-        - Escalation checks
+        This is the primary entry point — Foundry-first by design.
+        """
+        from openinsure.agents.foundry_client import get_foundry_client
+
+        foundry = get_foundry_client()
+
+        if foundry.is_available and self.config.model_deployment:
+            # Build prompt from task
+            prompt = self._build_prompt(task)
+            foundry_result = await foundry.invoke(
+                f"openinsure-{self.config.agent_id.split('-')[0]}",
+                prompt,
+            )
+            if foundry_result.get("source") == "foundry":
+                # Wrap Foundry response in standard format
+                result = foundry_result.get("response", {})
+                if isinstance(result, str):
+                    result = {"output": result}
+                result["source"] = "foundry"
+                result["ai_mode"] = "foundry"
+                result["confidence"] = result.get("confidence", 0.8)
+                # Create decision record
+                decision = DecisionRecord(
+                    agent_id=self.config.agent_id,
+                    agent_version=self.config.agent_version,
+                    model_used=self.config.model_deployment,
+                    model_version="2026-03-01",
+                    decision_type=self._get_decision_type(task),
+                    input_summary=self._summarize_input(task),
+                    output=self._summarize_output(result),
+                    confidence=result.get("confidence", 0.8),
+                    reasoning={"source": "foundry", "raw": foundry_result.get("raw", "")[:500]},
+                )
+                decision.human_oversight = {
+                    "required": decision.confidence < self.config.escalation_threshold,
+                    "reason": "foundry_assessment",
+                    "overridden": False,
+                }
+                self.decision_history.append(decision)
+                return result, decision
+
+        # Fallback to local processing
+        return await self.execute_local(task)
+
+    async def execute_local(self, task: dict[str, Any]) -> tuple[dict[str, Any], DecisionRecord]:
+        """Execute locally with full decision record logging.
+
+        This is the fallback path when Foundry is unavailable. Results
+        are tagged with ``ai_mode = "local_fallback"`` so callers can
+        distinguish AI-powered responses from stub defaults.
         """
         start_time = datetime.now(UTC)
         decision = DecisionRecord(
@@ -121,6 +166,11 @@ class InsuranceAgent(ABC):
         try:
             self.logger.info("agent.task.start", task_type=task.get("type"))
             result = await self.process(task)
+
+            # Tag local-fallback results so callers know AI was not used
+            result.setdefault("ai_mode", "local_fallback")
+            if result["ai_mode"] == "local_fallback":
+                result.setdefault("ai_warning", "Running without AI — Foundry unavailable")
 
             decision.output = self._summarize_output(result)
             decision.confidence = result.get("confidence", 0.0)
@@ -164,49 +214,6 @@ class InsuranceAgent(ABC):
             self.decision_history.append(decision)
 
         return result, decision
-
-    async def execute_with_foundry(self, task: dict[str, Any]) -> tuple[dict[str, Any], DecisionRecord]:
-        """Execute via Foundry if available, otherwise local."""
-        from openinsure.agents.foundry_client import get_foundry_client
-
-        foundry = get_foundry_client()
-
-        if foundry.is_available and self.config.model_deployment:
-            # Build prompt from task
-            prompt = self._build_prompt(task)
-            foundry_result = await foundry.invoke(
-                f"openinsure-{self.config.agent_id.split('-')[0]}",
-                prompt,
-            )
-            if foundry_result.get("source") == "foundry":
-                # Wrap Foundry response in standard format
-                result = foundry_result.get("response", {})
-                if isinstance(result, str):
-                    result = {"output": result}
-                result["source"] = "foundry"
-                result["confidence"] = result.get("confidence", 0.8)
-                # Create decision record
-                decision = DecisionRecord(
-                    agent_id=self.config.agent_id,
-                    agent_version=self.config.agent_version,
-                    model_used=self.config.model_deployment,
-                    model_version="2026-03-01",
-                    decision_type=self._get_decision_type(task),
-                    input_summary=self._summarize_input(task),
-                    output=self._summarize_output(result),
-                    confidence=result.get("confidence", 0.8),
-                    reasoning={"source": "foundry", "raw": foundry_result.get("raw", "")[:500]},
-                )
-                decision.human_oversight = {
-                    "required": decision.confidence < self.config.escalation_threshold,
-                    "reason": "foundry_assessment",
-                    "overridden": False,
-                }
-                self.decision_history.append(decision)
-                return result, decision
-
-        # Fallback to local processing
-        return await self.execute(task)
 
     def _build_prompt(self, task: dict[str, Any]) -> str:
         """Build a prompt string from the task dict."""

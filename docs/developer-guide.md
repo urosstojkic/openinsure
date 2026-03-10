@@ -636,15 +636,16 @@ class MyAgent(InsuranceAgent):
         )]
 
     async def process(self, task: dict[str, Any]) -> dict[str, Any]:
-        # 1. Call Foundry
-        result = await self.execute_with_foundry(
-            agent_name="openinsure-my-agent",
-            prompt=f"Process: {task}",
-            decision_type="my_decision",
-            input_summary=task,
-        )
-        return result
+        # Local fallback — return minimal defaults
+        return {
+            "confidence": 0.0,
+            "ai_mode": "local_fallback",
+            "ai_warning": "AI unavailable — manual review required",
+        }
 ```
+
+The `execute()` method on `InsuranceAgent` automatically routes to
+Foundry when available and falls back to `process()` otherwise.
 
 **2. Deploy to Foundry:**
 

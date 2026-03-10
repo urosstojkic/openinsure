@@ -137,7 +137,7 @@ class Orchestrator:
 
         try:
             # --- Step 1: Submission intake & triage ---
-            sub_result, sub_decision = await self.submission_agent.execute_with_foundry(
+            sub_result, sub_decision = await self.submission_agent.execute(
                 {"type": "submission_intake", "submission": submission}
             )
             workflow.add_step("submission_intake", "submission_agent", sub_result, sub_decision)
@@ -161,12 +161,12 @@ class Orchestrator:
             # --- Step 2: Document processing ---
             documents = submission.get("documents", [])
             for doc in documents:
-                doc_result, doc_decision = await self.document_agent.execute_with_foundry(
+                doc_result, doc_decision = await self.document_agent.execute(
                     {"type": "classify", "document": doc}
                 )
                 workflow.add_step("document_classify", "document_agent", doc_result, doc_decision)
 
-                ext_result, ext_decision = await self.document_agent.execute_with_foundry(
+                ext_result, ext_decision = await self.document_agent.execute(
                     {
                         "type": "extract",
                         "document": doc,
@@ -177,7 +177,7 @@ class Orchestrator:
 
             # --- Step 3: Knowledge retrieval ---
             lob = submission.get("line_of_business", "cyber")
-            kg_result, kg_decision = await self.knowledge_agent.execute_with_foundry(
+            kg_result, kg_decision = await self.knowledge_agent.execute(
                 {"type": "get_guidelines", "line_of_business": lob}
             )
             workflow.add_step("knowledge_retrieval", "knowledge_agent", kg_result, kg_decision)
@@ -189,7 +189,7 @@ class Orchestrator:
 
             # --- Step 4: Underwriting & pricing ---
             extracted = sub_result.get("extracted_data", {})
-            uw_result, uw_decision = await self.underwriting_agent.execute_with_foundry(
+            uw_result, uw_decision = await self.underwriting_agent.execute(
                 {
                     "type": "underwrite",
                     "extracted_data": extracted,
@@ -209,7 +209,7 @@ class Orchestrator:
 
             # --- Step 5: Policy binding ---
             quote = uw_result.get("quote", {})
-            bind_result, bind_decision = await self.policy_agent.execute_with_foundry(
+            bind_result, bind_decision = await self.policy_agent.execute(
                 {
                     "type": "bind",
                     "quote": quote,
@@ -227,7 +227,7 @@ class Orchestrator:
             )
 
             # --- Step 6: Compliance check ---
-            comp_result, comp_decision = await self.compliance_agent.execute_with_foundry(
+            comp_result, comp_decision = await self.compliance_agent.execute(
                 {
                     "type": "check_compliance",
                     "decision_records": [dr.model_dump(mode="json") for dr in workflow.decision_records],
@@ -287,7 +287,7 @@ class Orchestrator:
 
         try:
             # --- Step 1-4: Full FNOL pipeline (handled atomically by ClaimsAgent) ---
-            claims_result, claims_decision = await self.claims_agent.execute_with_foundry(
+            claims_result, claims_decision = await self.claims_agent.execute(
                 {
                     "type": "fnol",
                     "claim_report": claim_report,
@@ -308,7 +308,7 @@ class Orchestrator:
             triage = claims_result.get("triage_result", {})
             if triage.get("requires_investigation"):
                 fnol = claims_result.get("fnol", {})
-                inv_result, inv_decision = await self.claims_agent.execute_with_foundry(
+                inv_result, inv_decision = await self.claims_agent.execute(
                     {
                         "type": "investigation",
                         "claim_id": fnol.get("claim_number"),
@@ -317,7 +317,7 @@ class Orchestrator:
                 workflow.add_step("investigation_support", "claims_agent", inv_result, inv_decision)
 
             # --- Step 6: Compliance check ---
-            comp_result, comp_decision = await self.compliance_agent.execute_with_foundry(
+            comp_result, comp_decision = await self.compliance_agent.execute(
                 {
                     "type": "check_compliance",
                     "decision_records": [dr.model_dump(mode="json") for dr in workflow.decision_records],

@@ -221,7 +221,9 @@ class KnowledgeAgent(InsuranceAgent):
 
         store = get_knowledge_store()
         if store:
-            return await self._process_with_store(store, task)
+            result = await self._process_with_store(store, task)
+            result.setdefault("ai_mode", "static_knowledge")
+            return result
 
         # Fall back to static dict logic
         task_type = task.get("type", "query")
@@ -237,7 +239,9 @@ class KnowledgeAgent(InsuranceAgent):
             raise ValueError(f"Unknown knowledge task type: {task_type}")
 
         self.logger.info("knowledge.task.dispatch", task_type=task_type)
-        return await handler(task)
+        result = await handler(task)
+        result["ai_mode"] = "static_knowledge"
+        return result
 
     # ------------------------------------------------------------------
     # Cosmos DB store dispatch
