@@ -8,12 +8,23 @@
 
 > Every module — underwriting, policy administration, claims, billing, compliance — is designed from the ground up to be operated by, and through, AI agents.
 
+📖 **[Full Functional Capabilities →](docs/CAPABILITIES.md)** — Comprehensive description of everything the platform does, written for insurance executives and product managers.
+
 ## What Is This?
 
-OpenInsure is an open-source, AI-native core insurance platform built on the Microsoft AI stack (Foundry + Azure). It is **not** a traditional core system with AI bolted on — AI is the primary interface and execution engine, with human oversight on exceptions.
+OpenInsure is an open-source, AI-native core insurance platform built on the Microsoft AI stack (Azure AI Foundry + Azure). It is **not** a traditional core system with AI bolted on — AI is the primary interface and execution engine, with human oversight on exceptions.
 
 **Traditional system:** Human opens screen → fills forms → clicks buttons → reviews output
 **OpenInsure:** Agent receives submission → extracts data → assesses risk → generates quote → binds within authority → escalates exceptions to humans
+
+**What's live today:**
+- ✅ 8 AI agents (Submission, Underwriting, Policy, Claims, Compliance, Document, Knowledge, Orchestrator) deployed on Azure AI Foundry
+- ✅ 35+ REST API endpoints covering submissions, policies, claims, billing, products, and compliance
+- ✅ React dashboard with 11 role-specific views (Executive, Underwriting Workbench, Claims Workbench, Compliance Workbench, Broker Portal)
+- ✅ Cyber Liability SMB product with 5 coverages and configurable rating engine
+- ✅ EU AI Act compliance: immutable decision records, bias monitoring (4/5ths rule), audit trail
+- ✅ Role-based access control with 19 platform roles and authority delegation
+- ✅ Azure infrastructure: 13+ resources defined as Bicep IaC
 
 ### Why OpenInsure?
 
@@ -39,18 +50,28 @@ OpenInsure is an open-source, AI-native core insurance platform built on the Mic
 │                    M365 Copilot / Teams                      │
 │         (User-facing agent surface for insurance ops)        │
 ├─────────────────────────────────────────────────────────────┤
-│                    Copilot Studio                             │
-│      (No-code agent config, topic routing, guardrails)       │
+│              React Dashboard (11 role-specific views)        │
+│   Executive │ UW Workbench │ Claims │ Compliance │ Broker   │
 ├─────────────────────────────────────────────────────────────┤
-│                Microsoft Foundry                             │
+│                 Azure AI Foundry                             │
 │  ┌──────────────┬──────────────┬───────────────────────┐    │
-│  │ Agent Service │  Foundry IQ  │   Foundry Models      │    │
-│  │ (Multi-agent  │ (Knowledge   │  (GPT-5.2, Claude,   │    │
-│  │  orchestration)│  retrieval) │   Phi, Mistral)       │    │
+│  │ Agent Service │   AI Search  │   Foundry Models      │    │
+│  │ 8 Agents:     │ (Knowledge   │  (GPT-5.1, Claude,   │    │
+│  │ Submission,   │  retrieval,  │   Phi, Mistral —      │    │
+│  │ Underwriting, │  hybrid      │   1,900+ models)      │    │
+│  │ Policy,Claims,│  vector +    │                       │    │
+│  │ Compliance,   │  keyword)    │                       │    │
+│  │ Document,     │              │                       │    │
+│  │ Knowledge,    │              │                       │    │
+│  │ Orchestrator  │              │                       │    │
 │  └──────────────┴──────────────┴───────────────────────┘    │
+├─────────────────────────────────────────────────────────────┤
+│              FastAPI Backend (Python 3.12+)                  │
+│  Submissions │ Underwriting │ Policies │ Claims │ Billing   │
 ├─────────────────────────────────────────────────────────────┤
 │              Azure Infrastructure                            │
 │  Azure SQL │ Cosmos DB │ AI Search │ Blob Storage │ Events  │
+│  Service Bus │ Event Grid │ Key Vault │ Entra ID           │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -74,11 +95,51 @@ OpenInsure is an open-source, AI-native core insurance platform built on the Mic
 5. **Regulatory compliance as architecture** — EU AI Act compliant by design
 6. **Microsoft ecosystem integration** — M365 Copilot, Teams, Entra ID
 
+## Foundry Agents
+
+OpenInsure deploys **8 specialized AI agents** on Azure AI Foundry Agent Service:
+
+| Agent | Responsibility | Key Decisions |
+|-------|---------------|---------------|
+| **Submission Agent** | Intake, classification, extraction, triage, appetite matching | Submission triage, priority assignment |
+| **Underwriting Agent** | Risk assessment, cyber scoring, premium calculation, authority check | Quote generation, bind/decline recommendation |
+| **Policy Agent** | Bind, issue, endorse, renew, cancel | Policy lifecycle actions |
+| **Claims Agent** | FNOL intake, coverage verification, reserving, fraud detection | Severity triage, reserve setting, fraud flagging |
+| **Compliance Agent** | Decision audit, bias analysis, regulatory checking | Compliance pass/fail, bias alerts |
+| **Document Agent** | Document classification (ACORD, loss runs, financials), OCR extraction | Document type, extracted data |
+| **Knowledge Agent** | Underwriting rules, product definitions, regulatory requirement retrieval | Knowledge query results |
+| **Orchestrator** | Multi-step workflow coordination, decision record collection | Workflow routing, escalation |
+
+Every agent decision produces an immutable **Decision Record** (EU AI Act Art. 12) with reasoning chain, confidence score, and fairness metrics. Agents with confidence < 0.7 automatically escalate to human oversight.
+
+Agents are visible in the [Azure AI Foundry portal](https://ai.azure.com) under the `uros-ai-foundry-demo` project.
+
+## Role-Based Access
+
+OpenInsure supports **11 dashboard roles** with role-specific views and authority levels:
+
+| Role | Default View | Key Capabilities |
+|------|-------------|-----------------|
+| CEO | Executive Dashboard | Portfolio KPIs, trends, agent impact metrics |
+| CUO | Main Dashboard | Underwriting oversight, authority management |
+| Senior Underwriter | Underwriting Workbench | Complex risk review, quote approval |
+| UW Analyst | Underwriting Workbench | Submission analysis, preliminary assessment |
+| Claims Manager | Claims Workbench | Claims oversight, reserve approval, settlement authority |
+| Claims Adjuster | Claims Workbench | Investigation, evidence gathering, payments |
+| CFO | Executive Dashboard | Financial oversight, premium tracking, loss ratios |
+| Compliance Officer | Compliance Workbench | AI decision audit, bias monitoring, regulatory reporting |
+| Product Manager | Main Dashboard | Product configuration, pricing strategy |
+| Operations | Main Dashboard | System health, workflow monitoring |
+| Broker (External) | Broker Portal | Self-service submission, quotes, binding — no internal data exposed |
+
+**Authority delegation:** Auto-bind for premiums < $25K and risk score ≤ 5; escalation to UW Level 1/2 or Committee based on premium, risk, and referral triggers. Supports both **Carrier** (19 roles) and **MGA** (12 roles) deployment modes.
+
 ## Quick Start
 
 ### Prerequisites
 
 - Python 3.12+
+- Node.js 18+ (for dashboard)
 - Azure subscription (for production; works locally with in-memory stores)
 - Azure CLI (`az`) and Bicep CLI
 
@@ -89,11 +150,16 @@ OpenInsure is an open-source, AI-native core insurance platform built on the Mic
 git clone https://github.com/urosstojkic/openinsure.git
 cd openinsure
 
-# Install dependencies
+# Install backend dependencies
 pip install -e ".[dev]"
 
-# Run the development server
+# Run the backend API server
 uvicorn openinsure.main:app --reload --port 8000
+
+# In a second terminal — run the dashboard
+cd dashboard
+npm install
+npm run dev
 
 # Run tests
 pytest tests/ -v --cov=src/openinsure
@@ -104,6 +170,15 @@ ruff check src/ tests/ && ruff format src/ tests/
 # Type check
 mypy src/openinsure/
 ```
+
+### Live Deployment
+
+| Service | URL |
+|---------|-----|
+| **Dashboard** | https://openinsure-dashboard.braveriver-f92a9f28.swedencentral.azurecontainerapps.io |
+| **Backend API** | https://openinsure-backend.braveriver-f92a9f28.swedencentral.azurecontainerapps.io |
+| **Swagger UI** | https://openinsure-backend.braveriver-f92a9f28.swedencentral.azurecontainerapps.io/docs |
+| **Foundry Agents** | [ai.azure.com](https://ai.azure.com) → `uros-ai-foundry-demo` project |
 
 ## Testing
 
@@ -134,22 +209,40 @@ az deployment group create \
 
 ### API Documentation
 
-Once running, visit:
+Once running locally, visit:
 - **Swagger UI:** http://localhost:8000/docs
 - **ReDoc:** http://localhost:8000/redoc
 - **OpenAPI JSON:** http://localhost:8000/openapi.json
 
 ## API Overview
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `GET /health` | GET | Health check |
-| `POST /api/v1/submissions` | POST | Create submission |
-| `POST /api/v1/submissions/{id}/triage` | POST | AI triage |
-| `POST /api/v1/submissions/{id}/quote` | POST | Generate quote |
-| `POST /api/v1/submissions/{id}/bind` | POST | Bind to policy |
-| `POST /api/v1/claims` | POST | Report FNOL |
-| `GET /api/v1/compliance/decisions` | GET | Decision records (EU AI Act) |
+| Module | Endpoints | Key Operations |
+|--------|-----------|----------------|
+| **Submissions** | `POST/GET/PUT /api/v1/submissions` | Create, list, get, update submissions |
+| | `POST /api/v1/submissions/{id}/triage` | AI-powered triage and risk scoring |
+| | `POST /api/v1/submissions/{id}/quote` | Generate quote (calls Underwriting Agent) |
+| | `POST /api/v1/submissions/{id}/bind` | Bind submission to policy |
+| | `POST /api/v1/submissions/{id}/documents` | Upload supporting documents |
+| **Policies** | `POST/GET/PUT /api/v1/policies` | Create, list, get, update policies |
+| | `POST /api/v1/policies/{id}/endorse` | Mid-term endorsement |
+| | `POST /api/v1/policies/{id}/renew` | Renew policy |
+| | `POST /api/v1/policies/{id}/cancel` | Cancel policy |
+| **Claims** | `POST/GET/PUT /api/v1/claims` | Create (FNOL), list, get, update claims |
+| | `POST /api/v1/claims/{id}/reserve` | Set reserves |
+| | `POST /api/v1/claims/{id}/payment` | Record payment |
+| | `POST /api/v1/claims/{id}/close` | Close claim |
+| | `POST /api/v1/claims/{id}/reopen` | Reopen claim |
+| **Products** | `POST/GET/PUT /api/v1/products` | Manage product definitions |
+| | `POST /api/v1/products/{id}/rate` | Rate a submission |
+| | `GET /api/v1/products/{id}/coverages` | List available coverages |
+| **Billing** | `POST/GET /api/v1/billing/accounts` | Create/get billing accounts |
+| | `POST /api/v1/billing/accounts/{id}/payment` | Record payment |
+| | `GET/POST /api/v1/billing/accounts/{id}/invoices` | List/issue invoices |
+| **Compliance** | `GET /api/v1/compliance/decisions` | List AI decision records (EU AI Act) |
+| | `GET /api/v1/compliance/audit-trail` | Filtered audit trail |
+| | `POST /api/v1/compliance/bias-report` | Generate bias analysis report |
+| | `GET /api/v1/compliance/system-inventory` | AI system inventory |
+| **Health** | `GET /health`, `GET /ready` | Health and readiness probes |
 
 See [API Documentation](docs/api/) for the full specification.
 
@@ -157,9 +250,9 @@ See [API Documentation](docs/api/) for the full specification.
 
 OpenInsure agents are organized in three tiers:
 
-**Tier 1 — Orchestrator** (Copilot Studio): Routes requests to specialized agents
-**Tier 2 — Domain Agents** (Foundry Agent Service): Submission, Underwriting, Policy, Claims, Billing, Compliance
-**Tier 3 — Utility Agents** (Foundry Agent Service): Document, Data, Communication, Analytics
+**Tier 1 — Orchestrator** (Foundry Agent Service): Coordinates multi-step workflows (submission-to-bind, claims workflows), collects decision records, manages escalations
+**Tier 2 — Domain Agents** (Foundry Agent Service): Submission, Underwriting, Policy, Claims, Compliance — each owns a business domain
+**Tier 3 — Utility Agents** (Foundry Agent Service): Document (OCR/classification), Knowledge (retrieval from knowledge base)
 
 Every agent decision produces a **Decision Record** for EU AI Act compliance:
 
@@ -167,10 +260,11 @@ Every agent decision produces a **Decision Record** for EU AI Act compliance:
 {
   "decision_id": "uuid",
   "agent_id": "underwriting-agent-v0.1",
-  "model_used": "gpt-5.2",
+  "model_used": "gpt-5.1",
   "decision_type": "underwriting_recommendation",
   "confidence": 0.82,
   "reasoning": { "chain_of_thought": "...", "key_factors": [...] },
+  "fairness_metrics": { "disparate_impact_ratio": 0.95 },
   "human_oversight": { "required": false, "reason": "within_auto_authority" }
 }
 ```
@@ -180,15 +274,21 @@ Every agent decision produces a **Decision Record** for EU AI Act compliance:
 Phase 1 delivers a working cyber insurance submission-to-bind workflow:
 
 - ✅ Core domain model (Party, Submission, Policy, Claim, Product, Billing)
-- ✅ REST API with full CRUD operations
-- ✅ AI Agent framework with decision record logging
-- ✅ Azure infrastructure (Bicep IaC)
-- ✅ Knowledge base (cyber insurance product, underwriting guidelines)
-- ✅ EU AI Act compliance layer
+- ✅ REST API with 35+ endpoints across 7 modules
+- ✅ 8 AI agents with decision record logging (Submission, Underwriting, Policy, Claims, Compliance, Document, Knowledge, Orchestrator)
+- ✅ Azure infrastructure (9 Bicep modules, 13+ Azure resources)
+- ✅ Knowledge base (cyber insurance product, underwriting guidelines, regulatory requirements)
+- ✅ EU AI Act compliance layer (immutable decision records, audit trail, bias monitoring with 4/5ths rule)
 - ✅ MCP Server interface
-- 🔄 Multi-agent orchestration workflows
-- 🔄 Document intelligence (OCR, extraction)
-- 🔄 M365 Copilot publishing
+- ✅ Role-based access control (19 platform roles, authority delegation)
+- ✅ React dashboard with 11 role-specific views
+- ✅ Underwriting Workbench, Claims Workbench, Compliance Workbench
+- ✅ Broker Portal for external self-service
+- ✅ Cyber Liability SMB product (5 coverages, configurable rating engine)
+- ✅ Multi-agent orchestration workflows (new_business, claims_workflow)
+- ✅ CI/CD pipeline (lint, type check, security scan, tests ≥80% coverage, build)
+- 🔄 Document intelligence (OCR, extraction) — in progress
+- 🔄 M365 Copilot publishing — planned
 
 **Success Criteria:**
 - Process a cyber submission from email to bindable quote in <15 minutes
@@ -201,15 +301,18 @@ Phase 1 delivers a working cyber insurance submission-to-bind workflow:
 | Layer | Technology |
 |-------|------------|
 | **Backend** | Python 3.12+ / FastAPI / Pydantic v2 |
-| **AI Platform** | Microsoft Foundry (Agent Service, IQ, Models) |
-| **Agent Framework** | Microsoft Agent Framework (Python SDK) |
-| **Database** | Azure SQL (transactional) + Cosmos DB Gremlin (knowledge graph) |
+| **Dashboard** | React 18 + TypeScript + Vite |
+| **AI Platform** | Azure AI Foundry (Agent Service, AI Search, Models) |
+| **AI Models** | GPT-5.1 (primary), 1,900+ models via Foundry Model Router |
+| **Agent Framework** | Azure AI Foundry Agent Service (Python SDK) |
+| **Database** | Azure SQL (transactional) + Cosmos DB NoSQL (knowledge, decision records) |
 | **Search** | Azure AI Search (vector + keyword hybrid) |
 | **Storage** | Azure Blob Storage |
 | **Events** | Azure Event Grid + Service Bus |
-| **Identity** | Microsoft Entra ID |
-| **IaC** | Bicep |
+| **Identity** | Microsoft Entra ID + Managed Identity (passwordless) |
+| **IaC** | Bicep (9 modules) |
 | **CI/CD** | GitHub Actions |
+| **Hosting** | Azure Container Apps |
 
 ## Contributing
 
