@@ -96,6 +96,10 @@ from openinsure.domain.submission import (
 )
 
 __all__ = [
+    # state machine
+    "CLAIM_TRANSITIONS",
+    "POLICY_TRANSITIONS",
+    "SUBMISSION_TRANSITIONS",
     # party
     "Address",
     # events
@@ -122,21 +126,17 @@ __all__ = [
     "Coverage",
     # product
     "CoverageDefinition",
-    # state machine
-    "CLAIM_TRANSITIONS",
-    "DomainInvariantError",
-    "InvalidTransitionError",
-    "POLICY_TRANSITIONS",
-    "SUBMISSION_TRANSITIONS",
     # submission
     "CyberRiskData",
     "Document",
     "DomainEntity",
     "DomainEvent",
+    "DomainInvariantError",
     "Endorsement",
     "EventMetadata",
     "ExclusionRule",
     "FilingRequirement",
+    "InvalidTransitionError",
     "Invoice",
     "InvoiceStatus",
     "LineItem",
@@ -168,12 +168,12 @@ __all__ = [
     "SubmissionStatus",
     "SubmissionTriaged",
     "TriageResult",
+    "new_id",
+    "utc_now",
     "validate_claim_invariants",
     "validate_claim_transition",
     "validate_policy_invariants",
     "validate_policy_transition",
     "validate_submission_invariants",
     "validate_submission_transition",
-    "new_id",
-    "utc_now",
 ]

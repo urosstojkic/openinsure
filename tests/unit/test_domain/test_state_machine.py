@@ -5,7 +5,6 @@ from __future__ import annotations
 import pytest
 
 from openinsure.domain.state_machine import (
-    CLAIM_TRANSITIONS,
     POLICY_TRANSITIONS,
     SUBMISSION_TRANSITIONS,
     DomainInvariantError,
@@ -18,7 +17,6 @@ from openinsure.domain.state_machine import (
     validate_submission_transition,
 )
 
-
 # ---------------------------------------------------------------------------
 # Submission transition tests
 # ---------------------------------------------------------------------------
@@ -28,7 +26,7 @@ class TestSubmissionTransitions:
     """Verify every allowed and disallowed submission state transition."""
 
     @pytest.mark.parametrize(
-        "current,target",
+        ("current", "target"),
         [
             ("received", "triaging"),
             ("received", "declined"),
@@ -45,7 +43,7 @@ class TestSubmissionTransitions:
         validate_submission_transition(current, target)  # should not raise
 
     @pytest.mark.parametrize(
-        "current,target",
+        ("current", "target"),
         [
             ("received", "bound"),
             ("received", "quoted"),
@@ -80,7 +78,7 @@ class TestSubmissionTransitions:
 
 class TestPolicyTransitions:
     @pytest.mark.parametrize(
-        "current,target",
+        ("current", "target"),
         [
             ("pending", "active"),
             ("active", "cancelled"),
@@ -94,7 +92,7 @@ class TestPolicyTransitions:
         validate_policy_transition(current, target)
 
     @pytest.mark.parametrize(
-        "current,target",
+        ("current", "target"),
         [
             ("pending", "cancelled"),
             ("pending", "expired"),
@@ -121,7 +119,7 @@ class TestPolicyTransitions:
 
 class TestClaimTransitions:
     @pytest.mark.parametrize(
-        "current,target",
+        ("current", "target"),
         [
             ("fnol", "investigating"),
             ("investigating", "reserved"),
@@ -139,7 +137,7 @@ class TestClaimTransitions:
         validate_claim_transition(current, target)
 
     @pytest.mark.parametrize(
-        "current,target",
+        ("current", "target"),
         [
             ("fnol", "closed"),
             ("fnol", "denied"),
@@ -173,9 +171,7 @@ class TestSubmissionInvariants:
             validate_submission_invariants({"status": "bound", "quoted_premium": None})
 
     def test_bound_with_quoted_premium_ok(self) -> None:
-        validate_submission_invariants(
-            {"status": "bound", "quoted_premium": 1500.0, "triage_result": {"score": 80}}
-        )
+        validate_submission_invariants({"status": "bound", "quoted_premium": 1500.0, "triage_result": {"score": 80}})
 
     def test_received_no_invariants(self) -> None:
         validate_submission_invariants({"status": "received"})
@@ -200,9 +196,7 @@ class TestPolicyInvariants:
             )
 
     def test_valid_dates_ok(self) -> None:
-        validate_policy_invariants(
-            {"effective_date": "2025-01-01", "expiration_date": "2025-12-31", "premium": 100}
-        )
+        validate_policy_invariants({"effective_date": "2025-01-01", "expiration_date": "2025-12-31", "premium": 100})
 
     def test_negative_premium(self) -> None:
         with pytest.raises(DomainInvariantError, match="premium cannot be negative"):
