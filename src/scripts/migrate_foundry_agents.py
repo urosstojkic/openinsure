@@ -22,12 +22,30 @@ for a in client.agents.list():
             print(f"  Skip {a.name}: {e}")
 
 AGENTS = [
-    ("openinsure-submission", "Cyber insurance submission intake and triage. Classifies documents, extracts structured data, validates completeness, checks appetite, scores risk (1-10), assigns priority. Responds with structured JSON."),
-    ("openinsure-underwriting", "Cyber insurance underwriting and pricing. Multi-factor risk assessment, comparable analysis, terms generation, authority check (<$100K auto-bind). Provides risk_score, premium, confidence, authority_decision."),
-    ("openinsure-policy", "Policy lifecycle management: bind, endorse, renew, cancel. Validates requirements, recalculates premiums, generates documents. Produces EU AI Act compliant DecisionRecords."),
-    ("openinsure-claims", "Cyber claims lifecycle: FNOL intake, coverage verification, initial reserving, triage, fraud scoring. Provides severity_tier, reserve_estimate, fraud_score, escalation_recommendation."),
-    ("openinsure-compliance", "EU AI Act compliance agent. Decision audit, bias monitoring (4/5ths rule), regulatory checks, Art. 9-15 documentation. Flags low confidence, missing reasoning, potential bias."),
-    ("openinsure-orchestrator", "Multi-agent workflow orchestrator. New Business: Submission->Underwriting->Policy->Billing->Compliance. Claims: FNOL->Reserve->Compliance. Collects DecisionRecords, checks escalations."),
+    (
+        "openinsure-submission",
+        "Cyber insurance submission intake and triage. Classifies documents, extracts structured data, validates completeness, checks appetite, scores risk (1-10), assigns priority. Responds with structured JSON.",
+    ),
+    (
+        "openinsure-underwriting",
+        "Cyber insurance underwriting and pricing. Multi-factor risk assessment, comparable analysis, terms generation, authority check (<$100K auto-bind). Provides risk_score, premium, confidence, authority_decision.",
+    ),
+    (
+        "openinsure-policy",
+        "Policy lifecycle management: bind, endorse, renew, cancel. Validates requirements, recalculates premiums, generates documents. Produces EU AI Act compliant DecisionRecords.",
+    ),
+    (
+        "openinsure-claims",
+        "Cyber claims lifecycle: FNOL intake, coverage verification, initial reserving, triage, fraud scoring. Provides severity_tier, reserve_estimate, fraud_score, escalation_recommendation.",
+    ),
+    (
+        "openinsure-compliance",
+        "EU AI Act compliance agent. Decision audit, bias monitoring (4/5ths rule), regulatory checks, Art. 9-15 documentation. Flags low confidence, missing reasoning, potential bias.",
+    ),
+    (
+        "openinsure-orchestrator",
+        "Multi-agent workflow orchestrator. New Business: Submission->Underwriting->Policy->Billing->Compliance. Claims: FNOL->Reserve->Compliance. Collects DecisionRecords, checks escalations.",
+    ),
 ]
 
 print("\nCreating agents with new API (create_version)...")

@@ -251,10 +251,7 @@ async def generate_bias_report(body: BiasReportRequest) -> BiasReportResponse:
         filters={"decision_type": body.decision_type}, skip=0, limit=10000
     )
     decisions_in_range = [
-        d
-        for d in all_decisions
-        if d["created_at"] >= body.date_from
-        and d["created_at"] <= body.date_to
+        d for d in all_decisions if d["created_at"] >= body.date_from and d["created_at"] <= body.date_to
     ]
 
     metrics: list[BiasMetric] = []
