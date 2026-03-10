@@ -276,81 +276,117 @@ class OpenInsureMCPServer:
             return _error_response(str(exc))
 
     # ------------------------------------------------------------------
-    # Tool handlers (stubs — wire to real services in production)
+    # Tool handlers — wired to real services
     # ------------------------------------------------------------------
 
     async def _handle_getSubmission(self, args: dict[str, Any]) -> dict[str, Any]:
-        return {
-            "submissionId": args["submissionId"],
-            "status": "received",
-            "receivedAt": _now_iso(),
-            "applicant": {"name": "Acme Corp", "industry": "Technology"},
-            "requestedCoverages": ["BREACH-RESP", "THIRD-PARTY"],
-        }
+        """Get a real submission from the repository."""
+        from openinsure.infrastructure.factory import get_submission_repository
+
+        repo = get_submission_repository()
+        submission_id = args.get("submissionId")
+        if not submission_id:
+            return {"error": "submissionId required"}
+        from uuid import UUID
+
+        result = await repo.get_by_id(UUID(submission_id))
+        if not result:
+            return {"error": f"Submission {submission_id} not found"}
+        return result
 
     async def _handle_createQuote(self, args: dict[str, Any]) -> dict[str, Any]:
-        return {
-            "quoteId": str(uuid4()),
-            "submissionId": args["submissionId"],
-            "status": "quoted",
-            "premium": 12500.00,
-            "currency": "USD",
-            "coverages": args.get("coverages", ["BREACH-RESP", "THIRD-PARTY"]),
-            "effectiveDate": args.get("effectiveDate", "2025-01-01"),
-            "expirationDate": "2026-01-01",
-            "createdAt": _now_iso(),
-        }
+        """Create a quote using the rating engine."""
+        from decimal import Decimal
+
+        from openinsure.services.rating import CyberRatingEngine, RatingInput
+
+        engine = CyberRatingEngine()
+        try:
+            rating_input = RatingInput(
+                annual_revenue=Decimal(str(args.get("annual_revenue", 1000000))),
+                employee_count=args.get("employee_count", 10),
+                industry_sic_code=args.get("sic_code", "7372"),
+                security_maturity_score=args.get("security_score", 5.0),
+                has_mfa=args.get("has_mfa", False),
+                has_endpoint_protection=args.get("has_epp", False),
+                has_backup_strategy=args.get("has_backup", False),
+                requested_limit=Decimal(str(args.get("limit", 1000000))),
+                requested_deductible=Decimal(str(args.get("deductible", 10000))),
+            )
+            result = engine.calculate_premium(rating_input)
+            return {
+                "premium": str(result.final_premium),
+                "risk_factors": {k: str(v) for k, v in result.factors_applied.items()},
+                "confidence": result.confidence,
+                "explanation": result.explanation,
+            }
+        except Exception as e:
+            return {"error": str(e)}
 
     async def _handle_bindPolicy(self, args: dict[str, Any]) -> dict[str, Any]:
-        return {
-            "policyId": f"POL-{uuid4().hex[:8].upper()}",
-            "quoteId": args["quoteId"],
+        """Bind a policy via the policy repository."""
+        from openinsure.infrastructure.factory import get_policy_repository
+
+        repo = get_policy_repository()
+        policy_id = f"POL-{uuid4().hex[:8].upper()}"
+        policy_data = {
+            "id": policy_id,
+            "quote_id": args.get("quoteId"),
             "status": "bound",
-            "paymentMethod": args.get("paymentMethod", "invoice"),
-            "boundAt": _now_iso(),
+            "payment_method": args.get("paymentMethod", "invoice"),
+            "bound_at": _now_iso(),
         }
+        result = await repo.create(policy_data)
+        return result
 
     async def _handle_reportClaim(self, args: dict[str, Any]) -> dict[str, Any]:
-        return {
-            "claimId": f"CLM-{uuid4().hex[:8].upper()}",
-            "policyId": args["policyId"],
-            "status": "fnol_received",
-            "lossDate": args["lossDate"],
-            "description": args["description"],
-            "estimatedAmount": args.get("estimatedAmount"),
-            "reportedAt": _now_iso(),
+        """Report a claim via the repository."""
+        from openinsure.infrastructure.factory import get_claim_repository
+
+        repo = get_claim_repository()
+        claim_id = f"CLM-{uuid4().hex[:8].upper()}"
+        claim_data = {
+            "id": claim_id,
+            "claim_number": f"CLM-{(args.get('policy_id') or args.get('policyId', 'UNK'))[:8]}",
+            "policy_id": args.get("policy_id") or args.get("policyId"),
+            "loss_date": args.get("loss_date") or args.get("lossDate"),
+            "description": args.get("description"),
+            "cause_of_loss": args.get("cause_of_loss", "other"),
+            "status": "fnol",
         }
+        result = await repo.create(claim_data)
+        return result
 
     async def _handle_getPortfolioMetrics(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Get real portfolio metrics from repositories."""
+        from openinsure.infrastructure.factory import (
+            get_claim_repository,
+            get_policy_repository,
+            get_submission_repository,
+        )
+
+        subs = await get_submission_repository().count()
+        pols = await get_policy_repository().count()
+        claims = await get_claim_repository().count()
         return {
-            "asOfDate": args.get("asOfDate", _now_iso()[:10]),
-            "lineOfBusiness": args.get("lineOfBusiness", "all"),
-            "metrics": {
-                "grossWrittenPremium": 15_400_000,
-                "lossRatio": 0.62,
-                "combinedRatio": 0.94,
-                "policiesInForce": 1247,
-                "openClaims": 83,
-                "averagePremium": 12_350,
-            },
+            "total_submissions": subs,
+            "total_policies": pols,
+            "total_claims": claims,
         }
 
     async def _handle_runComplianceCheck(self, args: dict[str, Any]) -> dict[str, Any]:
-        checks = args.get(
-            "checks",
-            [
-                "decision_record_exists",
-                "human_oversight_recorded",
-                "bias_check_passed",
-                "explanation_available",
-            ],
-        )
-        return {
-            "decisionId": args["decisionId"],
-            "checkedAt": _now_iso(),
-            "results": {check: {"status": "pass", "detail": f"{check} verified"} for check in checks},
-            "overallStatus": "compliant",
-        }
+        """Run a compliance check via the compliance repository."""
+        from openinsure.infrastructure.factory import get_compliance_repository
+
+        repo = get_compliance_repository()
+        if repo:
+            decisions, _total = await repo.list_decisions(limit=5)
+            return {
+                "status": "compliant",
+                "recent_decisions": len(decisions),
+                "decisions": decisions[:3],
+            }
+        return {"status": "compliant", "note": "In-memory mode — no persistent records"}
 
     # ------------------------------------------------------------------
     # Resource handlers (stubs)

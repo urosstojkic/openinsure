@@ -122,3 +122,14 @@ def get_compliance_repository():
     from openinsure.infrastructure.repositories.compliance import InMemoryComplianceRepository
 
     return InMemoryComplianceRepository()
+
+
+@lru_cache
+def get_search_adapter():
+    """Return a shared SearchAdapter, or ``None`` when not configured."""
+    settings = get_settings()
+    if settings.storage_mode == "azure" and settings.search_endpoint:
+        from openinsure.infrastructure.ai_search import SearchAdapter
+
+        return SearchAdapter(settings.search_endpoint, settings.search_index_name)
+    return None
