@@ -31,10 +31,11 @@ class DatabaseAdapter:
 
     Parameters
     ----------
-    server:
-        Fully-qualified server name, e.g. ``myserver.database.windows.net``.
+    connection_string_or_server:
+        Either a full ODBC connection string (if it contains "Driver=")
+        or a server hostname (e.g. ``myserver.database.windows.net``).
     database:
-        Target database name.
+        Target database name (ignored when a full connection string is provided).
     credential:
         An Azure credential instance.  Defaults to ``DefaultAzureCredential``.
     pool_size:
@@ -43,18 +44,33 @@ class DatabaseAdapter:
 
     def __init__(
         self,
-        server: str,
-        database: str,
+        connection_string_or_server: str,
+        database: str = "",
         *,
         credential: DefaultAzureCredential | None = None,
         pool_size: int = 5,
     ) -> None:
-        self._server = server
-        self._database = database
         self._credential = credential or DefaultAzureCredential()
         self._pool_size = pool_size
         self._executor = ThreadPoolExecutor(max_workers=pool_size)
-        self._connection_string = f"DRIVER={{ODBC Driver 18 for SQL Server}};SERVER={server};DATABASE={database};"
+
+        # Detect if this is a full ODBC connection string or just a server name
+        if "Driver=" in connection_string_or_server or "driver=" in connection_string_or_server:
+            # Full connection string — strip any Authentication= clause (we use token auth)
+            cs = connection_string_or_server
+            # Remove Authentication=... segments since we use access token
+            import re
+            cs = re.sub(r"Authentication=[^;]*;?", "", cs)
+            self._connection_string = cs
+        else:
+            self._server = connection_string_or_server
+            self._database = database
+            self._connection_string = (
+                f"Driver={{ODBC Driver 18 for SQL Server}};"
+                f"Server={connection_string_or_server};"
+                f"Database={database};"
+                f"Encrypt=yes;TrustServerCertificate=no;"
+            )
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -65,13 +81,24 @@ class DatabaseAdapter:
         return token.token
 
     def _connect(self) -> pyodbc.Connection:
-        """Create a new connection using AAD access-token authentication."""
+        """Create a new connection using AAD access-token authentication.
+
+        The access token must be passed as a UTF-16-LE encoded byte string
+        via the SQL_COPT_SS_ACCESS_TOKEN (1256) connection attribute.
+        """
+        import struct
+
         token = self._get_access_token()
+
+        # pyodbc requires the token as bytes in a specific format:
+        # UTF-16-LE encoded string preceded by its length as a 4-byte little-endian int
+        token_bytes = token.encode("UTF-16-LE")
+        token_struct = struct.pack(f"<I{len(token_bytes)}s", len(token_bytes), token_bytes)
+
         conn = pyodbc.connect(
             self._connection_string,
             attrs_before={
-                # SQL_COPT_SS_ACCESS_TOKEN — pyodbc constant for token auth
-                1256: token,
+                1256: token_struct,  # SQL_COPT_SS_ACCESS_TOKEN
             },
         )
         conn.autocommit = False
