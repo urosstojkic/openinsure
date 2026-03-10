@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-route
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider, useAuth, NAV_ACCESS, DEFAULT_ROUTES } from './context/AuthContext';
 import Layout from './components/Layout';
+import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Submissions from './pages/Submissions';
 import SubmissionDetail from './pages/SubmissionDetail';
@@ -84,13 +85,21 @@ function AppRoutes() {
   );
 }
 
+function AuthGate() {
+  const { isAuthenticated } = useAuth();
+  if (!isAuthenticated) return <Login />;
+  return (
+    <BrowserRouter>
+      <AppRoutes />
+    </BrowserRouter>
+  );
+}
+
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <BrowserRouter>
-          <AppRoutes />
-        </BrowserRouter>
+        <AuthGate />
       </AuthProvider>
     </QueryClientProvider>
   );

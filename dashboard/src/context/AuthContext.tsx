@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, type ReactNode } from 'react';
+import React, { createContext, useContext, useState, useCallback, type ReactNode } from 'react';
 
 export type UserRole =
   | 'cuo'
@@ -24,7 +24,9 @@ interface User {
 
 interface AuthContextType {
   user: User;
-  setRole: (role: UserRole) => void;
+  isAuthenticated: boolean;
+  login: (role: UserRole) => void;
+  logout: () => void;
   hasAccess: (requiredRoles: UserRole[]) => boolean;
 }
 
@@ -75,21 +77,45 @@ export const ALL_ROLES: UserRole[] = [
   'adjuster', 'cfo', 'compliance', 'product_mgr', 'operations', 'broker',
 ];
 
+const STORAGE_KEY = 'openinsure_role';
+
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 function buildUser(role: UserRole): User {
   return { ...ROLE_PROFILES[role], role };
 }
 
+function getSavedRole(): UserRole | null {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved && ALL_ROLES.includes(saved as UserRole)) return saved as UserRole;
+  } catch { /* localStorage unavailable */ }
+  return null;
+}
+
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [role, setRoleState] = useState<UserRole>('cuo');
+  const savedRole = getSavedRole();
+  const [role, setRoleState] = useState<UserRole>(savedRole ?? 'cuo');
+  const [isAuthenticated, setIsAuthenticated] = useState(savedRole !== null);
+
   const user = buildUser(role);
 
-  const setRole = (newRole: UserRole) => setRoleState(newRole);
-  const hasAccess = (requiredRoles: UserRole[]) => requiredRoles.includes(role);
+  const login = useCallback((newRole: UserRole) => {
+    setRoleState(newRole);
+    setIsAuthenticated(true);
+    try { localStorage.setItem(STORAGE_KEY, newRole); } catch { /* noop */ }
+  }, []);
+
+  const logout = useCallback(() => {
+    setIsAuthenticated(false);
+    setRoleState('cuo');
+    try { localStorage.removeItem(STORAGE_KEY); } catch { /* noop */ }
+  }, []);
+
+  const hasAccess = useCallback((requiredRoles: UserRole[]) => requiredRoles.includes(role), [role]);
 
   return (
-    <AuthContext.Provider value={{ user, setRole, hasAccess }}>
+    <AuthContext.Provider value={{ user, isAuthenticated, login, logout, hasAccess }}>
       {children}
     </AuthContext.Provider>
   );
