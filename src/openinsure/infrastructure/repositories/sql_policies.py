@@ -133,4 +133,3 @@ def _deserialize_policy(row: dict[str, Any]) -> dict[str, Any]:
         if col in row and isinstance(row[col], str):
             row[col] = json.loads(row[col])
     return row
-

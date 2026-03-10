@@ -119,4 +119,3 @@ class SqlSubmissionRepository(BaseRepository):
             query += " WHERE " + " AND ".join(where_clauses)
         result = await self.db.fetch_one(query, params)
         return result.get("cnt", 0) if result else 0
-
