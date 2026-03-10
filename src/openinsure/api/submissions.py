@@ -516,15 +516,27 @@ async def process_submission(submission_id: str):
     # Step 1: Triage
     triage = await foundry.invoke(
         "openinsure-submission",
-        f"Triage this submission. Respond with JSON including appetite_match (yes/no), risk_score (1-10), priority, confidence.\n{json.dumps(submission, default=str)[:1000]}",
+        (
+            "You are triaging a cyber insurance submission. Our appetite accepts:\n"
+            "- IT/Tech companies (SIC 7xxx), Financial (SIC 6xxx), Professional Services\n"
+            "- Revenue $500K to $50M\n"
+            "- Security maturity score 4+ out of 10\n"
+            "- Max 3 prior cyber incidents\n\n"
+            "Respond ONLY with this exact JSON structure:\n"
+            '{"appetite_match": "yes", "risk_score": 5, "priority": "medium", "confidence": 0.9, "reasoning": "..."}\n\n'
+            f"Submission data:\n{json.dumps(submission, default=str)[:1000]}"
+        ),
     )
     results["triage"] = triage
 
     # Update submission with triage results
     triage_resp = triage.get("response", {})
-    appetite = "yes"
+    appetite = "yes"  # default to yes
     if isinstance(triage_resp, dict):
-        appetite = str(triage_resp.get("appetite_match", "yes")).lower()
+        match_val = str(triage_resp.get("appetite_match", "yes")).lower().strip()
+        appetite = "no" if match_val in ("no", "decline", "false", "reject", "outside") else "yes"
+    elif isinstance(triage_resp, str):
+        appetite = "no" if any(w in triage_resp.lower() for w in ["decline", "reject", "outside appetite"]) else "yes"
     await _repo.update(
         submission_id,
         {
@@ -553,7 +565,17 @@ async def process_submission(submission_id: str):
 
     uw = await foundry.invoke(
         "openinsure-underwriting",
-        f"Assess and price. Respond with JSON including risk_score, recommended_premium, confidence.\n{json.dumps(submission, default=str)[:500]}\nTriage: {json.dumps(triage_resp, default=str)[:300]}",
+        (
+            "You are pricing a cyber insurance submission. Calculate a premium.\n"
+            "Base rate: $1.50 per $1000 revenue. Adjust for:\n"
+            "- Industry risk (IT=1.0x, Healthcare=1.6x, Finance=1.5x)\n"
+            "- Security maturity (8+=0.7x, 6+=0.85x, 4+=1.0x, <4=1.3x)\n"
+            "- Prior incidents (0=1.0x, 1=1.25x, 2+=1.5x)\n\n"
+            "Respond ONLY with this JSON:\n"
+            '{"risk_score": 35, "recommended_premium": 12500, "confidence": 0.85, "key_factors": ["factor1", "factor2"]}\n\n'
+            f"Submission:\n{json.dumps(submission, default=str)[:500]}\n"
+            f"Triage: {json.dumps(triage_resp, default=str)[:300]}"
+        ),
     )
     results["underwriting"] = uw
 

@@ -6,6 +6,7 @@ Uses in-memory storage as a placeholder until the database adapter is wired in.
 
 from __future__ import annotations
 
+import json
 import uuid
 from datetime import UTC, datetime
 from enum import StrEnum
@@ -14,7 +15,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from openinsure.infrastructure.factory import get_claim_repository
+from openinsure.infrastructure.factory import get_claim_repository, get_compliance_repository
 
 router = APIRouter()
 
@@ -398,3 +399,80 @@ async def reopen_claim(claim_id: str, body: ReopenRequest) -> ReopenResponse:
         reason=body.reason,
         reopened_at=now,
     )
+
+
+@router.post("/{claim_id}/process")
+async def process_claim(claim_id: str):
+    """Run the claims workflow via Foundry agents.
+
+    1. Coverage verification (AI)
+    2. Reserve estimation (AI)
+    3. Compliance audit (AI)
+    Updates the claim record with results.
+    """
+    from openinsure.agents.foundry_client import get_foundry_client
+    from openinsure.services.event_publisher import publish_domain_event
+
+    foundry = get_foundry_client()
+    claim = await _repo.get_by_id(claim_id)
+    if not claim:
+        raise HTTPException(status_code=404, detail="Claim not found")
+
+    results: dict[str, Any] = {}
+
+    # Step 1: Coverage verification & assessment
+    assessment = await foundry.invoke(
+        "openinsure-claims",
+        "Assess this cyber insurance claim. Respond ONLY with JSON:\n"
+        '{"coverage_confirmed": true, "severity_tier": "moderate", "initial_reserve": 50000, '
+        '"fraud_score": 0.1, "confidence": 0.85, "reasoning": "..."}\n\n'
+        f"Claim: {json.dumps(claim, default=str)[:800]}",
+    )
+    results["assessment"] = assessment
+
+    # Extract and update claim
+    resp = assessment.get("response", {})
+    if isinstance(resp, dict):
+        updates: dict[str, Any] = {"status": "reserved", "updated_at": _now()}
+        if "severity_tier" in resp:
+            updates["severity"] = resp["severity_tier"]
+        if "initial_reserve" in resp:
+            updates["reserves"] = [{"type": "indemnity", "amount": resp["initial_reserve"]}]
+        if "fraud_score" in resp:
+            updates["fraud_score"] = resp["fraud_score"]
+        await _repo.update(claim_id, updates)
+
+    # Step 2: Compliance
+    comp = await foundry.invoke(
+        "openinsure-compliance",
+        f"Audit this claims assessment for EU AI Act compliance.\nAssessment: {json.dumps(resp, default=str)[:300]}",
+    )
+    results["compliance"] = comp
+
+    await publish_domain_event(
+        "claim.assessed",
+        f"/claims/{claim_id}",
+        {"claim_id": claim_id, "source": assessment.get("source", "unknown")},
+    )
+
+    # Store decision
+    compliance_repo = get_compliance_repository()
+    if compliance_repo:
+        await compliance_repo.store_decision(
+            {
+                "decision_id": str(uuid.uuid4()),
+                "agent_id": "openinsure-claims",
+                "decision_type": "claim_assessment",
+                "input_summary": {"claim_id": claim_id},
+                "output": resp if isinstance(resp, dict) else {"raw": str(resp)[:200]},
+                "confidence": float(resp.get("confidence", 0.7)) if isinstance(resp, dict) else 0.7,
+                "model_used": "gpt-5.1",
+            }
+        )
+
+    return {
+        "claim_id": claim_id,
+        "workflow": "claims_assessment",
+        "outcome": "assessed",
+        "steps": results,
+    }
