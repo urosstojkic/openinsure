@@ -16,6 +16,8 @@ import {
   ChevronDown,
   LogOut,
   ArrowLeftRight,
+  Calculator,
+  Repeat2,
 } from 'lucide-react';
 import { useAuth, NAV_ACCESS, type UserRole } from '../context/AuthContext';
 
@@ -32,6 +34,8 @@ const workbenchItems = [
   { to: '/workbench/underwriting', label: 'Underwriter',  icon: Briefcase },
   { to: '/workbench/claims',      label: 'Claims',        icon: Scale },
   { to: '/workbench/compliance',  label: 'Compliance',    icon: ShieldAlert },
+  { to: '/workbench/actuarial',   label: 'Actuarial',     icon: Calculator },
+  { to: '/workbench/reinsurance', label: 'Reinsurance',   icon: Repeat2 },
 ];
 
 const extraItems = [
@@ -58,6 +62,8 @@ function getBreadcrumb(pathname: string): string {
     '/workbench/underwriting': 'Underwriter Workbench',
     '/workbench/claims': 'Claims Workbench',
     '/workbench/compliance': 'Compliance Workbench',
+    '/workbench/reinsurance': 'Reinsurance Dashboard',
+    '/workbench/actuarial': 'Actuarial Workbench',
     '/executive': 'Executive Dashboard',
     '/portal/broker': 'Broker Portal',
   };

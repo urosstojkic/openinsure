@@ -468,3 +468,108 @@ export interface BrokerClaim {
   status: ClaimStatus;
   loss_date: string;
 }
+
+// ── Reinsurance (Carrier-only) ──
+
+export type TreatyType = 'quota_share' | 'excess_of_loss' | 'surplus' | 'facultative';
+export type TreatyStatus = 'active' | 'expired' | 'pending';
+
+export interface ReinsuranceTreaty {
+  id: string;
+  treaty_number: string;
+  treaty_type: TreatyType;
+  reinsurer_name: string;
+  status: TreatyStatus;
+  effective_date: string;
+  expiration_date: string;
+  lines_of_business: string[];
+  retention: number;
+  limit: number;
+  rate: number;
+  capacity_total: number;
+  capacity_used: number;
+  reinstatements: number;
+  description: string;
+}
+
+export interface ReinsuranceCession {
+  id: string;
+  treaty_id: string;
+  policy_id: string;
+  policy_number: string;
+  ceded_premium: number;
+  ceded_limit: number;
+  cession_date: string;
+}
+
+export interface ReinsuranceRecovery {
+  id: string;
+  treaty_id: string;
+  claim_id: string;
+  claim_number: string;
+  recovery_amount: number;
+  recovery_date: string;
+  status: 'pending' | 'billed' | 'collected';
+}
+
+export interface ReinsuranceDashboardData {
+  treaties: ReinsuranceTreaty[];
+  cessions: ReinsuranceCession[];
+  recoveries: ReinsuranceRecovery[];
+}
+
+// ── Actuarial ──
+
+export interface ActuarialReserve {
+  id: string;
+  line_of_business: string;
+  accident_year: number;
+  reserve_type: string;
+  carried_amount: number;
+  indicated_amount: number;
+  selected_amount: number;
+  as_of_date: string | null;
+  analyst: string;
+  approved_by: string;
+  notes: string;
+}
+
+export interface TriangleEntry {
+  accident_year: number;
+  development_month: number;
+  incurred_amount: number;
+  paid_amount: number;
+  case_reserve: number;
+  claim_count: number;
+}
+
+export interface TriangleData {
+  line_of_business: string;
+  entries: TriangleEntry[];
+  accident_years: number[];
+  development_months: number[];
+}
+
+export interface IBNRResult {
+  line_of_business: string;
+  method: string;
+  factors: Record<string, string>;
+  ultimates: Record<string, string>;
+  ibnr_by_year: Record<string, string>;
+  total_ibnr: string;
+}
+
+export interface RateAdequacyItem {
+  line_of_business: string;
+  segment: string;
+  current_rate: string;
+  indicated_rate: string;
+  adequacy_ratio: string;
+}
+
+export interface ActuarialWorkbenchData {
+  reserves: ActuarialReserve[];
+  triangle: TriangleData;
+  ibnr: IBNRResult;
+  rateAdequacy: RateAdequacyItem[];
+}

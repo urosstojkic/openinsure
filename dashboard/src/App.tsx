@@ -18,6 +18,8 @@ import ClaimsWorkbench from './pages/ClaimsWorkbench';
 import ComplianceWorkbench from './pages/ComplianceWorkbench';
 import ExecutiveDashboard from './pages/ExecutiveDashboard';
 import BrokerPortal from './pages/BrokerPortal';
+import ReinsuranceDashboard from './pages/ReinsuranceDashboard';
+import ActuarialWorkbench from './pages/ActuarialWorkbench';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -77,6 +79,8 @@ function AppRoutes() {
         <Route path="workbench/underwriting" element={<RouteGuard path="workbench/underwriting"><UnderwriterWorkbench /></RouteGuard>} />
         <Route path="workbench/claims" element={<RouteGuard path="workbench/claims"><ClaimsWorkbench /></RouteGuard>} />
         <Route path="workbench/compliance" element={<RouteGuard path="workbench/compliance"><ComplianceWorkbench /></RouteGuard>} />
+        <Route path="workbench/reinsurance" element={<RouteGuard path="workbench/reinsurance"><ReinsuranceDashboard /></RouteGuard>} />
+        <Route path="workbench/actuarial" element={<RouteGuard path="workbench/actuarial"><ActuarialWorkbench /></RouteGuard>} />
         <Route path="executive" element={<RouteGuard path="executive"><ExecutiveDashboard /></RouteGuard>} />
         <Route path="portal/broker" element={<RouteGuard path="portal/broker"><BrokerPortal /></RouteGuard>} />
         <Route path="*" element={<DefaultRedirect />} />

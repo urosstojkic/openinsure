@@ -140,6 +140,14 @@ def get_compliance_repository():
 
 
 @lru_cache
+def get_reinsurance_repository() -> BaseRepository:
+    # Reinsurance uses in-memory for now; carrier-only module
+    from openinsure.infrastructure.repositories.reinsurance import InMemoryReinsuranceRepository
+
+    return InMemoryReinsuranceRepository()
+
+
+@lru_cache
 def get_search_adapter():
     """Return a shared SearchAdapter, or ``None`` when not configured."""
     settings = get_settings()

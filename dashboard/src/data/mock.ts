@@ -15,6 +15,14 @@ import type {
   BrokerSubmission,
   BrokerPolicy,
   BrokerClaim,
+  ReinsuranceTreaty,
+  ReinsuranceCession,
+  ReinsuranceRecovery,
+  ReinsuranceDashboardData,
+  ActuarialReserve,
+  TriangleData,
+  IBNRResult,
+  RateAdequacyItem,
 } from '../types';
 
 // ── Dashboard Stats ──
@@ -633,4 +641,118 @@ export const mockBrokerClaims: BrokerClaim[] = [
   { id: 'clm2', claim_number: 'CLM-2025-0038', policy_number: 'POL-2025-1830', status: 'reserved', loss_date: '2025-01-05' },
   { id: 'clm1', claim_number: 'CLM-2025-0042', policy_number: 'POL-2024-1650', status: 'investigating', loss_date: '2025-01-10' },
   { id: 'clm6', claim_number: 'CLM-2025-0045', policy_number: 'POL-2025-1847', status: 'open', loss_date: '2025-01-14' },
+];
+
+// ── Reinsurance (Carrier-only) ──
+
+export const mockReinsuranceTreaties: ReinsuranceTreaty[] = [
+  {
+    id: 'tre-1', treaty_number: 'TRE-2025-QS01', treaty_type: 'quota_share', reinsurer_name: 'Swiss Re',
+    status: 'active', effective_date: '2025-01-01', expiration_date: '2025-12-31',
+    lines_of_business: ['cyber', 'professional_liability'], retention: 5_000_000, limit: 20_000_000,
+    rate: 25, capacity_total: 50_000_000, capacity_used: 32_500_000, reinstatements: 2,
+    description: 'Cyber & Prof Liability quota share — 25% cession',
+  },
+  {
+    id: 'tre-2', treaty_number: 'TRE-2025-XL01', treaty_type: 'excess_of_loss', reinsurer_name: 'Munich Re',
+    status: 'active', effective_date: '2025-01-01', expiration_date: '2025-12-31',
+    lines_of_business: ['cyber'], retention: 2_000_000, limit: 10_000_000,
+    rate: 12, capacity_total: 30_000_000, capacity_used: 8_400_000, reinstatements: 1,
+    description: 'Cyber excess of loss — $2M xs $2M',
+  },
+  {
+    id: 'tre-3', treaty_number: 'TRE-2025-SU01', treaty_type: 'surplus', reinsurer_name: 'Hannover Re',
+    status: 'active', effective_date: '2025-01-01', expiration_date: '2025-12-31',
+    lines_of_business: ['dnol', 'epli'], retention: 1_000_000, limit: 15_000_000,
+    rate: 18, capacity_total: 40_000_000, capacity_used: 22_000_000, reinstatements: 2,
+    description: 'D&O / EPLI surplus treaty — 5 lines',
+  },
+  {
+    id: 'tre-4', treaty_number: 'TRE-2024-QS01', treaty_type: 'quota_share', reinsurer_name: 'Gen Re',
+    status: 'expired', effective_date: '2024-01-01', expiration_date: '2024-12-31',
+    lines_of_business: ['professional_liability'], retention: 3_000_000, limit: 12_000_000,
+    rate: 20, capacity_total: 25_000_000, capacity_used: 25_000_000, reinstatements: 0,
+    description: 'Prior year prof liability QS (expired)',
+  },
+  {
+    id: 'tre-5', treaty_number: 'TRE-2025-FA01', treaty_type: 'facultative', reinsurer_name: 'Lloyd\'s Syndicate 2001',
+    status: 'active', effective_date: '2025-03-01', expiration_date: '2026-02-28',
+    lines_of_business: ['cyber'], retention: 500_000, limit: 5_000_000,
+    rate: 30, capacity_total: 10_000_000, capacity_used: 3_200_000, reinstatements: 1,
+    description: 'Facultative placement — large cyber risk',
+  },
+];
+
+export const mockReinsuranceCessions: ReinsuranceCession[] = [
+  { id: 'ces-1', treaty_id: 'tre-1', policy_id: 'pol-100', policy_number: 'POL-2025-1830', ceded_premium: 11_250, ceded_limit: 250_000, cession_date: '2025-01-10' },
+  { id: 'ces-2', treaty_id: 'tre-1', policy_id: 'pol-101', policy_number: 'POL-2025-1847', ceded_premium: 7_000, ceded_limit: 175_000, cession_date: '2025-01-12' },
+  { id: 'ces-3', treaty_id: 'tre-2', policy_id: 'pol-102', policy_number: 'POL-2025-1855', ceded_premium: 18_600, ceded_limit: 500_000, cession_date: '2025-01-14' },
+  { id: 'ces-4', treaty_id: 'tre-3', policy_id: 'pol-103', policy_number: 'POL-2025-1860', ceded_premium: 21_600, ceded_limit: 600_000, cession_date: '2025-01-15' },
+  { id: 'ces-5', treaty_id: 'tre-5', policy_id: 'pol-104', policy_number: 'POL-2025-1870', ceded_premium: 45_000, ceded_limit: 1_500_000, cession_date: '2025-01-16' },
+  { id: 'ces-6', treaty_id: 'tre-1', policy_id: 'pol-105', policy_number: 'POL-2025-1872', ceded_premium: 8_750, ceded_limit: 200_000, cession_date: '2025-01-17' },
+];
+
+export const mockReinsuranceRecoveries: ReinsuranceRecovery[] = [
+  { id: 'rec-1', treaty_id: 'tre-1', claim_id: 'clm-200', claim_number: 'CLM-2025-0038', recovery_amount: 62_500, recovery_date: '2025-01-20', status: 'billed' },
+  { id: 'rec-2', treaty_id: 'tre-2', claim_id: 'clm-201', claim_number: 'CLM-2025-0042', recovery_amount: 150_000, recovery_date: '2025-01-22', status: 'pending' },
+  { id: 'rec-3', treaty_id: 'tre-3', claim_id: 'clm-202', claim_number: 'CLM-2025-0045', recovery_amount: 85_000, recovery_date: '2025-01-18', status: 'collected' },
+  { id: 'rec-4', treaty_id: 'tre-1', claim_id: 'clm-203', claim_number: 'CLM-2025-0050', recovery_amount: 37_500, recovery_date: '2025-01-25', status: 'pending' },
+];
+
+export const mockReinsuranceData: ReinsuranceDashboardData = {
+  treaties: mockReinsuranceTreaties,
+  cessions: mockReinsuranceCessions,
+  recoveries: mockReinsuranceRecoveries,
+};
+
+// ── Actuarial Mock Data ──
+
+export const mockActuarialReserves: ActuarialReserve[] = [
+  { id: 'res-001', line_of_business: 'cyber', accident_year: 2023, reserve_type: 'case', carried_amount: 4_500_000, indicated_amount: 4_800_000, selected_amount: 4_650_000, as_of_date: '2026-03-31', analyst: 'Sarah Chen', approved_by: 'Michael Torres', notes: '' },
+  { id: 'res-002', line_of_business: 'cyber', accident_year: 2023, reserve_type: 'ibnr', carried_amount: 2_100_000, indicated_amount: 2_350_000, selected_amount: 2_200_000, as_of_date: '2026-03-31', analyst: 'Sarah Chen', approved_by: 'Michael Torres', notes: '' },
+  { id: 'res-003', line_of_business: 'cyber', accident_year: 2024, reserve_type: 'case', carried_amount: 3_200_000, indicated_amount: 3_400_000, selected_amount: 3_300_000, as_of_date: '2026-03-31', analyst: 'Sarah Chen', approved_by: '', notes: 'Pending CFO approval' },
+  { id: 'res-004', line_of_business: 'cyber', accident_year: 2024, reserve_type: 'ibnr', carried_amount: 1_800_000, indicated_amount: 2_000_000, selected_amount: 1_900_000, as_of_date: '2026-03-31', analyst: 'Sarah Chen', approved_by: '', notes: '' },
+  { id: 'res-005', line_of_business: 'professional_liability', accident_year: 2023, reserve_type: 'case', carried_amount: 6_000_000, indicated_amount: 6_200_000, selected_amount: 6_100_000, as_of_date: '2026-03-31', analyst: 'James Wright', approved_by: 'Michael Torres', notes: '' },
+  { id: 'res-006', line_of_business: 'professional_liability', accident_year: 2023, reserve_type: 'ibnr', carried_amount: 3_500_000, indicated_amount: 3_800_000, selected_amount: 3_600_000, as_of_date: '2026-03-31', analyst: 'James Wright', approved_by: 'Michael Torres', notes: '' },
+];
+
+export const mockTriangleData: TriangleData = {
+  line_of_business: 'cyber',
+  accident_years: [2021, 2022, 2023, 2024],
+  development_months: [12, 24, 36, 48, 60],
+  entries: [
+    { accident_year: 2021, development_month: 12, incurred_amount: 1_200_000, paid_amount: 600_000, case_reserve: 600_000, claim_count: 15 },
+    { accident_year: 2021, development_month: 24, incurred_amount: 2_100_000, paid_amount: 1_400_000, case_reserve: 700_000, claim_count: 18 },
+    { accident_year: 2021, development_month: 36, incurred_amount: 2_600_000, paid_amount: 2_000_000, case_reserve: 600_000, claim_count: 19 },
+    { accident_year: 2021, development_month: 48, incurred_amount: 2_800_000, paid_amount: 2_500_000, case_reserve: 300_000, claim_count: 19 },
+    { accident_year: 2021, development_month: 60, incurred_amount: 2_850_000, paid_amount: 2_700_000, case_reserve: 150_000, claim_count: 19 },
+    { accident_year: 2022, development_month: 12, incurred_amount: 1_500_000, paid_amount: 700_000, case_reserve: 800_000, claim_count: 20 },
+    { accident_year: 2022, development_month: 24, incurred_amount: 2_500_000, paid_amount: 1_600_000, case_reserve: 900_000, claim_count: 24 },
+    { accident_year: 2022, development_month: 36, incurred_amount: 3_100_000, paid_amount: 2_400_000, case_reserve: 700_000, claim_count: 25 },
+    { accident_year: 2022, development_month: 48, incurred_amount: 3_400_000, paid_amount: 3_000_000, case_reserve: 400_000, claim_count: 25 },
+    { accident_year: 2023, development_month: 12, incurred_amount: 1_800_000, paid_amount: 800_000, case_reserve: 1_000_000, claim_count: 25 },
+    { accident_year: 2023, development_month: 24, incurred_amount: 3_000_000, paid_amount: 1_900_000, case_reserve: 1_100_000, claim_count: 30 },
+    { accident_year: 2023, development_month: 36, incurred_amount: 3_800_000, paid_amount: 2_800_000, case_reserve: 1_000_000, claim_count: 32 },
+    { accident_year: 2024, development_month: 12, incurred_amount: 2_000_000, paid_amount: 900_000, case_reserve: 1_100_000, claim_count: 28 },
+    { accident_year: 2024, development_month: 24, incurred_amount: 3_400_000, paid_amount: 2_100_000, case_reserve: 1_300_000, claim_count: 34 },
+  ],
+};
+
+export const mockIBNR: IBNRResult = {
+  line_of_business: 'cyber',
+  method: 'chain_ladder',
+  factors: { '12': '1.7500', '24': '1.2381', '36': '1.0769', '48': '1.0179' },
+  ultimates: { '2021': '2850.00', '2022': '3460.86', '2023': '4767.11', '2024': '7381.25' },
+  ibnr_by_year: { '2021': '0.00', '2022': '60.86', '2023': '967.11', '2024': '3981.25' },
+  total_ibnr: '5009.22',
+};
+
+export const mockRateAdequacy: RateAdequacyItem[] = [
+  { line_of_business: 'cyber', segment: 'smb-technology', current_rate: '1.50', indicated_rate: '1.72', adequacy_ratio: '1.1467' },
+  { line_of_business: 'cyber', segment: 'smb-healthcare', current_rate: '2.20', indicated_rate: '2.85', adequacy_ratio: '1.2955' },
+  { line_of_business: 'cyber', segment: 'smb-financial', current_rate: '1.80', indicated_rate: '1.95', adequacy_ratio: '1.0833' },
+  { line_of_business: 'cyber', segment: 'mid-market-technology', current_rate: '1.20', indicated_rate: '1.35', adequacy_ratio: '1.1250' },
+  { line_of_business: 'cyber', segment: 'mid-market-retail', current_rate: '0.90', indicated_rate: '0.82', adequacy_ratio: '0.9111' },
+  { line_of_business: 'professional_liability', segment: 'law-firms', current_rate: '3.10', indicated_rate: '3.45', adequacy_ratio: '1.1129' },
+  { line_of_business: 'professional_liability', segment: 'accounting', current_rate: '2.50', indicated_rate: '2.30', adequacy_ratio: '0.9200' },
 ];

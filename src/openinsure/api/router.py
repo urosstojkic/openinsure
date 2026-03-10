@@ -11,6 +11,7 @@ from openinsure.api.health import router as health_router
 from openinsure.api.knowledge import router as knowledge_router
 from openinsure.api.policies import router as policies_router
 from openinsure.api.products import router as products_router
+from openinsure.api.reinsurance import router as reinsurance_router
 from openinsure.api.submissions import router as submissions_router
 from openinsure.rbac.auth import get_current_user
 
@@ -28,5 +29,8 @@ api_v1_router.include_router(compliance_router, prefix="/compliance", tags=["com
 api_v1_router.include_router(documents_router, prefix="/documents", tags=["documents"])
 api_v1_router.include_router(events_router, prefix="/events", tags=["events"])
 api_v1_router.include_router(knowledge_router, prefix="/knowledge", tags=["knowledge"])
+
+# Carrier-only module — disabled in MGA deployments via deployment profile
+api_v1_router.include_router(reinsurance_router, prefix="/reinsurance", tags=["reinsurance"])
 
 api_router.include_router(api_v1_router)
