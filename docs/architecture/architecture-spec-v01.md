@@ -17,7 +17,7 @@
 
 OpenInsure is an open-source, AI-native core insurance platform built on the Microsoft AI stack. It is not a traditional core system with AI bolted on. Every module — underwriting, policy administration, claims, billing, compliance — is designed from the ground up to be operated by, and through, AI agents.
 
-The distinction matters. Guidewire ($1.2B revenue, 570+ insurers) and Duck Creek were architected in the 2000s around human-operated screens, batch processes, and deterministic business rules. They are now retrofitting AI capabilities onto architectures that were never designed for them. mea Platform, Corgi, Federato, and Concirrus Inspire are AI-native but closed-source and VC-funded ($50M–$260M+). No credible open-source AI-native core insurance system exists today. The previous attempt (APOSIN, backed by Allianz) was closed/defunct. Openkoda is an application framework with insurance templates, not an AI-native insurance system.
+The distinction matters. Legacy core systems were architected in the 2000s around human-operated screens, batch processes, and deterministic business rules. They are now retrofitting AI capabilities onto architectures that were never designed for them. Several AI-native competitors exist but are closed-source and VC-funded ($50M–$260M+). No credible open-source AI-native core insurance system exists today. Previous open-source attempts have been closed or defunct. Existing open-source application frameworks offer insurance templates but are not AI-native insurance systems.
 
 ### 1.2 What "AI-Native" Means in Practice
 
@@ -197,7 +197,7 @@ Each module is designed agent-first: the primary interface is an API consumed by
 
 **What it does:** Defines insurance products — coverages, rating algorithms, rules, forms, and regulatory constraints.
 
-**AI-native difference:** In Guidewire, actuaries work with product designers in a visual tool to manually configure rating tables, coverage structures, and rules. In OpenInsure, the primary interface is conversational:
+**AI-native difference:** In traditional core systems, actuaries work with product designers in a visual tool to manually configure rating tables, coverage structures, and rules. In OpenInsure, the primary interface is conversational:
 
 ```
 Actuary: "Create a cyber liability product for SMBs with revenue under $50M.
@@ -233,7 +233,7 @@ Product Agent: [Generates product definition in structured schema]
 
 **What it does:** Receives insurance submissions from any channel (email, API, portal, broker platform), extracts structured data, validates completeness, classifies risk, and routes to appropriate processing path.
 
-**AI-native difference:** This is the single highest-value AI capability and where mea Platform started. Current state: underwriters manually open emails, download attachments (ACORD applications, loss runs, supplementals, financials), re-key data into their systems, cross-reference against multiple databases. This takes hours per submission.
+**AI-native difference:** This is the single highest-value AI capability and where several AI-native competitors have focused. Current state: underwriters manually open emails, download attachments (ACORD applications, loss runs, supplementals, financials), re-key data into their systems, cross-reference against multiple databases. This takes hours per submission.
 
 **Agent workflow:**
 
@@ -660,8 +660,7 @@ OpenInsure must integrate with the insurance ecosystem. Foundry Tools + Logic Ap
 - Reinsurance accounting platforms
 
 **Existing Core Systems (Coexistence Mode)**
-- Guidewire APIs (for carriers running OpenInsure alongside Guidewire)
-- Duck Creek APIs
+- Legacy core system APIs (for carriers running OpenInsure alongside existing platforms)
 - Legacy system wrappers via Logic Apps
 
 ### 8.2 MCP Server Interface
@@ -840,26 +839,28 @@ This section is context for agents/developers to understand what exists and wher
 
 ### What Exists Today
 
+> *Company names anonymized. OpenInsure's positioning is based on publicly available information about market participants as of early 2026.*
+
 | Company | Approach | Funding | Key Differentiator | OpenInsure Advantage |
 |---|---|---|---|---|
-| Guidewire | Traditional core + AI bolt-on | Public ($1.2B rev) | 570+ insurers, ecosystem | Open source, AI-native architecture, no multi-year implementation |
-| Duck Creek | Traditional core (Azure-native) | Vista Equity | 90-day implementation promise | AI-native vs. AI-assisted, open source |
-| mea Platform | AI-native operations layer | $50M (bootstrapped → SEP) | dsLM + knowledge graph, 21 countries | Open source, model-agnostic (doesn't depreciate with frontier model upgrades) |
-| Corgi | AI-native full-stack carrier | $108M | Owns entire stack including carrier license | OpenInsure is platform, not carrier — serves anyone |
-| Federato | AI control tower + portfolio | $180M (Goldman Sachs) | Real-time portfolio governance | Open source, broader scope than portfolio management |
-| Concirrus Inspire | AI-native underwriting | Private | Specialty insurance focus, triple certification | Open source, full lifecycle (not just underwriting) |
-| Openkoda | Open source app platform | Self-funded | MIT license, insurance templates | AI-native vs. traditional with AI templates |
-| APOSIN | Open source core system | Allianz-backed | Comprehensive all-class system | Alive (APOSIN is defunct) |
+| Legacy Core System A | Traditional core + AI bolt-on | Public ($1B+ rev) | 500+ insurers, ecosystem | Open source, AI-native architecture, no multi-year implementation |
+| Legacy Core System B | Traditional core (Azure-native) | Private equity | 90-day implementation promise | AI-native vs. AI-assisted, open source |
+| AI-Native Platform A | AI-native operations layer | $50M funded | Custom dsLM + knowledge graph, 21 countries | Open source, model-agnostic (doesn't depreciate with frontier model upgrades) |
+| AI-Native Platform B | AI-native full-stack carrier | $108M funded | Owns entire stack including carrier license | OpenInsure is platform, not carrier — serves anyone |
+| AI Control Tower C | AI control tower + portfolio | $180M funded | Real-time portfolio governance | Open source, broader scope than portfolio management |
+| AI Underwriting Platform D | AI-native underwriting | Private | Specialty insurance focus, triple certification | Open source, full lifecycle (not just underwriting) |
+| Open Source Framework E | Open source app platform | Self-funded | MIT license, insurance templates | AI-native vs. traditional with AI templates |
+| Open Source Core F | Open source core system | Enterprise-backed | Comprehensive all-class system | Alive (predecessor is defunct) |
 
 ### OpenInsure's Unique Position
 
 The only solution that is simultaneously: open source AND AI-native AND built on enterprise Microsoft stack AND model-agnostic AND compliance-first.
 
 This combination matters because:
-- Open source addresses vendor lock-in (Guidewire's biggest criticism)
-- AI-native addresses operational efficiency (mea's value proposition, but open)
+- Open source addresses vendor lock-in (the biggest criticism of legacy core systems)
+- AI-native addresses operational efficiency (the value proposition of AI-native competitors, but open)
 - Microsoft stack addresses enterprise IT requirements (90%+ of insurers run Microsoft)
-- Model-agnostic addresses the BloombergGPT risk (domain models depreciate)
+- Model-agnostic addresses the domain model risk (domain-specific models depreciate)
 - Compliance-first addresses the August 2026 EU AI Act deadline
 
 ---
@@ -871,7 +872,7 @@ This combination matters because:
 - **Bordereaux:** Detailed reports that MGAs provide to carriers, showing premium, claims, and loss data
 - **Combined Ratio:** Insurance profitability metric (loss ratio + expense ratio). Below 100% = underwriting profit
 - **DORA:** Digital Operational Resilience Act — EU regulation on ICT risk management for financial entities
-- **dsLM:** Domain-specific Language Model (term used by mea Platform)
+- **dsLM:** Domain-specific Language Model (term used by some AI-native insurance platforms)
 - **FNOL:** First Notice of Loss — initial report of an insurance claim
 - **Foundry IQ:** Microsoft Foundry's agentic knowledge retrieval layer
 - **GWP:** Gross Written Premium — total premium before reinsurance

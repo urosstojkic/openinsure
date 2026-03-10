@@ -28,7 +28,9 @@ OpenInsure is an open-source, AI-native core insurance platform built on the Mic
 
 ### Why OpenInsure?
 
-| | Guidewire | mea Platform | Corgi | **OpenInsure** |
+> *Company names anonymized. OpenInsure's positioning is based on publicly available information about market participants as of early 2026.*
+
+| | Legacy Core System A | AI-Native Platform A | AI-Native Platform B | **OpenInsure** |
 |---|---|---|---|---|
 | **Architecture** | Traditional + AI bolt-on | AI-native (closed) | AI-native (closed) | **AI-native (open)** |
 | **License** | Proprietary | Proprietary | Proprietary | **AGPL-3.0** |
@@ -112,7 +114,7 @@ OpenInsure deploys **8 specialized AI agents** on Azure AI Foundry Agent Service
 
 Every agent decision produces an immutable **Decision Record** (EU AI Act Art. 12) with reasoning chain, confidence score, and fairness metrics. Agents with confidence < 0.7 automatically escalate to human oversight.
 
-Agents are visible in the [Azure AI Foundry portal](https://ai.azure.com) under the `uros-ai-foundry-demo` project.
+Agents are visible in the [Azure AI Foundry portal](https://ai.azure.com) under your configured project.
 
 ## Role-Based Access
 
@@ -171,14 +173,15 @@ ruff check src/ tests/ && ruff format src/ tests/
 mypy src/openinsure/
 ```
 
-### Live Deployment
+### Deployment
 
-| Service | URL |
-|---------|-----|
-| **Dashboard** | https://openinsure-dashboard.braveriver-f92a9f28.swedencentral.azurecontainerapps.io |
-| **Backend API** | https://openinsure-backend.braveriver-f92a9f28.swedencentral.azurecontainerapps.io |
-| **Swagger UI** | https://openinsure-backend.braveriver-f92a9f28.swedencentral.azurecontainerapps.io/docs |
-| **Foundry Agents** | [ai.azure.com](https://ai.azure.com) → `uros-ai-foundry-demo` project |
+OpenInsure can be deployed to any Azure subscription. See [Deployment Guide](docs/deployment/azure-setup.md) for instructions.
+
+After deployment, your instance will be available at:
+- **Dashboard:** `https://<your-dashboard>.azurecontainerapps.io`
+- **Backend API:** `https://<your-backend>.azurecontainerapps.io`
+- **Swagger UI:** `https://<your-backend>.azurecontainerapps.io/docs`
+- **Foundry Agents:** Visible in [Microsoft Foundry portal](https://ai.azure.com)
 
 ## Testing
 
@@ -202,7 +205,7 @@ pytest tests/ -m "not azure" -v
 ```bash
 # Deploy infrastructure
 az deployment group create \
-  --resource-group openinsure-dev \
+  --resource-group <your-resource-group> \
   --template-file infra/main.bicep \
   --parameters infra/parameters/dev.bicepparam
 ```

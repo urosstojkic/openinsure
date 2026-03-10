@@ -4,7 +4,7 @@
 
 OpenInsure is an open-source, AI-native core insurance platform that fundamentally reimagines how insurance operations work. Built on the Microsoft AI stack (Azure AI Foundry + Azure), it replaces the traditional human-driven, screen-by-screen workflow with an **agent-first architecture** where AI agents handle routine insurance operations end-to-end — from submission intake through underwriting, policy issuance, claims management, and compliance — while humans retain oversight and authority over exceptions, complex decisions, and strategic direction.
 
-Unlike legacy platforms (Guidewire, Duck Creek) that bolt AI onto existing workflows, or closed-source AI-native competitors, OpenInsure is designed from the ground up so that every insurance process is an agent-callable operation. It is open source (AGPL-3.0), model-agnostic (1,900+ models via Azure AI Foundry), and EU AI Act compliant by design.
+Unlike legacy platforms that bolt AI onto existing workflows, or closed-source AI-native competitors, OpenInsure is designed from the ground up so that every insurance process is an agent-callable operation. It is open source (AGPL-3.0), model-agnostic (1,900+ models via Azure AI Foundry), and EU AI Act compliant by design.
 
 OpenInsure targets **Managing General Agents (MGAs)**, **InsurTech startups**, and **small specialty carriers** looking for a modern core system that can process a cyber insurance submission from receipt to bindable quote in under 15 minutes — compared to the industry standard of 2–5 business days.
 
@@ -500,14 +500,16 @@ A self-service interface for brokers with strict data isolation:
 
 ### Production Environment
 
-OpenInsure is deployed on **Microsoft Azure** using a fully containerized architecture:
+OpenInsure can be deployed to any Azure subscription. See [Deployment Guide](deployment/azure-setup.md) for instructions.
+
+After deployment, your instance will be available at:
 
 | Component | URL |
 |-----------|-----|
-| **Dashboard** | https://openinsure-dashboard.braveriver-f92a9f28.swedencentral.azurecontainerapps.io |
-| **Backend API** | https://openinsure-backend.braveriver-f92a9f28.swedencentral.azurecontainerapps.io |
-| **API Documentation (Swagger)** | https://openinsure-backend.braveriver-f92a9f28.swedencentral.azurecontainerapps.io/docs |
-| **AI Foundry Agents** | https://ai.azure.com — `uros-ai-foundry-demo` project |
+| **Dashboard** | `https://<your-dashboard>.azurecontainerapps.io` |
+| **Backend API** | `https://<your-backend>.azurecontainerapps.io` |
+| **API Documentation (Swagger)** | `https://<your-backend>.azurecontainerapps.io/docs` |
+| **AI Foundry Agents** | [Microsoft Foundry portal](https://ai.azure.com) — your configured project |
 
 ### Azure Infrastructure
 
