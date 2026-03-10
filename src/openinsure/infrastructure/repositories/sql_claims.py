@@ -92,6 +92,17 @@ class SqlClaimRepository(BaseRepository):
         return [_deserialize_claim(r) for r in rows]
 
     async def update(self, entity_id: UUID | str, updates: dict[str, Any]) -> dict[str, Any] | None:
+        from openinsure.domain.state_machine import (
+            validate_claim_invariants,
+            validate_claim_transition,
+        )
+
+        existing = await self.get_by_id(entity_id)
+        if "status" in updates and existing and existing.get("status"):
+            validate_claim_transition(existing["status"], updates["status"])
+        merged = {**(existing or {}), **updates}
+        validate_claim_invariants(merged)
+
         sets: list[str] = []
         params: list[Any] = []
         for key, val in updates.items():

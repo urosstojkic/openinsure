@@ -30,9 +30,18 @@ class InMemorySubmissionRepository(BaseRepository):
         return entity
 
     async def update(self, entity_id: UUID | str, updates: dict[str, Any]) -> dict[str, Any] | None:
+        from openinsure.domain.state_machine import (
+            validate_submission_invariants,
+            validate_submission_transition,
+        )
+
         record = self._store.get(str(entity_id))
         if record is None:
             return None
+        if "status" in updates and record.get("status"):
+            validate_submission_transition(record["status"], updates["status"])
+        merged = {**record, **updates}
+        validate_submission_invariants(merged)
         record.update(updates)
         return record
 
@@ -84,9 +93,18 @@ class InMemorySubmissionRepository(BaseRepository):
     async def update_status(
         self, entity_id: UUID | str, status: str, extra: dict[str, Any] | None = None
     ) -> dict[str, Any] | None:
+        from openinsure.domain.state_machine import (
+            validate_submission_invariants,
+            validate_submission_transition,
+        )
+
         record = self._store.get(str(entity_id))
         if record is None:
             return None
+        if record.get("status"):
+            validate_submission_transition(record["status"], status)
+        merged = {**record, "status": status, **(extra or {})}
+        validate_submission_invariants(merged)
         record["status"] = status
         if extra:
             record.update(extra)

@@ -88,6 +88,17 @@ class SqlPolicyRepository(BaseRepository):
         return [_deserialize_policy(r) for r in rows]
 
     async def update(self, entity_id: UUID | str, updates: dict[str, Any]) -> dict[str, Any] | None:
+        from openinsure.domain.state_machine import (
+            validate_policy_invariants,
+            validate_policy_transition,
+        )
+
+        existing = await self.get_by_id(entity_id)
+        if "status" in updates and existing and existing.get("status"):
+            validate_policy_transition(existing["status"], updates["status"])
+        merged = {**(existing or {}), **updates}
+        validate_policy_invariants(merged)
+
         sets: list[str] = []
         params: list[Any] = []
         for key, val in updates.items():

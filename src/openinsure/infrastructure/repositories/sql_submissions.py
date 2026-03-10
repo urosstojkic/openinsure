@@ -82,6 +82,18 @@ class SqlSubmissionRepository(BaseRepository):
         return await self.db.fetch_all(query, params)
 
     async def update(self, entity_id: UUID | str, updates: dict[str, Any]) -> dict[str, Any] | None:
+        from openinsure.domain.state_machine import (
+            validate_submission_invariants,
+            validate_submission_transition,
+        )
+
+        if "status" in updates:
+            existing = await self.get_by_id(entity_id)
+            if existing and existing.get("status"):
+                validate_submission_transition(existing["status"], updates["status"])
+            merged = {**(existing or {}), **updates}
+            validate_submission_invariants(merged)
+
         sets: list[str] = []
         params: list[Any] = []
         for key, val in updates.items():

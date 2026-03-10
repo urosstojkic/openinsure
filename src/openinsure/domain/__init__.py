@@ -73,6 +73,19 @@ from openinsure.domain.product import (
     ProductStatus,
     RatingFactor,
 )
+from openinsure.domain.state_machine import (
+    CLAIM_TRANSITIONS,
+    POLICY_TRANSITIONS,
+    SUBMISSION_TRANSITIONS,
+    DomainInvariantError,
+    InvalidTransitionError,
+    validate_claim_invariants,
+    validate_claim_transition,
+    validate_policy_invariants,
+    validate_policy_transition,
+    validate_submission_invariants,
+    validate_submission_transition,
+)
 from openinsure.domain.submission import (
     CyberRiskData,
     Document,
@@ -109,6 +122,12 @@ __all__ = [
     "Coverage",
     # product
     "CoverageDefinition",
+    # state machine
+    "CLAIM_TRANSITIONS",
+    "DomainInvariantError",
+    "InvalidTransitionError",
+    "POLICY_TRANSITIONS",
+    "SUBMISSION_TRANSITIONS",
     # submission
     "CyberRiskData",
     "Document",
@@ -149,6 +168,12 @@ __all__ = [
     "SubmissionStatus",
     "SubmissionTriaged",
     "TriageResult",
+    "validate_claim_invariants",
+    "validate_claim_transition",
+    "validate_policy_invariants",
+    "validate_policy_transition",
+    "validate_submission_invariants",
+    "validate_submission_transition",
     "new_id",
     "utc_now",
 ]
