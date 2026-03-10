@@ -6,11 +6,6 @@ const USE_MOCK = import.meta.env.VITE_USE_MOCK !== 'false';
 
 export async function getProducts(): Promise<Product[]> {
   if (USE_MOCK) return mockProducts;
-  try {
-    const { data } = await client.get('/products');
-    return Array.isArray(data) ? data : (data.items || []);
-  } catch (error) {
-    console.warn('API call failed, falling back to mock:', error);
-    return mockProducts;
-  }
+  const { data } = await client.get('/products');
+  return Array.isArray(data) ? data : (data.items || []);
 }

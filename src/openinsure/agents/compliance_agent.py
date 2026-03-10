@@ -79,7 +79,7 @@ class ComplianceAgent(InsuranceAgent):
 
     async def process(self, task: dict[str, Any]) -> dict[str, Any]:
         """Return minimal defaults when Foundry is unavailable."""
-        records = self._load_records(task)
+        self._load_records(task)
         return {
             "compliant": False,
             "findings": [],

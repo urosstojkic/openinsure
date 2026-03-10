@@ -161,9 +161,7 @@ class Orchestrator:
             # --- Step 2: Document processing ---
             documents = submission.get("documents", [])
             for doc in documents:
-                doc_result, doc_decision = await self.document_agent.execute(
-                    {"type": "classify", "document": doc}
-                )
+                doc_result, doc_decision = await self.document_agent.execute({"type": "classify", "document": doc})
                 workflow.add_step("document_classify", "document_agent", doc_result, doc_decision)
 
                 ext_result, ext_decision = await self.document_agent.execute(

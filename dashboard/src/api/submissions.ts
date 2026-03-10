@@ -6,24 +6,14 @@ const USE_MOCK = import.meta.env.VITE_USE_MOCK !== 'false';
 
 export async function getSubmissions(): Promise<Submission[]> {
   if (USE_MOCK) return mockSubmissions;
-  try {
-    const { data } = await client.get('/submissions');
-    return Array.isArray(data) ? data : (data.items || []);
-  } catch (error) {
-    console.warn('API call failed, falling back to mock:', error);
-    return mockSubmissions;
-  }
+  const { data } = await client.get('/submissions');
+  return Array.isArray(data) ? data : (data.items || []);
 }
 
 export async function getSubmission(id: string): Promise<Submission | undefined> {
   if (USE_MOCK) return mockSubmissions.find((s) => s.id === id);
-  try {
-    const { data } = await client.get<Submission>(`/submissions/${id}`);
-    return data;
-  } catch (error) {
-    console.warn('API call failed, falling back to mock:', error);
-    return mockSubmissions.find((s) => s.id === id);
-  }
+  const { data } = await client.get<Submission>(`/submissions/${id}`);
+  return data;
 }
 
 export async function createSubmission(payload: Record<string, unknown>): Promise<Submission> {
