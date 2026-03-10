@@ -41,7 +41,7 @@ def _sample_submissions() -> list[dict[str, Any]]:
             "id": SUBMISSION_IDS[0],
             "applicant_name": "Acme Cyber Corp",
             "applicant_email": "underwriting@acmecyber.com",
-            "status": "submitted",
+            "status": "received",
             "channel": "portal",
             "line_of_business": "cyber",
             "risk_data": {"annual_revenue": 5_000_000, "employee_count": 50},
@@ -54,7 +54,7 @@ def _sample_submissions() -> list[dict[str, Any]]:
             "id": SUBMISSION_IDS[1],
             "applicant_name": "TechStart Inc",
             "applicant_email": "cfo@techstart.io",
-            "status": "in_triage",
+            "status": "triaging",
             "channel": "api",
             "line_of_business": "cyber",
             "risk_data": {"annual_revenue": 1_200_000, "employee_count": 15},
@@ -93,7 +93,7 @@ def _sample_submissions() -> list[dict[str, Any]]:
             "id": SUBMISSION_IDS[4],
             "applicant_name": "CloudNine SaaS",
             "applicant_email": "ops@cloudnine.dev",
-            "status": "triaged",
+            "status": "underwriting",
             "channel": "portal",
             "line_of_business": "tech_eo",
             "risk_data": {"annual_revenue": 3_000_000, "employee_count": 30},
@@ -456,3 +456,4 @@ async def seed_sample_data() -> None:
     await compliance_repo.clear_audit_events()
     for evt in _sample_audit_events():
         await compliance_repo.add_audit_event(evt)
+
