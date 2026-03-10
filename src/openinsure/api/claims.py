@@ -9,13 +9,16 @@ from __future__ import annotations
 import json
 import uuid
 from datetime import UTC, datetime
+from decimal import Decimal
 from enum import StrEnum
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from openinsure.infrastructure.factory import get_claim_repository, get_compliance_repository
+from openinsure.rbac.auth import CurrentUser, get_current_user
+from openinsure.rbac.authority import AuthorityEngine
 
 router = APIRouter()
 
@@ -129,6 +132,7 @@ class ReserveResponse(BaseModel):
     currency: str
     total_reserved: float
     created_at: str
+    authority: dict[str, Any] | None = None
 
 
 class PaymentRequest(BaseModel):
@@ -170,6 +174,7 @@ class CloseResponse(BaseModel):
     reason: str
     outcome: str
     closed_at: str
+    authority: dict[str, Any] | None = None
 
 
 class ReopenRequest(BaseModel):
@@ -292,7 +297,9 @@ async def update_claim(claim_id: str, body: ClaimUpdate) -> ClaimResponse:
 
 
 @router.post("/{claim_id}/reserve", response_model=ReserveResponse, status_code=201)
-async def set_reserve(claim_id: str, body: ReserveRequest) -> ReserveResponse:
+async def set_reserve(
+    claim_id: str, body: ReserveRequest, user: CurrentUser = Depends(get_current_user)
+) -> ReserveResponse:
     """Set or update reserves on a claim.
 
     When Foundry is available, an AI recommendation is logged alongside the
@@ -301,6 +308,24 @@ async def set_reserve(claim_id: str, body: ReserveRequest) -> ReserveResponse:
     record = await _get_claim(claim_id)
     if record["status"] == ClaimStatus.CLOSED:
         raise HTTPException(status_code=409, detail="Cannot set reserves on a closed claim")
+
+    # Authority check for reserve
+    from openinsure.services.event_publisher import publish_domain_event
+
+    engine = AuthorityEngine()
+    user_role = user.roles[0] if user.roles else "openinsure-claims-adjuster"
+    auth_result = engine.check_reserve_authority(Decimal(str(body.amount)), user_role)
+    await publish_domain_event(
+        "authority.checked",
+        f"/claims/{claim_id}",
+        {
+            "action": "reserve",
+            "amount": str(body.amount),
+            "user_role": user_role,
+            "decision": auth_result.decision,
+            "reason": auth_result.reason,
+        },
+    )
 
     # AI-assisted reserve recommendation (advisory only)
     from openinsure.agents.foundry_client import get_foundry_client
@@ -354,6 +379,7 @@ async def set_reserve(claim_id: str, body: ReserveRequest) -> ReserveResponse:
         currency=body.currency,
         total_reserved=record["total_reserved"],
         created_at=now,
+        authority={"decision": auth_result.decision, "reason": auth_result.reason},
     )
 
 
@@ -395,11 +421,32 @@ async def record_payment(claim_id: str, body: PaymentRequest) -> PaymentResponse
 
 
 @router.post("/{claim_id}/close", response_model=CloseResponse)
-async def close_claim(claim_id: str, body: CloseRequest) -> CloseResponse:
+async def close_claim(
+    claim_id: str, body: CloseRequest, user: CurrentUser = Depends(get_current_user)
+) -> CloseResponse:
     """Close a claim."""
     record = await _get_claim(claim_id)
     if record["status"] == ClaimStatus.CLOSED:
         raise HTTPException(status_code=409, detail="Claim is already closed")
+
+    # Settlement authority check
+    from openinsure.services.event_publisher import publish_domain_event
+
+    engine = AuthorityEngine()
+    user_role = user.roles[0] if user.roles else "openinsure-claims-adjuster"
+    settlement_amount = Decimal(str(record.get("total_paid", 0)))
+    auth_result = engine.check_settlement_authority(settlement_amount, user_role)
+    await publish_domain_event(
+        "authority.checked",
+        f"/claims/{claim_id}",
+        {
+            "action": "settlement",
+            "amount": str(settlement_amount),
+            "user_role": user_role,
+            "decision": auth_result.decision,
+            "reason": auth_result.reason,
+        },
+    )
 
     now = _now()
     record["status"] = ClaimStatus.CLOSED
@@ -411,6 +458,7 @@ async def close_claim(claim_id: str, body: CloseRequest) -> CloseResponse:
         reason=body.reason,
         outcome=body.outcome,
         closed_at=now,
+        authority={"decision": auth_result.decision, "reason": auth_result.reason},
     )
 
 
@@ -434,7 +482,7 @@ async def reopen_claim(claim_id: str, body: ReopenRequest) -> ReopenResponse:
 
 
 @router.post("/{claim_id}/process")
-async def process_claim(claim_id: str):
+async def process_claim(claim_id: str) -> dict[str, object]:
     """Run the claims workflow via Foundry agents.
 
     1. Coverage verification (AI)

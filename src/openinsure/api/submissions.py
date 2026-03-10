@@ -9,13 +9,16 @@ from __future__ import annotations
 import json
 import uuid
 from datetime import UTC, datetime
+from decimal import Decimal
 from enum import StrEnum
 from typing import Any
 
-from fastapi import APIRouter, File, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from pydantic import BaseModel, Field
 
 from openinsure.infrastructure.factory import get_blob_storage, get_submission_repository
+from openinsure.rbac.auth import CurrentUser, get_current_user
+from openinsure.rbac.authority import AuthorityDecision, AuthorityEngine
 
 router = APIRouter()
 
@@ -229,6 +232,7 @@ class QuoteResponse(BaseModel):
     currency: str = "USD"
     coverages: list[dict[str, Any]]
     valid_until: str
+    authority: dict[str, Any] | None = None
 
 
 class BindResponse(BaseModel):
@@ -238,6 +242,7 @@ class BindResponse(BaseModel):
     policy_id: str
     status: SubmissionStatus
     bound_at: str
+    authority: dict[str, Any] | None = None
 
 
 class DocumentUploadResponse(BaseModel):
@@ -417,7 +422,7 @@ async def triage_submission(submission_id: str) -> TriageResult:
 
 
 @router.post("/{submission_id}/quote", response_model=QuoteResponse)
-async def generate_quote(submission_id: str) -> QuoteResponse:
+async def generate_quote(submission_id: str, user: CurrentUser = Depends(get_current_user)) -> QuoteResponse:
     """Generate a quote for the submission.
 
     Calls the Foundry underwriting agent when available, falling back to
@@ -448,6 +453,28 @@ async def generate_quote(submission_id: str) -> QuoteResponse:
             record["updated_at"] = _now()
             from openinsure.services.event_publisher import publish_domain_event
 
+            # Authority check
+            engine = AuthorityEngine()
+            user_role = user.roles[0] if user.roles else "openinsure-uw-analyst"
+            auth_result = engine.check_quote_authority(Decimal(str(premium)), user_role)
+            if auth_result.decision == AuthorityDecision.ESCALATE:
+                raise HTTPException(
+                    403,
+                    detail=f"Quote authority exceeded. {auth_result.reason}. "
+                    f"Escalate to: {', '.join(auth_result.escalation_chain)}",
+                )
+            await publish_domain_event(
+                "authority.checked",
+                f"/submissions/{submission_id}",
+                {
+                    "action": "quote",
+                    "amount": str(premium),
+                    "user_role": user_role,
+                    "decision": auth_result.decision,
+                    "reason": auth_result.reason,
+                },
+            )
+
             await publish_domain_event(
                 "submission.quoted",
                 f"/submissions/{submission_id}",
@@ -460,25 +487,52 @@ async def generate_quote(submission_id: str) -> QuoteResponse:
                 currency="USD",
                 coverages=[{"name": "Cyber Liability", "limit": 1_000_000, "deductible": 10_000}],
                 valid_until=_now(),
+                authority={"decision": auth_result.decision, "reason": auth_result.reason},
             )
 
     # Local fallback
+    premium = 5000.00
     record["status"] = SubmissionStatus.QUOTED
     record["updated_at"] = _now()
     valid_until = datetime(2099, 12, 31, tzinfo=UTC).isoformat()
 
+    # Authority check
+    from openinsure.services.event_publisher import publish_domain_event
+
+    engine = AuthorityEngine()
+    user_role = user.roles[0] if user.roles else "openinsure-uw-analyst"
+    auth_result = engine.check_quote_authority(Decimal(str(premium)), user_role)
+    if auth_result.decision == AuthorityDecision.ESCALATE:
+        raise HTTPException(
+            403,
+            detail=f"Quote authority exceeded. {auth_result.reason}. "
+            f"Escalate to: {', '.join(auth_result.escalation_chain)}",
+        )
+    await publish_domain_event(
+        "authority.checked",
+        f"/submissions/{submission_id}",
+        {
+            "action": "quote",
+            "amount": str(premium),
+            "user_role": user_role,
+            "decision": auth_result.decision,
+            "reason": auth_result.reason,
+        },
+    )
+
     return QuoteResponse(
         submission_id=submission_id,
         quote_id=str(uuid.uuid4()),
-        premium=5000.00,
+        premium=premium,
         currency="USD",
         coverages=[{"name": "Cyber Liability", "limit": 1_000_000, "deductible": 10_000}],
         valid_until=valid_until,
+        authority={"decision": auth_result.decision, "reason": auth_result.reason},
     )
 
 
 @router.post("/{submission_id}/bind", response_model=BindResponse)
-async def bind_submission(submission_id: str) -> BindResponse:
+async def bind_submission(submission_id: str, user: CurrentUser = Depends(get_current_user)) -> BindResponse:
     """Bind the submission, creating a real policy and billing account."""
     from openinsure.infrastructure.factory import get_billing_repository, get_policy_repository
     from openinsure.services.event_publisher import publish_domain_event
@@ -491,6 +545,24 @@ async def bind_submission(submission_id: str) -> BindResponse:
     policy_id = str(uuid.uuid4())
     policy_number = f"POL-{datetime.now(UTC).strftime('%Y')}-{uuid.uuid4().hex[:6].upper()}"
     premium = record.get("quoted_premium", 0) or record.get("total_premium", 10000)
+
+    # Authority check before binding
+    engine = AuthorityEngine()
+    user_role = user.roles[0] if user.roles else "openinsure-uw-analyst"
+    cyber_data = record.get("risk_data", {})
+    if isinstance(cyber_data, str):
+        try:
+            cyber_data = json.loads(cyber_data)
+        except (json.JSONDecodeError, TypeError):
+            cyber_data = {}
+    limit = Decimal(str(cyber_data.get("requested_limit", 1000000) if cyber_data else 1000000))
+    auth_result = engine.check_bind_authority(Decimal(str(premium)), user_role, limit)
+    if auth_result.decision == AuthorityDecision.ESCALATE:
+        raise HTTPException(
+            403,
+            detail=f"Bind authority exceeded. {auth_result.reason}. "
+            f"Escalate to: {', '.join(auth_result.escalation_chain)}",
+        )
 
     # Create the actual policy record
     policy_repo = get_policy_repository()
@@ -514,7 +586,18 @@ async def bind_submission(submission_id: str) -> BindResponse:
     record["status"] = SubmissionStatus.BOUND
     record["updated_at"] = now
 
-    # Publish domain event
+    # Publish domain events
+    await publish_domain_event(
+        "authority.checked",
+        f"/submissions/{submission_id}",
+        {
+            "action": "bind",
+            "amount": str(premium),
+            "user_role": user_role,
+            "decision": auth_result.decision,
+            "reason": auth_result.reason,
+        },
+    )
     await publish_domain_event(
         event_type="policy.bound",
         subject=f"/policies/{policy_id}",
@@ -531,6 +614,7 @@ async def bind_submission(submission_id: str) -> BindResponse:
         policy_id=policy_id,
         status=SubmissionStatus.BOUND,
         bound_at=now,
+        authority={"decision": auth_result.decision, "reason": auth_result.reason},
     )
 
 
@@ -567,7 +651,7 @@ async def upload_documents(
 
 
 @router.post("/{submission_id}/process")
-async def process_submission(submission_id: str):
+async def process_submission(submission_id: str, user: CurrentUser = Depends(get_current_user)) -> dict[str, object]:
     """Run the full multi-agent new business workflow via Foundry agents.
 
     This is the real end-to-end pipeline:
@@ -661,18 +745,39 @@ async def process_submission(submission_id: str):
 
     # Extract premium from AI response
     uw_resp = uw.get("response", {})
-    premium = 10000  # fallback
+    premium: float = 10000  # fallback
     if isinstance(uw_resp, dict):
-        premium = float(uw_resp.get("recommended_premium", uw_resp.get("premium", 10000)))
+        premium = float(uw_resp.get("recommended_premium", uw_resp.get("premium", 10000)) or 10000)
     await _repo.update(submission_id, {"status": "quoted", "quoted_premium": premium, "updated_at": now})
     await publish_domain_event(
         "submission.quoted", f"/submissions/{submission_id}", {"submission_id": submission_id, "premium": premium}
     )
 
-    # Step 3: Auto-bind if premium within authority (<$100K)
+    # Step 3: Auto-bind if premium within authority (uses AuthorityEngine)
+    engine = AuthorityEngine()
+    user_role = user.roles[0] if user.roles else "openinsure-uw-analyst"
+    cyber_data = submission.get("cyber_risk_data", submission.get("risk_data", {}))
+    if isinstance(cyber_data, str):
+        try:
+            cyber_data = json.loads(cyber_data)
+        except (json.JSONDecodeError, TypeError):
+            cyber_data = {}
+    bind_limit = Decimal(str(cyber_data.get("requested_limit", 1000000) if cyber_data else 1000000))
+    bind_auth = engine.check_bind_authority(Decimal(str(premium)), user_role, bind_limit)
+    await publish_domain_event(
+        "authority.checked",
+        f"/submissions/{submission_id}",
+        {
+            "action": "bind",
+            "amount": str(premium),
+            "user_role": user_role,
+            "decision": bind_auth.decision,
+            "reason": bind_auth.reason,
+        },
+    )
     policy_id = None
     policy_number = None
-    if premium < 100000:
+    if bind_auth.decision != AuthorityDecision.ESCALATE:
         policy_id = str(uuid.uuid4())
         policy_number = f"POL-{datetime.now(UTC).strftime('%Y')}-{uuid.uuid4().hex[:6].upper()}"
         policy_repo = get_policy_repository()
@@ -735,4 +840,8 @@ async def process_submission(submission_id: str):
         "policy_number": policy_number,
         "premium": premium,
         "steps": results,
+        "authority": {
+            "decision": bind_auth.decision,
+            "reason": bind_auth.reason,
+        },
     }

@@ -241,7 +241,7 @@ async def get_audit_trail(
 
 
 @router.post("/bias-report", status_code=201)
-async def generate_bias_report(body: BiasReportRequest):
+async def generate_bias_report(body: BiasReportRequest) -> dict[str, object] | BiasReportResponse:
     """Generate a bias monitoring report for AI decisions.
 
     Uses Foundry compliance agent when available, falls back to local stub.

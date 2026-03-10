@@ -243,7 +243,7 @@ class KnowledgeAgent(InsuranceAgent):
     # Cosmos DB store dispatch
     # ------------------------------------------------------------------
 
-    async def _process_with_store(self, store, task: dict[str, Any]) -> dict[str, Any]:
+    async def _process_with_store(self, store: Any, task: dict[str, Any]) -> dict[str, Any]:
         """Process task using the Cosmos DB knowledge store."""
         task_type = task.get("type", "query")
         self.logger.info("knowledge.task.dispatch", task_type=task_type, backend="cosmos")

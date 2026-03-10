@@ -98,7 +98,7 @@ async def list_upcoming_renewals(
 
 
 @router.post("/{policy_id}/generate")
-async def generate_terms(policy_id: str):
+async def generate_terms(policy_id: str) -> dict[str, object] | RenewalTerms:
     """Generate renewal terms for a policy."""
     from openinsure.agents.foundry_client import get_foundry_client
 
@@ -144,7 +144,7 @@ async def generate_terms(policy_id: str):
 
 
 @router.post("/{policy_id}/process")
-async def process_renewal(policy_id: str):
+async def process_renewal(policy_id: str) -> dict[str, object]:
     """Process renewal — generate terms and create the renewal policy."""
     from openinsure.agents.foundry_client import get_foundry_client
     from openinsure.services.event_publisher import publish_domain_event

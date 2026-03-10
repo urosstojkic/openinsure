@@ -29,7 +29,7 @@ _FINANCIAL_SUMMARY = {
     "operating_income": 3_900_000,
 }
 
-_CASHFLOW_MONTHS = [
+_CASHFLOW_MONTHS: list[dict[str, str | float]] = [
     {"month": "2025-07", "collections": 2_100_000, "disbursements": 1_500_000, "net": 600_000},
     {"month": "2025-08", "collections": 2_300_000, "disbursements": 1_700_000, "net": 600_000},
     {"month": "2025-09", "collections": 1_900_000, "disbursements": 1_800_000, "net": 100_000},
@@ -44,7 +44,7 @@ _CASHFLOW_MONTHS = [
     {"month": "2026-06", "collections": 2_400_000, "disbursements": 1_900_000, "net": 500_000},
 ]
 
-_COMMISSIONS = [
+_COMMISSIONS: list[dict[str, str | int | float]] = [
     {
         "broker": "Marsh & Co",
         "policies": 42,
@@ -87,7 +87,7 @@ _COMMISSIONS = [
     },
 ]
 
-_RECONCILIATION = [
+_RECONCILIATION: list[dict[str, str | float]] = [
     {
         "item": "Premium receivables",
         "expected": 6_300_000,
@@ -196,10 +196,10 @@ async def financial_summary() -> FinancialSummary:
 @router.get("/cashflow", response_model=CashFlowResponse)
 async def cash_flow() -> CashFlowResponse:
     """Cash flow: collections vs disbursements over 12 months."""
-    total_c = sum(m["collections"] for m in _CASHFLOW_MONTHS)
-    total_d = sum(m["disbursements"] for m in _CASHFLOW_MONTHS)
+    total_c = sum(float(m["collections"]) for m in _CASHFLOW_MONTHS)
+    total_d = sum(float(m["disbursements"]) for m in _CASHFLOW_MONTHS)
     return CashFlowResponse(
-        months=[CashFlowMonth(**m) for m in _CASHFLOW_MONTHS],
+        months=[CashFlowMonth(**m) for m in _CASHFLOW_MONTHS],  # type: ignore[arg-type]
         total_collections=total_c,
         total_disbursements=total_d,
         net_cash_flow=total_c - total_d,
@@ -209,11 +209,11 @@ async def cash_flow() -> CashFlowResponse:
 @router.get("/commissions", response_model=CommissionSummary)
 async def commissions() -> CommissionSummary:
     """Commission summary by broker."""
-    entries = [CommissionEntry(**c) for c in _COMMISSIONS]
-    total = sum(c["commission_amount"] for c in _COMMISSIONS)
-    paid = sum(c["commission_amount"] for c in _COMMISSIONS if c["status"] == "paid")
-    pending = sum(c["commission_amount"] for c in _COMMISSIONS if c["status"] == "pending")
-    overdue = sum(c["commission_amount"] for c in _COMMISSIONS if c["status"] == "overdue")
+    entries = [CommissionEntry(**c) for c in _COMMISSIONS]  # type: ignore[arg-type]
+    total = sum(float(c["commission_amount"]) for c in _COMMISSIONS)
+    paid = sum(float(c["commission_amount"]) for c in _COMMISSIONS if c["status"] == "paid")
+    pending = sum(float(c["commission_amount"]) for c in _COMMISSIONS if c["status"] == "pending")
+    overdue = sum(float(c["commission_amount"]) for c in _COMMISSIONS if c["status"] == "overdue")
     return CommissionSummary(
         total_commissions=total,
         paid=paid,
@@ -226,7 +226,7 @@ async def commissions() -> CommissionSummary:
 @router.get("/reconciliation", response_model=list[ReconciliationItem])
 async def reconciliation() -> list[ReconciliationItem]:
     """Reconciliation status for key financial items."""
-    return [ReconciliationItem(**r) for r in _RECONCILIATION]
+    return [ReconciliationItem(**r) for r in _RECONCILIATION]  # type: ignore[arg-type]
 
 
 @router.post("/bordereaux/generate", response_model=BordereauGenerateResponse, status_code=201)

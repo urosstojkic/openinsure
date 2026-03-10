@@ -27,7 +27,7 @@ async def search_knowledge(
                 filters=f"category eq '{category}'" if category else None,
                 select=["id", "title", "content", "category", "source"],
             )
-            return results.get("results", [])
+            return list(results.get("results", []))
         except Exception as e:
             logger.warning("search.fallback", error=str(e))
 

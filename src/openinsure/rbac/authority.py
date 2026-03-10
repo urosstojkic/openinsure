@@ -71,7 +71,7 @@ def _escalation_above(role: str, hierarchy: list[str]) -> list[str]:
 # Default authority configuration
 # ---------------------------------------------------------------------------
 
-DEFAULT_AUTHORITY_CONFIG: dict = {
+DEFAULT_AUTHORITY_CONFIG: dict[str, dict[str, Decimal]] = {
     "quote": {
         "auto_limit": Decimal("50000"),
         "sr_uw_limit": Decimal("250000"),
@@ -107,7 +107,7 @@ class AuthorityEngine:
     escalated to a higher authority.
     """
 
-    def __init__(self, config: dict | None = None) -> None:
+    def __init__(self, config: dict[str, dict[str, Decimal]] | None = None) -> None:
         self.config = config or DEFAULT_AUTHORITY_CONFIG
 
     # -- Underwriting -------------------------------------------------------

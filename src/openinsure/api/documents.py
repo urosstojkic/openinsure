@@ -16,7 +16,7 @@ async def upload_document(
     policy_id: str | None = Query(None),
     claim_id: str | None = Query(None),
     document_type: str = Query("other"),
-):
+) -> dict[str, object]:
     """Upload a document to Azure Blob Storage."""
     storage = get_blob_storage()
     if not storage:
@@ -61,7 +61,7 @@ async def upload_document(
 async def list_documents(
     prefix: str | None = Query(None),
     limit: int = Query(50, ge=1, le=200),
-):
+) -> dict[str, object]:
     """List documents in storage."""
     storage = get_blob_storage()
     if not storage:
@@ -72,7 +72,7 @@ async def list_documents(
 
 
 @router.get("/download/{blob_name:path}")
-async def get_document_url(blob_name: str):
+async def get_document_url(blob_name: str) -> dict[str, str]:
     """Get a time-limited download URL for a document."""
     storage = get_blob_storage()
     if not storage:

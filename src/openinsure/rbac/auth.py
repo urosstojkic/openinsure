@@ -11,6 +11,7 @@ from __future__ import annotations
 import base64
 import json
 from dataclasses import dataclass
+from typing import Any
 
 from fastapi import Depends, HTTPException, Request, status
 
@@ -59,7 +60,7 @@ def _dev_user(deployment_type: str) -> CurrentUser:
 # ---------------------------------------------------------------------------
 
 
-def _decode_jwt_payload(token: str) -> dict:
+def _decode_jwt_payload(token: str) -> dict[str, Any]:
     """Decode JWT payload *without* signature verification.
 
     .. warning::
@@ -74,7 +75,8 @@ def _decode_jwt_payload(token: str) -> dict:
     # Fix base64 padding
     payload_b64 += "=" * (-len(payload_b64) % 4)
     decoded = base64.urlsafe_b64decode(payload_b64)
-    return json.loads(decoded)
+    result: dict[str, Any] = json.loads(decoded)
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -142,7 +144,7 @@ async def get_current_user(
     )
 
 
-def require_roles(*roles: str):
+def require_roles(*roles: str) -> Any:
     """Dependency that requires the user to hold at least one of *roles*."""
 
     async def _check_roles(

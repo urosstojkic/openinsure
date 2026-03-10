@@ -17,7 +17,7 @@ logger = structlog.get_logger()
 class FoundryAgentClient:
     """Calls Foundry-hosted agents."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         settings = get_settings()
         self._enabled = bool(settings.foundry_project_endpoint)
         self._openai = None
@@ -50,6 +50,8 @@ class FoundryAgentClient:
             return {"response": "", "source": "fallback", "error": "Foundry not available"}
 
         try:
+            if self._openai is None:
+                return {"response": "", "source": "fallback", "error": "OpenAI client not initialized"}
             response = self._openai.responses.create(
                 input=[{"role": "user", "content": message}],
                 extra_body={"agent_reference": {"name": agent_name, "type": "agent_reference"}},
