@@ -25,9 +25,11 @@ OpenInsure targets **Managing General Agents (MGAs)**, **InsurTech startups**, a
 | **Broker Portal** | ✅ Live | External self-service for submissions, quotes, and binding |
 | **Knowledge Base** | ✅ Live | Product definitions, underwriting guidelines, regulatory requirements |
 | **Cyber Insurance Product** | ✅ Live | Complete SMB Cyber Liability product with 5 coverages |
-| **Reinsurance** | 🔄 Planned | Treaty management, cession, placement automation |
-| **Actuarial** | 🔄 Planned | Reserves, loss triangles, IBNR estimation |
-| **MGA Oversight** | 🔄 Planned | Bordereaux reporting, authority monitoring |
+| **Reinsurance** | ✅ Live | Treaty management, cession calculation, recovery tracking |
+| **Actuarial** | ✅ Live | Loss triangles, IBNR estimation, reserve adequacy |
+| **MGA Oversight** | ✅ Live | Delegated authority monitoring, bordereaux, performance scoring |
+| **Renewal Workflow** | ✅ Live | Automated renewal identification and term generation |
+| **Finance Dashboard** | ✅ Live | Premium/claims analytics, cash flow, commissions |
 | **Additional LOBs** | 🔄 Planned | Property, General Liability, Tech E&O |
 
 ---
@@ -258,7 +260,90 @@ Draft → Issued → Paid / Overdue / Cancelled / Void
 
 ---
 
-## AI Agent Architecture
+### Reinsurance Management [Carrier]
+
+**What it does:** Manages the full reinsurance lifecycle — from treaty setup through automatic cession on policy bind and recovery calculation on claim payments — giving carriers real-time visibility into ceded risk and capacity utilization.
+
+**Treaty Types Supported:**
+
+| Type | Description |
+|------|-------------|
+| **Quota Share** | Fixed percentage of every policy ceded to reinsurer |
+| **Excess-of-Loss** | Reinsurer covers losses above a retention threshold |
+| **Surplus** | Cession of amounts exceeding the carrier's net line |
+| **Facultative** | Individual risk placement for large or unusual exposures |
+
+**Key Capabilities:**
+
+- **Treaty Lifecycle Management** — Create, activate, and expire treaties with defined terms, limits, and retention levels
+- **Automatic Cession Calculation** — When a policy is bound, cessions are calculated automatically based on active treaties
+- **Capacity Utilization Tracking** — Real-time monitoring of treaty utilization with configurable alerts at 80% and 95% thresholds
+- **Recovery Calculation** — When claims are paid, reinsurance recoveries are calculated automatically against applicable treaties
+- **Bordereau Generation** — Produce premium and claims bordereaux for reporting to reinsurers
+- **Reinsurance Dashboard** — Treaty summary view with utilization bars, cession history, and recovery tracking
+
+---
+
+### Actuarial Analytics [Carrier]
+
+**What it does:** Provides actuarial analysis tools for reserving, loss development, and rate adequacy — enabling actuaries to assess reserve sufficiency and pricing accuracy using data from the platform's claims and policy records.
+
+**Key Capabilities:**
+
+- **Loss Development Triangle Generation** — Builds incurred loss development triangles from claims data, organized by accident year and development period
+- **IBNR Estimation** — Calculates Incurred But Not Reported reserves using the chain-ladder (link ratio) method with age-to-age factors
+- **Reserve Adequacy Analysis** — Compares carried reserves against indicated reserves by line of business and accident year, flagging under- or over-reserved positions
+- **Rate Adequacy Testing** — Compares current premium rates against actuarially indicated rates, highlighting lines where pricing may be insufficient
+- **Actuarial Workbench** — Interactive dashboard with development triangles, IBNR charts, and reserve adequacy visualizations
+
+**Methodology:**
+- Chain-ladder method with weighted age-to-age factors
+- Tail factor application for immature accident years
+- Results segmented by line of business and accident year
+
+---
+
+### MGA Oversight [Carrier]
+
+**What it does:** Enables carriers to monitor and manage Managing General Agents operating under delegated authority — tracking authority utilization, validating bordereaux submissions, and scoring MGA performance.
+
+**Key Capabilities:**
+
+- **Delegated Authority Management** — Define and monitor authority grants with premium limits, coverage restrictions, and territory constraints
+- **Bordereaux Ingestion & Validation** — Receive and validate premium and claims bordereaux from MGAs, flagging data quality issues
+- **Authority Utilization Tracking** — Real-time monitoring of how much of each MGA's granted authority has been used
+- **Performance Scoring** — Composite scoring based on loss ratio, premium volume, compliance, and data quality
+- **Audit Trail** — Complete history of authority changes, bordereaux submissions, and compliance events
+- **MGA Oversight Dashboard** — Scorecards with performance metrics, utilization gauges, and compliance status for each MGA
+
+---
+
+### Renewal Management
+
+**What it does:** Identifies policies approaching expiration and automates the renewal workflow — from early identification through term generation to renewal processing.
+
+**Key Capabilities:**
+
+- **90/60/30-Day Renewal Identification** — Automatically surfaces policies at 90, 60, and 30 days before expiration, categorized by urgency
+- **Automated Renewal Term Generation** — Generates renewal terms based on current policy, updated risk assessment, and rate changes
+- **Renewal Processing** — Supports both auto-renewal (for low-risk, no-change renewals) and manual review workflows
+- **Renewal Queue** — Prioritized view of upcoming renewals with days-to-expiry, premium, and recommended action
+
+---
+
+### Financial Reporting
+
+**What it does:** Provides financial analytics and reporting across the insurance portfolio — covering premium flows, claims costs, cash management, and commission reconciliation.
+
+**Key Capabilities:**
+
+- **Premium Analytics** — Written, earned, and unearned premium tracking with period-over-period trends
+- **Claims Analytics** — Paid losses, outstanding reserves, and incurred losses with loss ratio calculation
+- **Cash Flow Management** — Net cash position tracking, premium collections vs. claims payments, forecasting
+- **Commission Tracking & Reconciliation** — Broker commission calculation, payment status, and reconciliation reporting
+- **Finance Dashboard** — Consolidated financial summary with KPI cards, trend charts, and drill-down capability
+
+---
 
 ### The Agents
 
@@ -604,7 +689,7 @@ The following classes are outside appetite and will be auto-declined:
 
 ## Roadmap
 
-### Completed (Phase 1)
+### Completed (Phases 1–4)
 
 - ✅ Core domain model: Party, Submission, Policy, Claim, Product, Billing
 - ✅ Complete REST API with 35+ endpoints
@@ -619,18 +704,20 @@ The following classes are outside appetite and will be auto-declined:
 - ✅ Cyber Liability SMB product (CYBER-SMB-001)
 - ✅ MCP Server interface for AI tool integration
 - ✅ CI/CD pipeline: lint, type check, security scan, tests, build
+- ✅ Reinsurance management (treaty lifecycle, cession, recovery, bordereau)
+- ✅ Actuarial analytics (loss triangles, IBNR, reserve adequacy, rate adequacy)
+- ✅ MGA oversight (delegated authority, bordereaux, performance scoring)
+- ✅ Renewal workflow (90/60/30-day identification, automated term generation)
+- ✅ Financial reporting (premium/claims analytics, cash flow, commissions)
 
 ### In Progress
 
 - 🔄 Document intelligence with OCR extraction
 - 🔄 M365 Copilot publishing for Teams integration
 
-### Planned (Phase 2+)
+### Planned (Phase 5+)
 
 - 📋 **Additional Lines of Business:** Property, General Liability, Technology E&O
-- 📋 **Reinsurance Management:** Treaty placement, cession calculations, recoverable tracking
-- 📋 **Actuarial Analytics:** Loss triangles, IBNR estimation, reserve adequacy
-- 📋 **MGA Oversight Module:** Bordereaux reporting, authority monitoring, carrier dashboards
 - 📋 **Portfolio Analytics:** Concentration risk alerts, geographic exposure mapping, limit adequacy
 - 📋 **Advanced Document Processing:** Vector embeddings for document similarity and retrieval
 - 📋 **M365 Copilot Native App:** Insurance operations directly within Microsoft Teams

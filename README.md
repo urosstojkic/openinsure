@@ -19,12 +19,14 @@ OpenInsure is an open-source, AI-native core insurance platform built on the Mic
 
 **What's live today:**
 - ✅ 8 AI agents (Submission, Underwriting, Policy, Claims, Compliance, Document, Knowledge, Orchestrator) deployed on Azure AI Foundry
-- ✅ 35+ REST API endpoints covering submissions, policies, claims, billing, products, and compliance
+- ✅ 35+ REST API endpoints covering submissions, policies, claims, billing, products, compliance, reinsurance, actuarial, MGA, renewals, and finance
 - ✅ React dashboard with 11 role-specific views (Executive, Underwriting Workbench, Claims Workbench, Compliance Workbench, Broker Portal)
+- ✅ Reinsurance management, actuarial analytics, MGA oversight, renewal workflow, finance dashboard
 - ✅ Cyber Liability SMB product with 5 coverages and configurable rating engine
 - ✅ EU AI Act compliance: immutable decision records, bias monitoring (4/5ths rule), audit trail
 - ✅ Role-based access control with 19 platform roles and authority delegation
 - ✅ Azure infrastructure: 13+ resources defined as Bicep IaC
+- ✅ 309 tests with ≥80% coverage
 
 ### Why OpenInsure?
 
@@ -245,6 +247,11 @@ Once running locally, visit:
 | | `GET /api/v1/compliance/audit-trail` | Filtered audit trail |
 | | `POST /api/v1/compliance/bias-report` | Generate bias analysis report |
 | | `GET /api/v1/compliance/system-inventory` | AI system inventory |
+| **Reinsurance** | `/api/v1/reinsurance/*` | Treaty management, cessions, recoveries |
+| **Actuarial** | `/api/v1/actuarial/*` | Reserves, triangles, IBNR, rate adequacy |
+| **MGA** | `/api/v1/mga/*` | MGA authorities, bordereaux, performance |
+| **Renewals** | `/api/v1/renewals/*` | Upcoming renewals, term generation |
+| **Finance** | `/api/v1/finance/*` | Financial summary, cashflow, commissions |
 | **Health** | `GET /health`, `GET /ready` | Health and readiness probes |
 
 See [API Documentation](docs/api/) for the full specification.
@@ -272,32 +279,45 @@ Every agent decision produces a **Decision Record** for EU AI Act compliance:
 }
 ```
 
-## Phase 1: Cyber Insurance MVP
+## Implementation Status
 
-Phase 1 delivers a working cyber insurance submission-to-bind workflow:
+### Phase 1 — Core Platform & Cyber MVP ✅
 
 - ✅ Core domain model (Party, Submission, Policy, Claim, Product, Billing)
 - ✅ REST API with 35+ endpoints across 7 modules
-- ✅ 8 AI agents with decision record logging (Submission, Underwriting, Policy, Claims, Compliance, Document, Knowledge, Orchestrator)
+- ✅ 8 AI agents with decision record logging
 - ✅ Azure infrastructure (9 Bicep modules, 13+ Azure resources)
-- ✅ Knowledge base (cyber insurance product, underwriting guidelines, regulatory requirements)
-- ✅ EU AI Act compliance layer (immutable decision records, audit trail, bias monitoring with 4/5ths rule)
+- ✅ Knowledge base (cyber product, underwriting guidelines, regulatory requirements)
+- ✅ EU AI Act compliance layer (decision records, audit trail, bias monitoring)
 - ✅ MCP Server interface
 - ✅ Role-based access control (19 platform roles, authority delegation)
 - ✅ React dashboard with 11 role-specific views
+- ✅ Cyber Liability SMB product (5 coverages, configurable rating engine)
+- ✅ CI/CD pipeline (lint, type check, security scan, 309 tests ≥80% coverage, build)
+
+### Phase 2 — Dashboard & Workbenches ✅
+
 - ✅ Underwriting Workbench, Claims Workbench, Compliance Workbench
 - ✅ Broker Portal for external self-service
-- ✅ Cyber Liability SMB product (5 coverages, configurable rating engine)
 - ✅ Multi-agent orchestration workflows (new_business, claims_workflow)
-- ✅ CI/CD pipeline (lint, type check, security scan, tests ≥80% coverage, build)
-- 🔄 Document intelligence (OCR, extraction) — in progress
-- 🔄 M365 Copilot publishing — planned
 
-**Success Criteria:**
-- Process a cyber submission from email to bindable quote in <15 minutes
-- Extract ACORD application data with 90%+ accuracy
-- Generate premium quotes within 5% of human underwriter pricing
-- Complete audit trail for every AI decision
+### Phase 3 — Reinsurance, Actuarial & MGA Oversight ✅
+
+- ✅ Reinsurance management (treaty lifecycle, cession calculation, recovery tracking)
+- ✅ Actuarial analytics (loss triangles, IBNR estimation, reserve adequacy, rate adequacy)
+- ✅ MGA oversight (delegated authority management, bordereaux, performance scoring)
+- ✅ Reinsurance Dashboard, Actuarial Workbench, MGA Oversight Dashboard
+
+### Phase 4 — Renewals & Finance ✅
+
+- ✅ Renewal workflow (90/60/30-day identification, automated term generation)
+- ✅ Financial reporting (premium/claims analytics, cash flow, commissions)
+- ✅ Finance Dashboard
+
+### In Progress
+
+- 🔄 Document intelligence (OCR, extraction)
+- 🔄 M365 Copilot publishing
 
 ## Tech Stack
 
