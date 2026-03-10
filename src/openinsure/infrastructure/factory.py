@@ -86,6 +86,31 @@ def get_billing_repository() -> BaseRepository:
 
 
 @lru_cache
+def get_event_bus():
+    """Return a shared EventBusAdapter, or ``None`` when not configured."""
+    settings = get_settings()
+    if settings.storage_mode == "azure" and settings.eventgrid_endpoint:
+        from openinsure.infrastructure.event_bus import EventBusAdapter
+
+        return EventBusAdapter(
+            event_grid_endpoint=settings.eventgrid_endpoint,
+            service_bus_namespace=settings.servicebus_connection_string,
+        )
+    return None
+
+
+@lru_cache
+def get_blob_storage():
+    """Return a shared BlobStorageAdapter, or ``None`` when not configured."""
+    settings = get_settings()
+    if settings.storage_mode == "azure" and settings.storage_account_url:
+        from openinsure.infrastructure.blob_storage import BlobStorageAdapter
+
+        return BlobStorageAdapter(settings.storage_account_url, settings.storage_container_name)
+    return None
+
+
+@lru_cache
 def get_compliance_repository():
     """Return decision/audit repositories for the compliance module."""
     settings = get_settings()

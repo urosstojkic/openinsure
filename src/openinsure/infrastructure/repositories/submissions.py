@@ -20,6 +20,13 @@ class InMemorySubmissionRepository(BaseRepository):
 
     async def create(self, entity: dict[str, Any]) -> dict[str, Any]:
         self._store[entity["id"]] = entity
+        from openinsure.services.event_publisher import publish_domain_event
+
+        await publish_domain_event(
+            event_type="submission.received",
+            subject=f"/submissions/{entity.get('id', '')}",
+            data={"submission_id": entity.get("id"), "status": entity.get("status")},
+        )
         return entity
 
     async def update(self, entity_id: UUID | str, updates: dict[str, Any]) -> dict[str, Any] | None:
@@ -83,4 +90,11 @@ class InMemorySubmissionRepository(BaseRepository):
         record["status"] = status
         if extra:
             record.update(extra)
+        from openinsure.services.event_publisher import publish_domain_event
+
+        await publish_domain_event(
+            event_type=f"submission.{status}",
+            subject=f"/submissions/{entity_id}",
+            data={"submission_id": str(entity_id), "status": status},
+        )
         return record

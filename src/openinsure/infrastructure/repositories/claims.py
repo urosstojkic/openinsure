@@ -18,6 +18,13 @@ class InMemoryClaimRepository(BaseRepository):
 
     async def create(self, entity: dict[str, Any]) -> dict[str, Any]:
         self._store[entity["id"]] = entity
+        from openinsure.services.event_publisher import publish_domain_event
+
+        await publish_domain_event(
+            event_type="claim.reported",
+            subject=f"/claims/{entity.get('id', '')}",
+            data={"claim_id": entity.get("id"), "status": entity.get("status")},
+        )
         return entity
 
     async def update(self, entity_id: UUID | str, updates: dict[str, Any]) -> dict[str, Any] | None:

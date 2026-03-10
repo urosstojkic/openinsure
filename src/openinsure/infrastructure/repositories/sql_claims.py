@@ -51,6 +51,13 @@ class SqlClaimRepository(BaseRepository):
                 entity["updated_at"],
             ],
         )
+        from openinsure.services.event_publisher import publish_domain_event
+
+        await publish_domain_event(
+            event_type="claim.reported",
+            subject=f"/claims/{entity['id']}",
+            data={"claim_id": entity["id"], "status": entity.get("status")},
+        )
         return entity
 
     async def get_by_id(self, entity_id: UUID | str) -> dict[str, Any] | None:

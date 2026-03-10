@@ -18,6 +18,13 @@ class InMemoryPolicyRepository(BaseRepository):
 
     async def create(self, entity: dict[str, Any]) -> dict[str, Any]:
         self._store[entity["id"]] = entity
+        from openinsure.services.event_publisher import publish_domain_event
+
+        await publish_domain_event(
+            event_type="policy.bound",
+            subject=f"/policies/{entity.get('id', '')}",
+            data={"policy_id": entity.get("id"), "status": entity.get("status")},
+        )
         return entity
 
     async def update(self, entity_id: UUID | str, updates: dict[str, Any]) -> dict[str, Any] | None:

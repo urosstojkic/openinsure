@@ -19,6 +19,7 @@ from openinsure.agents.knowledge_agent import KnowledgeAgent
 from openinsure.agents.policy_agent import PolicyAgent
 from openinsure.agents.submission_agent import SubmissionAgent
 from openinsure.agents.underwriting_agent import UnderwritingAgent
+from openinsure.services.event_publisher import publish_domain_event
 
 logger = structlog.get_logger()
 
@@ -140,6 +141,11 @@ class Orchestrator:
                 {"type": "submission_intake", "submission": submission}
             )
             workflow.add_step("submission_intake", "submission_agent", sub_result, sub_decision)
+            await publish_domain_event(
+                event_type="workflow.submission_intake_complete",
+                subject=f"/workflows/{workflow.workflow_id}",
+                data={"step": "submission_intake", "workflow_id": workflow.workflow_id},
+            )
 
             if sub_result.get("escalation_required"):
                 self.logger.warning("workflow.new_business.escalation", step="submission")
@@ -175,6 +181,11 @@ class Orchestrator:
                 {"type": "get_guidelines", "line_of_business": lob}
             )
             workflow.add_step("knowledge_retrieval", "knowledge_agent", kg_result, kg_decision)
+            await publish_domain_event(
+                event_type="workflow.knowledge_retrieval_complete",
+                subject=f"/workflows/{workflow.workflow_id}",
+                data={"step": "knowledge_retrieval", "workflow_id": workflow.workflow_id},
+            )
 
             # --- Step 4: Underwriting & pricing ---
             extracted = sub_result.get("extracted_data", {})
@@ -187,6 +198,11 @@ class Orchestrator:
                 }
             )
             workflow.add_step("underwriting", "underwriting_agent", uw_result, uw_decision)
+            await publish_domain_event(
+                event_type="workflow.underwriting_complete",
+                subject=f"/workflows/{workflow.workflow_id}",
+                data={"step": "underwriting", "workflow_id": workflow.workflow_id},
+            )
 
             if uw_result.get("escalation_required"):
                 self.logger.warning("workflow.new_business.escalation", step="underwriting")
@@ -204,6 +220,11 @@ class Orchestrator:
                 }
             )
             workflow.add_step("policy_bind", "policy_agent", bind_result, bind_decision)
+            await publish_domain_event(
+                event_type="workflow.policy_bind_complete",
+                subject=f"/workflows/{workflow.workflow_id}",
+                data={"step": "policy_bind", "workflow_id": workflow.workflow_id},
+            )
 
             # --- Step 6: Compliance check ---
             comp_result, comp_decision = await self.compliance_agent.execute_with_foundry(
@@ -213,6 +234,11 @@ class Orchestrator:
                 }
             )
             workflow.add_step("compliance_check", "compliance_agent", comp_result, comp_decision)
+            await publish_domain_event(
+                event_type="workflow.compliance_check_complete",
+                subject=f"/workflows/{workflow.workflow_id}",
+                data={"step": "compliance_check", "workflow_id": workflow.workflow_id},
+            )
 
             workflow.complete(
                 {
@@ -269,6 +295,11 @@ class Orchestrator:
                 }
             )
             workflow.add_step("claims_pipeline", "claims_agent", claims_result, claims_decision)
+            await publish_domain_event(
+                event_type="workflow.claims_pipeline_complete",
+                subject=f"/workflows/{workflow.workflow_id}",
+                data={"step": "claims_pipeline", "workflow_id": workflow.workflow_id},
+            )
 
             if claims_result.get("escalation_required"):
                 self.logger.warning("workflow.claims.escalation", step="claims_pipeline")
@@ -293,6 +324,11 @@ class Orchestrator:
                 }
             )
             workflow.add_step("compliance_check", "compliance_agent", comp_result, comp_decision)
+            await publish_domain_event(
+                event_type="workflow.claims_compliance_complete",
+                subject=f"/workflows/{workflow.workflow_id}",
+                data={"step": "compliance_check", "workflow_id": workflow.workflow_id},
+            )
 
             workflow.complete(
                 {

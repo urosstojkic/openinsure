@@ -47,6 +47,13 @@ class SqlPolicyRepository(BaseRepository):
                 entity["updated_at"],
             ],
         )
+        from openinsure.services.event_publisher import publish_domain_event
+
+        await publish_domain_event(
+            event_type="policy.bound",
+            subject=f"/policies/{entity['id']}",
+            data={"policy_id": entity["id"], "status": entity.get("status")},
+        )
         return entity
 
     async def get_by_id(self, entity_id: UUID | str) -> dict[str, Any] | None:

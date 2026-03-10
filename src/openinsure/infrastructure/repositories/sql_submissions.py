@@ -45,6 +45,13 @@ class SqlSubmissionRepository(BaseRepository):
                 entity["updated_at"],
             ],
         )
+        from openinsure.services.event_publisher import publish_domain_event
+
+        await publish_domain_event(
+            event_type="submission.received",
+            subject=f"/submissions/{entity['id']}",
+            data={"submission_id": entity["id"], "status": entity.get("status")},
+        )
         return entity
 
     async def get_by_id(self, entity_id: UUID | str) -> dict[str, Any] | None:
