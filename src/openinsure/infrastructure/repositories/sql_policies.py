@@ -30,7 +30,7 @@ def _policy_to_sql_row(entity: dict[str, Any]) -> dict[str, Any]:
         "status": entity.get("status", "active"),
         "product_id": entity.get("product_id"),
         "submission_id": entity.get("submission_id"),
-        "insured_id": None  # FK to parties — NULL until party created,
+        "insured_id": None,  # FK to parties — NULL until party created
         "effective_date": entity.get("effective_date"),
         "expiration_date": entity.get("expiration_date"),
         "total_premium": entity.get("premium", entity.get("total_premium")),
@@ -49,7 +49,7 @@ def _policy_from_sql_row(row: dict[str, Any]) -> dict[str, Any]:
     return {
         "id": str(row.get("id", "")),
         "policy_number": row.get("policy_number", ""),
-        "policyholder_name": ""  # Stored in entity metadata, not insured_id FK,
+        "policyholder_name": "",  # Stored in entity metadata, not insured_id FK
         "status": row.get("status", "active"),
         "product_id": row.get("product_id", ""),
         "submission_id": str(row.get("submission_id", "")),
