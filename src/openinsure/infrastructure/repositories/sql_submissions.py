@@ -44,24 +44,40 @@ def _to_sql_row(entity: dict[str, Any]) -> dict[str, Any]:
 
 
 def _from_sql_row(row: dict[str, Any]) -> dict[str, Any]:
-    """Map SQL column names back to API entity keys."""
+    """Map SQL column names back to API entity keys.
+
+    Ensures every value is properly typed — no None where str is expected.
+    """
+    def _str(val: Any) -> str:
+        return str(val) if val is not None else ""
+
+    def _json(val: Any) -> dict[str, Any]:
+        if val is None:
+            return {}
+        if isinstance(val, dict):
+            return val
+        try:
+            return json.loads(val)
+        except (json.JSONDecodeError, TypeError):
+            return {}
+
     return {
-        "id": str(row.get("id", "")),
-        "submission_number": row.get("submission_number", ""),
-        "applicant_name": row.get("applicant_id", ""),
-        "applicant_email": "",
-        "status": row.get("status", "received"),
-        "channel": row.get("channel", "api"),
-        "line_of_business": row.get("line_of_business", "cyber"),
-        "risk_data": json.loads(row["cyber_risk_data"]) if row.get("cyber_risk_data") else {},
-        "metadata": json.loads(row["extracted_data"]) if row.get("extracted_data") else {},
+        "id": _str(row.get("id")),
+        "submission_number": _str(row.get("submission_number")),
+        "applicant_name": _str(row.get("applicant_id")),
+        "applicant_email": None,
+        "status": _str(row.get("status")) or "received",
+        "channel": _str(row.get("channel")) or "api",
+        "line_of_business": _str(row.get("line_of_business")) or "cyber",
+        "risk_data": _json(row.get("cyber_risk_data")),
+        "metadata": _json(row.get("extracted_data")),
         "documents": [],
-        "triage_result": json.loads(row["triage_result"]) if row.get("triage_result") else None,
+        "triage_result": _json(row.get("triage_result")) if row.get("triage_result") else None,
         "quoted_premium": float(row["quoted_premium"]) if row.get("quoted_premium") else None,
-        "requested_effective_date": str(row.get("requested_effective_date", "")),
-        "requested_expiration_date": str(row.get("requested_expiration_date", "")),
-        "created_at": str(row.get("created_at", "")),
-        "updated_at": str(row.get("updated_at", "")),
+        "requested_effective_date": _str(row.get("requested_effective_date")),
+        "requested_expiration_date": _str(row.get("requested_expiration_date")),
+        "created_at": _str(row.get("created_at")),
+        "updated_at": _str(row.get("updated_at")),
     }
 
 

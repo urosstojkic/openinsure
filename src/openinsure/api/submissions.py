@@ -191,7 +191,7 @@ class SubmissionUpdate(BaseModel):
 class SubmissionResponse(BaseModel):
     """Public representation of a submission."""
 
-    id: str
+    id: str = ""
     applicant_name: str = ""
     applicant_email: str | None = None
     status: str = "received"
@@ -200,6 +200,10 @@ class SubmissionResponse(BaseModel):
     risk_data: dict[str, Any] = Field(default_factory=dict)
     metadata: dict[str, Any] = Field(default_factory=dict)
     documents: list[str] = Field(default_factory=list)
+    submission_number: str = ""
+    quoted_premium: float | None = None
+    requested_effective_date: str = ""
+    requested_expiration_date: str = ""
     created_at: str = ""
     updated_at: str = ""
 
