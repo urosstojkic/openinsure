@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 from uuid import UUID, uuid4
@@ -11,6 +12,8 @@ from openinsure.infrastructure.repository import BaseRepository
 
 if TYPE_CHECKING:
     from openinsure.infrastructure.database import DatabaseAdapter
+
+logger = logging.getLogger(__name__)
 
 # -- key mapping between API entity dicts and SQL columns -------------------
 
@@ -31,32 +34,65 @@ _CLAIM_SKIP_IN_SQL: set[str] = {
 }
 
 
+def _safe_uuid(val: Any) -> str | None:
+    """Return *val* as a UUID string, or ``None`` if it is not a valid UUID."""
+    if val is None:
+        return None
+    try:
+        return str(UUID(str(val)))
+    except (ValueError, AttributeError):
+        return None
+
+
 def _claim_to_sql_row(entity: dict[str, Any]) -> dict[str, Any]:
     """Map API claim dict keys to SQL column names for INSERT."""
     return {
         "id": entity.get("id"),
         "claim_number": entity.get("claim_number"),
         "status": entity.get("status", "reported"),
-        "policy_id": entity.get("policy_id"),
+        "policy_id": _safe_uuid(entity.get("policy_id")),
         "loss_date": entity.get("date_of_loss"),
         "report_date": entity.get("created_at"),
         "loss_type": entity.get("claim_type"),
+        "cause_of_loss": entity.get("cause_of_loss"),
         "description": entity.get("description"),
+        "severity": entity.get("severity"),
+        "assigned_adjuster": _safe_uuid(entity.get("assigned_adjuster")),
+        "fraud_score": entity.get("fraud_score"),
+        "closed_at": entity.get("closed_at"),
+        "close_reason": entity.get("close_reason"),
         "created_at": entity.get("created_at"),
         "updated_at": entity.get("updated_at"),
     }
 
 
 def _claim_from_sql_row(row: dict[str, Any]) -> dict[str, Any]:
-    """Map SQL column names back to API claim dict keys."""
+    """Map SQL column names back to API claim dict keys.
+
+    Ensures every value is properly typed — no None where str is expected.
+    """
+
+    def _str(val: Any) -> str:
+        return str(val) if val is not None else ""
+
+    def _json(val: Any) -> dict[str, Any]:
+        if val is None:
+            return {}
+        if isinstance(val, dict):
+            return val
+        try:
+            return json.loads(val)
+        except (json.JSONDecodeError, TypeError):
+            return {}
+
     return {
-        "id": str(row.get("id", "")),
-        "claim_number": row.get("claim_number", ""),
-        "policy_id": str(row.get("policy_id", "")),
-        "claim_type": row.get("loss_type", ""),
-        "status": row.get("status", "reported"),
-        "description": row.get("description", ""),
-        "date_of_loss": str(row.get("loss_date", "")),
+        "id": _str(row.get("id")),
+        "claim_number": _str(row.get("claim_number")),
+        "policy_id": _str(row.get("policy_id")),
+        "claim_type": _str(row.get("loss_type")) or "other",
+        "status": _str(row.get("status")) or "reported",
+        "description": _str(row.get("description")),
+        "date_of_loss": _str(row.get("loss_date")),
         "reported_by": "",
         "contact_email": None,
         "contact_phone": None,
@@ -65,8 +101,8 @@ def _claim_from_sql_row(row: dict[str, Any]) -> dict[str, Any]:
         "total_reserved": 0.0,
         "total_paid": 0.0,
         "metadata": {},
-        "created_at": str(row.get("created_at", "")),
-        "updated_at": str(row.get("updated_at", "")),
+        "created_at": _str(row.get("created_at")),
+        "updated_at": _str(row.get("updated_at")),
     }
 
 
@@ -77,17 +113,20 @@ class SqlClaimRepository(BaseRepository):
         self.db = db
 
     async def create(self, entity: dict[str, Any]) -> dict[str, Any]:
+        now = datetime.now(UTC).isoformat()
         entity.setdefault("id", str(uuid4()))
+        entity.setdefault("claim_number", f"CLM-{str(uuid4())[:8].upper()}")
         entity.setdefault("status", "reported")
-        entity.setdefault("created_at", datetime.now(UTC).isoformat())
-        entity.setdefault("updated_at", datetime.now(UTC).isoformat())
+        entity.setdefault("created_at", now)
+        entity.setdefault("updated_at", now)
 
         row = _claim_to_sql_row(entity)
         await self.db.execute_query(
             """INSERT INTO claims (id, claim_number, status, policy_id,
-               loss_date, report_date, loss_type, description,
-               created_at, updated_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+               loss_date, report_date, loss_type, cause_of_loss,
+               description, severity, assigned_adjuster, fraud_score,
+               closed_at, close_reason, created_at, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             [
                 row["id"],
                 row["claim_number"],
@@ -96,18 +135,42 @@ class SqlClaimRepository(BaseRepository):
                 row["loss_date"],
                 row["report_date"],
                 row["loss_type"],
+                row["cause_of_loss"],
                 row["description"],
+                row["severity"],
+                row["assigned_adjuster"],
+                row["fraud_score"],
+                row["closed_at"],
+                row["close_reason"],
                 row["created_at"],
                 row["updated_at"],
             ],
         )
-        from openinsure.services.event_publisher import publish_domain_event
+        try:
+            from openinsure.services.event_publisher import publish_domain_event
 
-        await publish_domain_event(
-            event_type="claim.reported",
-            subject=f"/claims/{entity['id']}",
-            data={"claim_id": entity["id"], "status": entity.get("status")},
-        )
+            await publish_domain_event(
+                event_type="claim.reported",
+                subject=f"/claims/{entity['id']}",
+                data={"claim_id": entity["id"], "status": entity.get("status")},
+            )
+        except Exception:
+            logger.warning("Failed to publish claim.reported event for %s", entity["id"])
+
+        # Return a complete dict that matches the API response model
+        entity.setdefault("claim_number", row["claim_number"])
+        entity.setdefault("claim_type", entity.get("claim_type", "other"))
+        entity.setdefault("description", "")
+        entity.setdefault("date_of_loss", "")
+        entity.setdefault("reported_by", "")
+        entity.setdefault("contact_email", None)
+        entity.setdefault("contact_phone", None)
+        entity.setdefault("reserves", [])
+        entity.setdefault("payments", [])
+        entity.setdefault("total_reserved", 0.0)
+        entity.setdefault("total_paid", 0.0)
+        entity.setdefault("metadata", {})
+        entity.setdefault("policy_id", "")
         return entity
 
     async def get_by_id(self, entity_id: UUID | str) -> dict[str, Any] | None:

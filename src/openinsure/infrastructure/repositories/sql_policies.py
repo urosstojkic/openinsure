@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 from uuid import UUID, uuid4
@@ -11,6 +12,8 @@ from openinsure.infrastructure.repository import BaseRepository
 
 if TYPE_CHECKING:
     from openinsure.infrastructure.database import DatabaseAdapter
+
+logger = logging.getLogger(__name__)
 
 # -- key mapping between API entity dicts and SQL columns -------------------
 
@@ -22,6 +25,16 @@ _POLICY_API_TO_SQL_KEY: dict[str, str] = {
 _POLICY_SKIP_IN_SQL: set[str] = {"coverages", "endorsements", "metadata", "documents"}
 
 
+def _safe_uuid(val: Any) -> str | None:
+    """Return *val* as a UUID string, or ``None`` if it is not a valid UUID."""
+    if val is None:
+        return None
+    try:
+        return str(UUID(str(val)))
+    except (ValueError, AttributeError):
+        return None
+
+
 def _policy_to_sql_row(entity: dict[str, Any]) -> dict[str, Any]:
     """Map API policy dict keys to SQL column names for INSERT."""
     return {
@@ -29,7 +42,7 @@ def _policy_to_sql_row(entity: dict[str, Any]) -> dict[str, Any]:
         "policy_number": entity.get("policy_number"),
         "status": entity.get("status", "active"),
         "product_id": entity.get("product_id"),
-        "submission_id": entity.get("submission_id"),
+        "submission_id": _safe_uuid(entity.get("submission_id")),
         "insured_id": None,  # FK to parties — NULL until party created
         "effective_date": entity.get("effective_date"),
         "expiration_date": entity.get("expiration_date"),
@@ -38,23 +51,42 @@ def _policy_to_sql_row(entity: dict[str, Any]) -> dict[str, Any]:
         "earned_premium": entity.get("earned_premium"),
         "unearned_premium": entity.get("unearned_premium"),
         "bound_at": entity.get("bound_at"),
+        "cancelled_at": entity.get("cancelled_at"),
+        "cancel_reason": entity.get("cancel_reason"),
         "created_at": entity.get("created_at"),
         "updated_at": entity.get("updated_at"),
     }
 
 
 def _policy_from_sql_row(row: dict[str, Any]) -> dict[str, Any]:
-    """Map SQL column names back to API policy dict keys."""
+    """Map SQL column names back to API policy dict keys.
+
+    Ensures every value is properly typed — no None where str is expected.
+    """
+
+    def _str(val: Any) -> str:
+        return str(val) if val is not None else ""
+
+    def _json(val: Any) -> dict[str, Any]:
+        if val is None:
+            return {}
+        if isinstance(val, dict):
+            return val
+        try:
+            return json.loads(val)
+        except (json.JSONDecodeError, TypeError):
+            return {}
+
     premium = float(row["total_premium"]) if row.get("total_premium") else None
     return {
-        "id": str(row.get("id", "")),
-        "policy_number": row.get("policy_number", ""),
+        "id": _str(row.get("id")),
+        "policy_number": _str(row.get("policy_number")),
         "policyholder_name": "",  # Stored in entity metadata, not insured_id FK
-        "status": row.get("status", "active"),
-        "product_id": row.get("product_id", ""),
-        "submission_id": str(row.get("submission_id", "")),
-        "effective_date": str(row.get("effective_date", "")),
-        "expiration_date": str(row.get("expiration_date", "")),
+        "status": _str(row.get("status")) or "active",
+        "product_id": _str(row.get("product_id")),
+        "submission_id": _str(row.get("submission_id")),
+        "effective_date": _str(row.get("effective_date")),
+        "expiration_date": _str(row.get("expiration_date")),
         "premium": premium,
         "total_premium": premium,
         "written_premium": float(row["written_premium"]) if row.get("written_premium") else None,
@@ -64,9 +96,9 @@ def _policy_from_sql_row(row: dict[str, Any]) -> dict[str, Any]:
         "endorsements": [],
         "metadata": {},
         "documents": [],
-        "bound_at": str(row.get("bound_at", "")) if row.get("bound_at") else None,
-        "created_at": str(row.get("created_at", "")),
-        "updated_at": str(row.get("updated_at", "")),
+        "bound_at": _str(row.get("bound_at")) if row.get("bound_at") else None,
+        "created_at": _str(row.get("created_at")),
+        "updated_at": _str(row.get("updated_at")),
     }
 
 
@@ -77,18 +109,20 @@ class SqlPolicyRepository(BaseRepository):
         self.db = db
 
     async def create(self, entity: dict[str, Any]) -> dict[str, Any]:
+        now = datetime.now(UTC).isoformat()
         entity.setdefault("id", str(uuid4()))
+        entity.setdefault("policy_number", f"POL-{str(uuid4())[:8].upper()}")
         entity.setdefault("status", "active")
-        entity.setdefault("created_at", datetime.now(UTC).isoformat())
-        entity.setdefault("updated_at", datetime.now(UTC).isoformat())
+        entity.setdefault("created_at", now)
+        entity.setdefault("updated_at", now)
 
         row = _policy_to_sql_row(entity)
         await self.db.execute_query(
             """INSERT INTO policies (id, policy_number, status, product_id, submission_id,
                insured_id, effective_date, expiration_date, total_premium,
                written_premium, earned_premium, unearned_premium, bound_at,
-               created_at, updated_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+               cancelled_at, cancel_reason, created_at, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             [
                 row["id"],
                 row["policy_number"],
@@ -103,17 +137,35 @@ class SqlPolicyRepository(BaseRepository):
                 row["earned_premium"],
                 row["unearned_premium"],
                 row["bound_at"],
+                row["cancelled_at"],
+                row["cancel_reason"],
                 row["created_at"],
                 row["updated_at"],
             ],
         )
-        from openinsure.services.event_publisher import publish_domain_event
+        try:
+            from openinsure.services.event_publisher import publish_domain_event
 
-        await publish_domain_event(
-            event_type="policy.bound",
-            subject=f"/policies/{entity['id']}",
-            data={"policy_id": entity["id"], "status": entity.get("status")},
-        )
+            await publish_domain_event(
+                event_type="policy.bound",
+                subject=f"/policies/{entity['id']}",
+                data={"policy_id": entity["id"], "status": entity.get("status")},
+            )
+        except Exception:
+            logger.warning("Failed to publish policy.bound event for %s", entity["id"])
+
+        # Return a complete dict that matches the API response model
+        entity.setdefault("policyholder_name", "")
+        entity.setdefault("product_id", "")
+        entity.setdefault("submission_id", "")
+        entity.setdefault("effective_date", "")
+        entity.setdefault("expiration_date", "")
+        entity.setdefault("premium", entity.get("premium", entity.get("total_premium")))
+        entity.setdefault("total_premium", entity.get("total_premium", entity.get("premium")))
+        entity.setdefault("coverages", [])
+        entity.setdefault("endorsements", [])
+        entity.setdefault("metadata", {})
+        entity.setdefault("documents", [])
         return entity
 
     async def get_by_id(self, entity_id: UUID | str) -> dict[str, Any] | None:

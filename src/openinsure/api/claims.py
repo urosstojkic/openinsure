@@ -85,23 +85,23 @@ class ClaimUpdate(BaseModel):
 class ClaimResponse(BaseModel):
     """Public representation of a claim."""
 
-    id: str
-    claim_number: str
-    policy_id: str
-    claim_type: ClaimType
-    status: ClaimStatus
-    description: str
-    date_of_loss: str
-    reported_by: str
+    id: str = ""
+    claim_number: str = ""
+    policy_id: str = ""
+    claim_type: str = "other"
+    status: str = "reported"
+    description: str = ""
+    date_of_loss: str = ""
+    reported_by: str = ""
     contact_email: str | None = None
     contact_phone: str | None = None
-    reserves: list[dict[str, Any]]
-    payments: list[dict[str, Any]]
-    total_reserved: float
-    total_paid: float
-    metadata: dict[str, Any]
-    created_at: str
-    updated_at: str
+    reserves: list[dict[str, Any]] = Field(default_factory=list)
+    payments: list[dict[str, Any]] = Field(default_factory=list)
+    total_reserved: float = 0.0
+    total_paid: float = 0.0
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    created_at: str = ""
+    updated_at: str = ""
 
 
 class ClaimList(BaseModel):

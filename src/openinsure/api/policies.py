@@ -67,22 +67,24 @@ class PolicyUpdate(BaseModel):
 class PolicyResponse(BaseModel):
     """Public representation of a policy."""
 
-    id: str
+    id: str = ""
     submission_id: str = ""
-    product_id: str
-    policy_number: str
-    policyholder_name: str
-    status: str
-    effective_date: str
-    expiration_date: str
-    premium: float
-    total_premium: float = 0
-    written_premium: float = 0
-    coverages: list[dict[str, Any]]
+    product_id: str = ""
+    policy_number: str = ""
+    policyholder_name: str = ""
+    status: str = "active"
+    effective_date: str = ""
+    expiration_date: str = ""
+    premium: float | None = None
+    total_premium: float | None = None
+    written_premium: float | None = None
+    earned_premium: float | None = None
+    unearned_premium: float | None = None
+    coverages: list[dict[str, Any]] = Field(default_factory=list)
     endorsements: list[dict[str, Any]] = Field(default_factory=list)
     metadata: dict[str, Any] = Field(default_factory=dict)
     documents: list[str] = Field(default_factory=list)
-    bound_at: str = ""
+    bound_at: str | None = None
     created_at: str = ""
     updated_at: str = ""
 
