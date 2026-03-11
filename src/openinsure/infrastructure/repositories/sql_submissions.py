@@ -132,6 +132,14 @@ class SqlSubmissionRepository(BaseRepository):
             subject=f"/submissions/{entity['id']}",
             data={"submission_id": entity["id"], "status": entity.get("status")},
         )
+        # Return the entity with all fields populated for the response model
+        entity.setdefault("applicant_name", entity.get("applicant_name", ""))
+        entity.setdefault("applicant_email", None)
+        entity.setdefault("risk_data", entity.get("risk_data", entity.get("cyber_risk_data", {})))
+        entity.setdefault("metadata", entity.get("metadata", {}))
+        entity.setdefault("documents", [])
+        entity.setdefault("channel", "api")
+        entity.setdefault("line_of_business", "cyber")
         return entity
 
     async def get_by_id(self, entity_id: UUID | str) -> dict[str, Any] | None:
