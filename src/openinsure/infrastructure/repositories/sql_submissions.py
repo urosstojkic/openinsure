@@ -25,16 +25,22 @@ _SKIP_IN_SQL: set[str] = {"applicant_email", "documents"}
 
 def _to_sql_row(entity: dict[str, Any]) -> dict[str, Any]:
     """Map API entity keys to SQL column names for INSERT."""
+    # Store applicant_name inside extracted_data JSON since applicant_id
+    # is a UNIQUEIDENTIFIER FK, not a text field.
+    metadata = dict(entity.get("metadata", {}))
+    metadata["applicant_name"] = entity.get("applicant_name", "")
+    metadata["applicant_email"] = entity.get("applicant_email", "")
+
     return {
         "id": entity.get("id"),
         "submission_number": entity.get("submission_number"),
         "status": entity.get("status", "received"),
         "channel": entity.get("channel", "api"),
         "line_of_business": entity.get("line_of_business", "cyber"),
-        "applicant_id": entity.get("applicant_name", ""),
+        "applicant_id": None,  # FK to parties table — NULL until party is created
         "requested_effective_date": entity.get("requested_effective_date"),
         "requested_expiration_date": entity.get("requested_expiration_date"),
-        "extracted_data": json.dumps(entity.get("metadata", {})),
+        "extracted_data": json.dumps(metadata),
         "cyber_risk_data": json.dumps(entity.get("risk_data", entity.get("cyber_risk_data", {}))),
         "triage_result": json.dumps(entity.get("triage_result", {})) if entity.get("triage_result") else None,
         "quoted_premium": entity.get("quoted_premium"),
@@ -61,16 +67,17 @@ def _from_sql_row(row: dict[str, Any]) -> dict[str, Any]:
         except (json.JSONDecodeError, TypeError):
             return {}
 
+    metadata = _json(row.get("extracted_data"))
     return {
         "id": _str(row.get("id")),
         "submission_number": _str(row.get("submission_number")),
-        "applicant_name": _str(row.get("applicant_id")),
-        "applicant_email": None,
+        "applicant_name": metadata.pop("applicant_name", "") if isinstance(metadata, dict) else "",
+        "applicant_email": metadata.pop("applicant_email", None) if isinstance(metadata, dict) else None,
         "status": _str(row.get("status")) or "received",
         "channel": _str(row.get("channel")) or "api",
         "line_of_business": _str(row.get("line_of_business")) or "cyber",
         "risk_data": _json(row.get("cyber_risk_data")),
-        "metadata": _json(row.get("extracted_data")),
+        "metadata": metadata,
         "documents": [],
         "triage_result": _json(row.get("triage_result")) if row.get("triage_result") else None,
         "quoted_premium": float(row["quoted_premium"]) if row.get("quoted_premium") else None,
