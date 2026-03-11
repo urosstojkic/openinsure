@@ -456,4 +456,3 @@ async def seed_sample_data() -> None:
     await compliance_repo.clear_audit_events()
     for evt in _sample_audit_events():
         await compliance_repo.add_audit_event(evt)
-
