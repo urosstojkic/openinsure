@@ -192,16 +192,16 @@ class SubmissionResponse(BaseModel):
     """Public representation of a submission."""
 
     id: str
-    applicant_name: str
+    applicant_name: str = ""
     applicant_email: str | None = None
-    status: SubmissionStatus
-    channel: SubmissionChannel
-    line_of_business: LineOfBusiness
-    risk_data: dict[str, Any]
-    metadata: dict[str, Any]
-    documents: list[str]
-    created_at: str
-    updated_at: str
+    status: str = "received"
+    channel: str = "api"
+    line_of_business: str = "cyber"
+    risk_data: dict[str, Any] = Field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    documents: list[str] = Field(default_factory=list)
+    created_at: str = ""
+    updated_at: str = ""
 
 
 class SubmissionList(BaseModel):
