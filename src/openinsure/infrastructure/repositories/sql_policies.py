@@ -43,13 +43,13 @@ def _policy_to_sql_row(entity: dict[str, Any]) -> dict[str, Any]:
         "status": entity.get("status", "active"),
         "product_id": entity.get("product_id"),
         "submission_id": _safe_uuid(entity.get("submission_id")),
-        "insured_id": None,  # FK to parties — NULL until party created
+        "insured_id": entity.get("insured_id") or str(uuid4()),  # auto-generate if no party linked
         "effective_date": entity.get("effective_date"),
         "expiration_date": entity.get("expiration_date"),
         "total_premium": entity.get("premium", entity.get("total_premium")),
-        "written_premium": entity.get("written_premium"),
-        "earned_premium": entity.get("earned_premium"),
-        "unearned_premium": entity.get("unearned_premium"),
+        "written_premium": entity.get("written_premium", 0),
+        "earned_premium": entity.get("earned_premium", 0),
+        "unearned_premium": entity.get("unearned_premium", 0),
         "bound_at": entity.get("bound_at"),
         "cancelled_at": entity.get("cancelled_at"),
         "cancel_reason": entity.get("cancel_reason"),
@@ -115,6 +115,44 @@ class SqlPolicyRepository(BaseRepository):
         entity.setdefault("status", "active")
         entity.setdefault("created_at", now)
         entity.setdefault("updated_at", now)
+
+        # Auto-create a party record for the policyholder so the FK is valid.
+        insured_id = entity.get("insured_id")
+        if not insured_id:
+            insured_id = str(uuid4())
+            policyholder = entity.get("policyholder_name", "Unknown")
+            try:
+                await self.db.execute_query(
+                    "INSERT INTO parties (id, name, party_type) VALUES (?, ?, ?)",
+                    [insured_id, policyholder, "organization"],
+                )
+                await self.db.execute_query(
+                    "INSERT INTO party_roles (party_id, role) VALUES (?, ?)",
+                    [insured_id, "insured"],
+                )
+            except Exception:
+                logger.warning("Could not auto-create party for %s", policyholder)
+            entity["insured_id"] = insured_id
+
+        # Resolve product_id: if it looks like a code (not a UUID), look it up.
+        product_id = entity.get("product_id", "")
+        if product_id and not _safe_uuid(product_id):
+            try:
+                product_row = await self.db.fetch_one(
+                    "SELECT id FROM products WHERE product_code = ?", [product_id],
+                )
+                if product_row:
+                    entity["product_id"] = str(product_row["id"])
+                else:
+                    logger.warning("Product code %s not found, creating placeholder", product_id)
+                    new_pid = str(uuid4())
+                    await self.db.execute_query(
+                        "INSERT INTO products (id, product_code, product_name, line_of_business, status, effective_date) VALUES (?, ?, ?, ?, ?, ?)",
+                        [new_pid, product_id, product_id, "cyber", "active", "2025-01-01"],
+                    )
+                    entity["product_id"] = new_pid
+            except Exception:
+                logger.warning("Could not resolve product_id %s", product_id)
 
         row = _policy_to_sql_row(entity)
         await self.db.execute_query(

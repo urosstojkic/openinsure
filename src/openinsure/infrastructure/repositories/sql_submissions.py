@@ -22,6 +22,20 @@ _API_TO_SQL_KEY: dict[str, str] = {
 
 _SKIP_IN_SQL: set[str] = {"applicant_email", "documents"}
 
+# The SQL CHECK constraint uses 'broker_platform', but the API enum uses 'broker'.
+_CHANNEL_API_TO_SQL: dict[str, str] = {"broker": "broker_platform"}
+_CHANNEL_SQL_TO_API: dict[str, str] = {"broker_platform": "broker"}
+
+
+def _api_channel_to_sql(channel: str) -> str:
+    """Map API channel enum value to the SQL CHECK-constrained value."""
+    return _CHANNEL_API_TO_SQL.get(channel, channel)
+
+
+def _sql_channel_to_api(channel: str) -> str:
+    """Map SQL channel value back to the API enum value."""
+    return _CHANNEL_SQL_TO_API.get(channel, channel)
+
 
 def _to_sql_row(entity: dict[str, Any]) -> dict[str, Any]:
     """Map API entity keys to SQL column names for INSERT."""
@@ -35,7 +49,7 @@ def _to_sql_row(entity: dict[str, Any]) -> dict[str, Any]:
         "id": entity.get("id"),
         "submission_number": entity.get("submission_number"),
         "status": entity.get("status", "received"),
-        "channel": entity.get("channel", "api"),
+        "channel": _api_channel_to_sql(entity.get("channel", "api")),
         "line_of_business": entity.get("line_of_business", "cyber"),
         "applicant_id": None,  # FK to parties table — NULL until party is created
         "requested_effective_date": entity.get("requested_effective_date"),
@@ -74,7 +88,7 @@ def _from_sql_row(row: dict[str, Any]) -> dict[str, Any]:
         "applicant_name": metadata.pop("applicant_name", "") if isinstance(metadata, dict) else "",
         "applicant_email": metadata.pop("applicant_email", None) if isinstance(metadata, dict) else None,
         "status": _str(row.get("status")) or "received",
-        "channel": _str(row.get("channel")) or "api",
+        "channel": _sql_channel_to_api(_str(row.get("channel")) or "api"),
         "line_of_business": _str(row.get("line_of_business")) or "cyber",
         "risk_data": _json(row.get("cyber_risk_data")),
         "metadata": metadata,

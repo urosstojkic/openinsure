@@ -44,12 +44,31 @@ def _safe_uuid(val: Any) -> str | None:
         return None
 
 
+# The API uses different status values than the SQL CHECK constraint.
+# API: reported, under_investigation, reserved, approved, denied, closed, reopened
+# SQL: fnol, investigating, reserved, settling, closed, reopened, denied
+_STATUS_API_TO_SQL: dict[str, str] = {
+    "reported": "fnol",
+    "under_investigation": "investigating",
+    "approved": "settling",
+}
+_STATUS_SQL_TO_API: dict[str, str] = {v: k for k, v in _STATUS_API_TO_SQL.items()}
+
+
+def _api_status_to_sql(status: str) -> str:
+    return _STATUS_API_TO_SQL.get(status, status)
+
+
+def _sql_status_to_api(status: str) -> str:
+    return _STATUS_SQL_TO_API.get(status, status)
+
+
 def _claim_to_sql_row(entity: dict[str, Any]) -> dict[str, Any]:
     """Map API claim dict keys to SQL column names for INSERT."""
     return {
         "id": entity.get("id"),
         "claim_number": entity.get("claim_number"),
-        "status": entity.get("status", "reported"),
+        "status": _api_status_to_sql(entity.get("status", "reported")),
         "policy_id": _safe_uuid(entity.get("policy_id")),
         "loss_date": entity.get("date_of_loss"),
         "report_date": entity.get("created_at"),
@@ -90,7 +109,7 @@ def _claim_from_sql_row(row: dict[str, Any]) -> dict[str, Any]:
         "claim_number": _str(row.get("claim_number")),
         "policy_id": _str(row.get("policy_id")),
         "claim_type": _str(row.get("loss_type")) or "other",
-        "status": _str(row.get("status")) or "reported",
+        "status": _sql_status_to_api(_str(row.get("status")) or "fnol"),
         "description": _str(row.get("description")),
         "date_of_loss": _str(row.get("loss_date")),
         "reported_by": "",
@@ -116,7 +135,7 @@ class SqlClaimRepository(BaseRepository):
         now = datetime.now(UTC).isoformat()
         entity.setdefault("id", str(uuid4()))
         entity.setdefault("claim_number", f"CLM-{str(uuid4())[:8].upper()}")
-        entity.setdefault("status", "reported")
+        entity.setdefault("status", "fnol")
         entity.setdefault("created_at", now)
         entity.setdefault("updated_at", now)
 
@@ -189,7 +208,7 @@ class SqlClaimRepository(BaseRepository):
         if filters:
             if "status" in filters:
                 where_clauses.append("status = ?")
-                params.append(filters["status"])
+                params.append(_api_status_to_sql(filters["status"]))
             if "claim_type" in filters:
                 where_clauses.append("loss_type = ?")
                 params.append(filters["claim_type"])
@@ -220,6 +239,9 @@ class SqlClaimRepository(BaseRepository):
             if key in ("id", "created_at") or key in _CLAIM_SKIP_IN_SQL:
                 continue
             col = _CLAIM_API_TO_SQL_KEY.get(key, key)
+            # Map API status values to SQL CHECK-compatible values
+            if key == "status":
+                val = _api_status_to_sql(val)
             sets.append(f"{col} = ?")
             params.append(val if not isinstance(val, (dict, list)) else json.dumps(val))
         sets.append("updated_at = ?")
@@ -242,7 +264,7 @@ class SqlClaimRepository(BaseRepository):
         if filters:
             if "status" in filters:
                 where_clauses.append("status = ?")
-                params.append(filters["status"])
+                params.append(_api_status_to_sql(filters["status"]))
             if "claim_type" in filters:
                 where_clauses.append("loss_type = ?")
                 params.append(filters["claim_type"])
