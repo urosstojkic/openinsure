@@ -12,6 +12,58 @@ from openinsure.infrastructure.repository import BaseRepository
 if TYPE_CHECKING:
     from openinsure.infrastructure.database import DatabaseAdapter
 
+# -- key mapping between API entity dicts and SQL columns -------------------
+
+_API_TO_SQL_KEY: dict[str, str] = {
+    "applicant_name": "applicant_id",
+    "risk_data": "cyber_risk_data",
+    "metadata": "extracted_data",
+}
+
+_SKIP_IN_SQL: set[str] = {"applicant_email", "documents"}
+
+
+def _to_sql_row(entity: dict[str, Any]) -> dict[str, Any]:
+    """Map API entity keys to SQL column names for INSERT."""
+    return {
+        "id": entity.get("id"),
+        "submission_number": entity.get("submission_number"),
+        "status": entity.get("status", "received"),
+        "channel": entity.get("channel", "api"),
+        "line_of_business": entity.get("line_of_business", "cyber"),
+        "applicant_id": entity.get("applicant_name", ""),
+        "requested_effective_date": entity.get("requested_effective_date"),
+        "requested_expiration_date": entity.get("requested_expiration_date"),
+        "extracted_data": json.dumps(entity.get("metadata", {})),
+        "cyber_risk_data": json.dumps(entity.get("risk_data", entity.get("cyber_risk_data", {}))),
+        "triage_result": json.dumps(entity.get("triage_result", {})) if entity.get("triage_result") else None,
+        "quoted_premium": entity.get("quoted_premium"),
+        "created_at": entity.get("created_at"),
+        "updated_at": entity.get("updated_at"),
+    }
+
+
+def _from_sql_row(row: dict[str, Any]) -> dict[str, Any]:
+    """Map SQL column names back to API entity keys."""
+    return {
+        "id": str(row.get("id", "")),
+        "submission_number": row.get("submission_number", ""),
+        "applicant_name": row.get("applicant_id", ""),
+        "applicant_email": "",
+        "status": row.get("status", "received"),
+        "channel": row.get("channel", "api"),
+        "line_of_business": row.get("line_of_business", "cyber"),
+        "risk_data": json.loads(row["cyber_risk_data"]) if row.get("cyber_risk_data") else {},
+        "metadata": json.loads(row["extracted_data"]) if row.get("extracted_data") else {},
+        "documents": [],
+        "triage_result": json.loads(row["triage_result"]) if row.get("triage_result") else None,
+        "quoted_premium": float(row["quoted_premium"]) if row.get("quoted_premium") else None,
+        "requested_effective_date": str(row.get("requested_effective_date", "")),
+        "requested_expiration_date": str(row.get("requested_expiration_date", "")),
+        "created_at": str(row.get("created_at", "")),
+        "updated_at": str(row.get("updated_at", "")),
+    }
+
 
 class SqlSubmissionRepository(BaseRepository):
     """Azure SQL implementation of the submission repository."""
@@ -26,23 +78,28 @@ class SqlSubmissionRepository(BaseRepository):
         entity.setdefault("created_at", datetime.now(UTC).isoformat())
         entity.setdefault("updated_at", datetime.now(UTC).isoformat())
 
+        row = _to_sql_row(entity)
         await self.db.execute_query(
             """INSERT INTO submissions (id, submission_number, status, channel, line_of_business,
-               requested_effective_date, requested_expiration_date, extracted_data, cyber_risk_data,
+               applicant_id, requested_effective_date, requested_expiration_date,
+               extracted_data, cyber_risk_data, triage_result, quoted_premium,
                created_at, updated_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             [
-                entity["id"],
-                entity.get("submission_number"),
-                entity.get("status"),
-                entity.get("channel", "api"),
-                entity.get("line_of_business", "cyber"),
-                entity.get("requested_effective_date"),
-                entity.get("requested_expiration_date"),
-                json.dumps(entity.get("extracted_data", {})),
-                json.dumps(entity.get("cyber_risk_data", {})),
-                entity["created_at"],
-                entity["updated_at"],
+                row["id"],
+                row["submission_number"],
+                row["status"],
+                row["channel"],
+                row["line_of_business"],
+                row["applicant_id"],
+                row["requested_effective_date"],
+                row["requested_expiration_date"],
+                row["extracted_data"],
+                row["cyber_risk_data"],
+                row["triage_result"],
+                row["quoted_premium"],
+                row["created_at"],
+                row["updated_at"],
             ],
         )
         from openinsure.services.event_publisher import publish_domain_event
@@ -55,7 +112,8 @@ class SqlSubmissionRepository(BaseRepository):
         return entity
 
     async def get_by_id(self, entity_id: UUID | str) -> dict[str, Any] | None:
-        return await self.db.fetch_one("SELECT * FROM submissions WHERE id = ?", [str(entity_id)])
+        row = await self.db.fetch_one("SELECT * FROM submissions WHERE id = ?", [str(entity_id)])
+        return _from_sql_row(row) if row else None
 
     async def list_all(
         self,
@@ -79,7 +137,8 @@ class SqlSubmissionRepository(BaseRepository):
         if where_clauses:
             query += " WHERE " + " AND ".join(where_clauses)
         query += f" ORDER BY created_at DESC OFFSET {skip} ROWS FETCH NEXT {limit} ROWS ONLY"
-        return await self.db.fetch_all(query, params)
+        rows = await self.db.fetch_all(query, params)
+        return [_from_sql_row(r) for r in rows]
 
     async def update(self, entity_id: UUID | str, updates: dict[str, Any]) -> dict[str, Any] | None:
         from openinsure.domain.state_machine import (
@@ -97,9 +156,11 @@ class SqlSubmissionRepository(BaseRepository):
         sets: list[str] = []
         params: list[Any] = []
         for key, val in updates.items():
-            if key not in ("id", "created_at"):
-                sets.append(f"{key} = ?")
-                params.append(val if not isinstance(val, dict) else json.dumps(val))
+            if key in ("id", "created_at") or key in _SKIP_IN_SQL:
+                continue
+            col = _API_TO_SQL_KEY.get(key, key)
+            sets.append(f"{col} = ?")
+            params.append(val if not isinstance(val, (dict, list)) else json.dumps(val))
         sets.append("updated_at = ?")
         params.append(datetime.now(UTC).isoformat())
         params.append(str(entity_id))

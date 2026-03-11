@@ -12,6 +12,63 @@ from openinsure.infrastructure.repository import BaseRepository
 if TYPE_CHECKING:
     from openinsure.infrastructure.database import DatabaseAdapter
 
+# -- key mapping between API entity dicts and SQL columns -------------------
+
+_POLICY_API_TO_SQL_KEY: dict[str, str] = {
+    "policyholder_name": "insured_id",
+    "premium": "total_premium",
+}
+
+_POLICY_SKIP_IN_SQL: set[str] = {"coverages", "endorsements", "metadata", "documents"}
+
+
+def _policy_to_sql_row(entity: dict[str, Any]) -> dict[str, Any]:
+    """Map API policy dict keys to SQL column names for INSERT."""
+    return {
+        "id": entity.get("id"),
+        "policy_number": entity.get("policy_number"),
+        "status": entity.get("status", "active"),
+        "product_id": entity.get("product_id"),
+        "submission_id": entity.get("submission_id"),
+        "insured_id": entity.get("policyholder_name", ""),
+        "effective_date": entity.get("effective_date"),
+        "expiration_date": entity.get("expiration_date"),
+        "total_premium": entity.get("premium", entity.get("total_premium")),
+        "written_premium": entity.get("written_premium"),
+        "earned_premium": entity.get("earned_premium"),
+        "unearned_premium": entity.get("unearned_premium"),
+        "bound_at": entity.get("bound_at"),
+        "created_at": entity.get("created_at"),
+        "updated_at": entity.get("updated_at"),
+    }
+
+
+def _policy_from_sql_row(row: dict[str, Any]) -> dict[str, Any]:
+    """Map SQL column names back to API policy dict keys."""
+    premium = float(row["total_premium"]) if row.get("total_premium") else None
+    return {
+        "id": str(row.get("id", "")),
+        "policy_number": row.get("policy_number", ""),
+        "policyholder_name": row.get("insured_id", ""),
+        "status": row.get("status", "active"),
+        "product_id": row.get("product_id", ""),
+        "submission_id": str(row.get("submission_id", "")),
+        "effective_date": str(row.get("effective_date", "")),
+        "expiration_date": str(row.get("expiration_date", "")),
+        "premium": premium,
+        "total_premium": premium,
+        "written_premium": float(row["written_premium"]) if row.get("written_premium") else None,
+        "earned_premium": float(row["earned_premium"]) if row.get("earned_premium") else None,
+        "unearned_premium": float(row["unearned_premium"]) if row.get("unearned_premium") else None,
+        "coverages": [],
+        "endorsements": [],
+        "metadata": {},
+        "documents": [],
+        "bound_at": str(row.get("bound_at", "")) if row.get("bound_at") else None,
+        "created_at": str(row.get("created_at", "")),
+        "updated_at": str(row.get("updated_at", "")),
+    }
+
 
 class SqlPolicyRepository(BaseRepository):
     """Azure SQL implementation of the policy repository."""
@@ -25,26 +82,29 @@ class SqlPolicyRepository(BaseRepository):
         entity.setdefault("created_at", datetime.now(UTC).isoformat())
         entity.setdefault("updated_at", datetime.now(UTC).isoformat())
 
+        row = _policy_to_sql_row(entity)
         await self.db.execute_query(
-            """INSERT INTO policies (id, policy_number, submission_id, product_id,
-               policyholder_name, status, effective_date, expiration_date, premium,
-               coverages, endorsements, metadata, created_at, updated_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            """INSERT INTO policies (id, policy_number, status, product_id, submission_id,
+               insured_id, effective_date, expiration_date, total_premium,
+               written_premium, earned_premium, unearned_premium, bound_at,
+               created_at, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             [
-                entity["id"],
-                entity.get("policy_number"),
-                entity.get("submission_id"),
-                entity.get("product_id"),
-                entity.get("policyholder_name"),
-                entity.get("status"),
-                entity.get("effective_date"),
-                entity.get("expiration_date"),
-                entity.get("premium"),
-                json.dumps(entity.get("coverages", [])),
-                json.dumps(entity.get("endorsements", [])),
-                json.dumps(entity.get("metadata", {})),
-                entity["created_at"],
-                entity["updated_at"],
+                row["id"],
+                row["policy_number"],
+                row["status"],
+                row["product_id"],
+                row["submission_id"],
+                row["insured_id"],
+                row["effective_date"],
+                row["expiration_date"],
+                row["total_premium"],
+                row["written_premium"],
+                row["earned_premium"],
+                row["unearned_premium"],
+                row["bound_at"],
+                row["created_at"],
+                row["updated_at"],
             ],
         )
         from openinsure.services.event_publisher import publish_domain_event
@@ -58,9 +118,7 @@ class SqlPolicyRepository(BaseRepository):
 
     async def get_by_id(self, entity_id: UUID | str) -> dict[str, Any] | None:
         row = await self.db.fetch_one("SELECT * FROM policies WHERE id = ?", [str(entity_id)])
-        if row:
-            row = _deserialize_policy(row)
-        return row
+        return _policy_from_sql_row(row) if row else None
 
     async def list_all(
         self,
@@ -79,13 +137,13 @@ class SqlPolicyRepository(BaseRepository):
                 where_clauses.append("product_id = ?")
                 params.append(filters["product_id"])
             if "policyholder_name__contains" in filters:
-                where_clauses.append("policyholder_name LIKE ?")
+                where_clauses.append("insured_id LIKE ?")
                 params.append(f"%{filters['policyholder_name__contains']}%")
         if where_clauses:
             query += " WHERE " + " AND ".join(where_clauses)
         query += f" ORDER BY created_at DESC OFFSET {skip} ROWS FETCH NEXT {limit} ROWS ONLY"
         rows = await self.db.fetch_all(query, params)
-        return [_deserialize_policy(r) for r in rows]
+        return [_policy_from_sql_row(r) for r in rows]
 
     async def update(self, entity_id: UUID | str, updates: dict[str, Any]) -> dict[str, Any] | None:
         from openinsure.domain.state_machine import (
@@ -102,9 +160,11 @@ class SqlPolicyRepository(BaseRepository):
         sets: list[str] = []
         params: list[Any] = []
         for key, val in updates.items():
-            if key not in ("id", "created_at"):
-                sets.append(f"{key} = ?")
-                params.append(val if not isinstance(val, (dict, list)) else json.dumps(val))
+            if key in ("id", "created_at") or key in _POLICY_SKIP_IN_SQL:
+                continue
+            col = _POLICY_API_TO_SQL_KEY.get(key, key)
+            sets.append(f"{col} = ?")
+            params.append(val if not isinstance(val, (dict, list)) else json.dumps(val))
         sets.append("updated_at = ?")
         params.append(datetime.now(UTC).isoformat())
         params.append(str(entity_id))
@@ -130,17 +190,9 @@ class SqlPolicyRepository(BaseRepository):
                 where_clauses.append("product_id = ?")
                 params.append(filters["product_id"])
             if "policyholder_name__contains" in filters:
-                where_clauses.append("policyholder_name LIKE ?")
+                where_clauses.append("insured_id LIKE ?")
                 params.append(f"%{filters['policyholder_name__contains']}%")
         if where_clauses:
             query += " WHERE " + " AND ".join(where_clauses)
         result = await self.db.fetch_one(query, params)
         return result.get("cnt", 0) if result else 0
-
-
-def _deserialize_policy(row: dict[str, Any]) -> dict[str, Any]:
-    """Parse JSON columns back into Python objects."""
-    for col in ("coverages", "endorsements", "metadata"):
-        if col in row and isinstance(row[col], str):
-            row[col] = json.loads(row[col])
-    return row
