@@ -46,17 +46,21 @@ async def publish_domain_event(
 
     bus = get_event_bus()
     if bus:
-        from uuid import UUID
+        try:
+            from uuid import UUID
 
-        from openinsure.infrastructure.event_bus import DomainEvent
+            from openinsure.infrastructure.event_bus import DomainEvent
 
-        event = DomainEvent(
-            event_type=event_type,
-            subject=subject,
-            data=data,
-            correlation_id=UUID(correlation_id) if correlation_id else None,
-        )
-        await bus.publish_event(event)
-        logger.info("event.published", event_type=event_type, subject=subject)
+            event = DomainEvent(
+                event_type=event_type,
+                subject=subject,
+                data=data,
+                correlation_id=UUID(correlation_id) if correlation_id else None,
+            )
+            await bus.publish_event(event)
+            logger.info("event.published", event_type=event_type, subject=subject)
+        except Exception as e:
+            # Event publishing is non-critical — log and continue
+            logger.warning("event.publish_failed", event_type=event_type, error=str(e)[:200])
     else:
         logger.debug("event.skipped", event_type=event_type, subject=subject, reason="no_event_bus")
