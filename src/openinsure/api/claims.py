@@ -88,10 +88,14 @@ class ClaimResponse(BaseModel):
     id: str = ""
     claim_number: str = ""
     policy_id: str = ""
+    policy_number: str = ""
     claim_type: str = "other"
     status: str = "reported"
     description: str = ""
     date_of_loss: str = ""
+    loss_date: str = ""
+    severity: str = "medium"
+    cause_of_loss: str = ""
     reported_by: str = ""
     contact_email: str | None = None
     contact_phone: str | None = None
@@ -99,6 +103,11 @@ class ClaimResponse(BaseModel):
     payments: list[dict[str, Any]] = Field(default_factory=list)
     total_reserved: float = 0.0
     total_paid: float = 0.0
+    total_incurred: float = 0.0
+    assigned_to: str = ""
+    fraud_score: float | None = None
+    lob: str = "cyber"
+    reported_date: str = ""
     metadata: dict[str, Any] = Field(default_factory=dict)
     created_at: str = ""
     updated_at: str = ""

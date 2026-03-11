@@ -30,7 +30,13 @@ _CLAIM_SKIP_IN_SQL: set[str] = {
     "payments",
     "total_reserved",
     "total_paid",
+    "total_incurred",
     "metadata",
+    "loss_date",
+    "assigned_to",
+    "lob",
+    "reported_date",
+    "policy_number",
 }
 
 
@@ -92,7 +98,12 @@ def _claim_from_sql_row(row: dict[str, Any]) -> dict[str, Any]:
     """
 
     def _str(val: Any) -> str:
-        return str(val) if val is not None else ""
+        if val is None:
+            return ""
+        # Convert SQL datetime objects to ISO 8601 string
+        if hasattr(val, 'isoformat'):
+            return val.isoformat()
+        return str(val)
 
     def _json(val: Any) -> dict[str, Any]:
         if val is None:
@@ -104,21 +115,35 @@ def _claim_from_sql_row(row: dict[str, Any]) -> dict[str, Any]:
         except (json.JSONDecodeError, TypeError):
             return {}
 
+    total_reserved = float(row["total_reserved"]) if row.get("total_reserved") else 0.0
+    total_paid = float(row["total_paid"]) if row.get("total_paid") else 0.0
+    total_incurred = total_reserved + total_paid
+    loss_date = _str(row.get("loss_date"))
+
     return {
         "id": _str(row.get("id")),
         "claim_number": _str(row.get("claim_number")),
         "policy_id": _str(row.get("policy_id")),
+        "policy_number": _str(row.get("policy_number")) or "",
         "claim_type": _str(row.get("loss_type")) or "other",
         "status": _sql_status_to_api(_str(row.get("status")) or "fnol"),
         "description": _str(row.get("description")),
-        "date_of_loss": _str(row.get("loss_date")),
+        "date_of_loss": loss_date,
+        "loss_date": loss_date,
+        "severity": _str(row.get("severity")) or "medium",
+        "cause_of_loss": _str(row.get("cause_of_loss")),
         "reported_by": "",
         "contact_email": None,
         "contact_phone": None,
         "reserves": [],
         "payments": [],
-        "total_reserved": 0.0,
-        "total_paid": 0.0,
+        "total_reserved": total_reserved,
+        "total_paid": total_paid,
+        "total_incurred": total_incurred,
+        "assigned_to": _str(row.get("assigned_adjuster")) or "",
+        "fraud_score": float(row["fraud_score"]) if row.get("fraud_score") else None,
+        "lob": "cyber",
+        "reported_date": _str(row.get("report_date")) or _str(row.get("created_at")),
         "metadata": {},
         "created_at": _str(row.get("created_at")),
         "updated_at": _str(row.get("updated_at")),

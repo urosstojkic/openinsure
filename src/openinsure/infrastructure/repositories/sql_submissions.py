@@ -20,7 +20,11 @@ _API_TO_SQL_KEY: dict[str, str] = {
     "metadata": "extracted_data",
 }
 
-_SKIP_IN_SQL: set[str] = {"applicant_email", "documents"}
+_SKIP_IN_SQL: set[str] = {
+    "applicant_email", "documents", "lob", "received_date",
+    "company_name", "risk_score", "priority", "assigned_to",
+    "decision_history",
+}
 
 # The SQL CHECK constraint uses 'broker_platform', but the API enum uses 'broker'.
 _CHANNEL_API_TO_SQL: dict[str, str] = {"broker": "broker_platform"}
@@ -69,7 +73,12 @@ def _from_sql_row(row: dict[str, Any]) -> dict[str, Any]:
     Ensures every value is properly typed — no None where str is expected.
     """
     def _str(val: Any) -> str:
-        return str(val) if val is not None else ""
+        if val is None:
+            return ""
+        # Convert SQL datetime objects to ISO 8601 string
+        if hasattr(val, 'isoformat'):
+            return val.isoformat()
+        return str(val)
 
     def _json(val: Any) -> dict[str, Any]:
         if val is None:
@@ -82,14 +91,24 @@ def _from_sql_row(row: dict[str, Any]) -> dict[str, Any]:
             return {}
 
     metadata = _json(row.get("extracted_data"))
+
+    # Ensure submission_number is human-readable (not a raw UUID)
+    sub_num = _str(row.get("submission_number"))
+    if sub_num and not sub_num.startswith("SUB-"):
+        sub_num = f"SUB-{sub_num[:8].upper()}"
+
+    lob = _str(row.get("line_of_business")) or "cyber"
+    created = _str(row.get("created_at"))
+
     return {
         "id": _str(row.get("id")),
-        "submission_number": _str(row.get("submission_number")),
+        "submission_number": sub_num,
         "applicant_name": metadata.pop("applicant_name", "") if isinstance(metadata, dict) else "",
         "applicant_email": metadata.pop("applicant_email", None) if isinstance(metadata, dict) else None,
         "status": _str(row.get("status")) or "received",
         "channel": _sql_channel_to_api(_str(row.get("channel")) or "api"),
-        "line_of_business": _str(row.get("line_of_business")) or "cyber",
+        "line_of_business": lob,
+        "lob": lob,
         "risk_data": _json(row.get("cyber_risk_data")),
         "metadata": metadata,
         "documents": [],
@@ -97,8 +116,15 @@ def _from_sql_row(row: dict[str, Any]) -> dict[str, Any]:
         "quoted_premium": float(row["quoted_premium"]) if row.get("quoted_premium") else None,
         "requested_effective_date": _str(row.get("requested_effective_date")),
         "requested_expiration_date": _str(row.get("requested_expiration_date")),
-        "created_at": _str(row.get("created_at")),
+        "created_at": created,
         "updated_at": _str(row.get("updated_at")),
+        # Dashboard-expected aliases
+        "received_date": created,
+        "company_name": metadata.get("company_name", "") if isinstance(metadata, dict) else "",
+        "risk_score": 0,
+        "priority": "medium",
+        "assigned_to": None,
+        "decision_history": [],
     }
 
 

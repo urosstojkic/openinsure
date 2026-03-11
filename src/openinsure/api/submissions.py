@@ -197,6 +197,7 @@ class SubmissionResponse(BaseModel):
     status: str = "received"
     channel: str = "api"
     line_of_business: str = "cyber"
+    lob: str = "cyber"
     risk_data: dict[str, Any] = Field(default_factory=dict)
     metadata: dict[str, Any] = Field(default_factory=dict)
     documents: list[str] = Field(default_factory=list)
@@ -206,6 +207,12 @@ class SubmissionResponse(BaseModel):
     requested_expiration_date: str = ""
     created_at: str = ""
     updated_at: str = ""
+    received_date: str = ""
+    company_name: str = ""
+    risk_score: int = 0
+    priority: str = "medium"
+    assigned_to: str | None = None
+    decision_history: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class SubmissionList(BaseModel):

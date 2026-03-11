@@ -72,6 +72,8 @@ class PolicyResponse(BaseModel):
     product_id: str = ""
     policy_number: str = ""
     policyholder_name: str = ""
+    insured_name: str = ""
+    lob: str = "cyber"
     status: str = "active"
     effective_date: str = ""
     expiration_date: str = ""
@@ -197,6 +199,8 @@ async def create_policy(body: PolicyCreate) -> PolicyResponse:
         "product_id": body.product_id,
         "policy_number": _generate_policy_number(),
         "policyholder_name": body.policyholder_name,
+        "insured_name": body.policyholder_name,
+        "lob": "cyber",
         "status": PolicyStatus.ACTIVE,
         "effective_date": body.effective_date,
         "expiration_date": body.expiration_date,

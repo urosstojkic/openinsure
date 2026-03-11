@@ -22,7 +22,10 @@ _POLICY_API_TO_SQL_KEY: dict[str, str] = {
     "premium": "total_premium",
 }
 
-_POLICY_SKIP_IN_SQL: set[str] = {"coverages", "endorsements", "metadata", "documents"}
+_POLICY_SKIP_IN_SQL: set[str] = {
+    "coverages", "endorsements", "metadata", "documents",
+    "insured_name", "lob", "party_name",
+}
 
 
 def _safe_uuid(val: Any) -> str | None:
@@ -65,7 +68,12 @@ def _policy_from_sql_row(row: dict[str, Any]) -> dict[str, Any]:
     """
 
     def _str(val: Any) -> str:
-        return str(val) if val is not None else ""
+        if val is None:
+            return ""
+        # Convert SQL datetime objects to ISO 8601 string
+        if hasattr(val, 'isoformat'):
+            return val.isoformat()
+        return str(val)
 
     def _json(val: Any) -> dict[str, Any]:
         if val is None:
@@ -78,10 +86,13 @@ def _policy_from_sql_row(row: dict[str, Any]) -> dict[str, Any]:
             return {}
 
     premium = float(row["total_premium"]) if row.get("total_premium") else None
+    policyholder = _str(row.get("party_name")) or ""
     return {
         "id": _str(row.get("id")),
         "policy_number": _str(row.get("policy_number")),
-        "policyholder_name": "",  # Stored in entity metadata, not insured_id FK
+        "policyholder_name": policyholder,
+        "insured_name": policyholder,
+        "lob": "cyber",
         "status": _str(row.get("status")) or "active",
         "product_id": _str(row.get("product_id")),
         "submission_id": _str(row.get("submission_id")),
@@ -207,7 +218,12 @@ class SqlPolicyRepository(BaseRepository):
         return entity
 
     async def get_by_id(self, entity_id: UUID | str) -> dict[str, Any] | None:
-        row = await self.db.fetch_one("SELECT * FROM policies WHERE id = ?", [str(entity_id)])
+        row = await self.db.fetch_one(
+            "SELECT p.*, pa.name AS party_name"
+            " FROM policies p LEFT JOIN parties pa ON p.insured_id = pa.id"
+            " WHERE p.id = ?",
+            [str(entity_id)],
+        )
         return _policy_from_sql_row(row) if row else None
 
     async def list_all(
@@ -216,22 +232,25 @@ class SqlPolicyRepository(BaseRepository):
         skip: int = 0,
         limit: int = 50,
     ) -> list[dict[str, Any]]:
-        query = "SELECT * FROM policies"
+        query = (
+            "SELECT p.*, pa.name AS party_name"
+            " FROM policies p LEFT JOIN parties pa ON p.insured_id = pa.id"
+        )
         params: list[Any] = []
         where_clauses: list[str] = []
         if filters:
             if "status" in filters:
-                where_clauses.append("status = ?")
+                where_clauses.append("p.status = ?")
                 params.append(filters["status"])
             if "product_id" in filters:
-                where_clauses.append("product_id = ?")
+                where_clauses.append("p.product_id = ?")
                 params.append(filters["product_id"])
             if "policyholder_name__contains" in filters:
-                where_clauses.append("insured_id LIKE ?")
+                where_clauses.append("pa.name LIKE ?")
                 params.append(f"%{filters['policyholder_name__contains']}%")
         if where_clauses:
             query += " WHERE " + " AND ".join(where_clauses)
-        query += f" ORDER BY created_at DESC OFFSET {skip} ROWS FETCH NEXT {limit} ROWS ONLY"
+        query += f" ORDER BY p.created_at DESC OFFSET {skip} ROWS FETCH NEXT {limit} ROWS ONLY"
         rows = await self.db.fetch_all(query, params)
         return [_policy_from_sql_row(r) for r in rows]
 
@@ -269,18 +288,21 @@ class SqlPolicyRepository(BaseRepository):
         return result > 0
 
     async def count(self, filters: dict[str, Any] | None = None) -> int:
-        query = "SELECT COUNT(*) as cnt FROM policies"
+        query = "SELECT COUNT(*) as cnt FROM policies p"
+        join_needed = filters and "policyholder_name__contains" in filters
+        if join_needed:
+            query += " LEFT JOIN parties pa ON p.insured_id = pa.id"
         params: list[Any] = []
         where_clauses: list[str] = []
         if filters:
             if "status" in filters:
-                where_clauses.append("status = ?")
+                where_clauses.append("p.status = ?")
                 params.append(filters["status"])
             if "product_id" in filters:
-                where_clauses.append("product_id = ?")
+                where_clauses.append("p.product_id = ?")
                 params.append(filters["product_id"])
             if "policyholder_name__contains" in filters:
-                where_clauses.append("insured_id LIKE ?")
+                where_clauses.append("pa.name LIKE ?")
                 params.append(f"%{filters['policyholder_name__contains']}%")
         if where_clauses:
             query += " WHERE " + " AND ".join(where_clauses)
