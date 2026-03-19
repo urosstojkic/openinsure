@@ -91,6 +91,12 @@ warn_return_any = false
 check_untyped_defs = false
 ignore_errors = true
 
+[[tool.mypy.overrides]]
+module = [
+    "openinsure.api.*",
+]
+warn_return_any = false
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]

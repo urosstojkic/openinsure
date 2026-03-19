@@ -33,94 +33,189 @@ import httpx
 # ---------------------------------------------------------------------------
 random.seed(42)
 
-DEFAULT_URL = (
-    "https://openinsure-backend.braveriver-f92a9f28"
-    ".swedencentral.azurecontainerapps.io"
-)
+DEFAULT_URL = "https://openinsure-backend.braveriver-f92a9f28.swedencentral.azurecontainerapps.io"
 
 # ---------------------------------------------------------------------------
 # Company names by industry (170+ unique names across 8 industries)
 # ---------------------------------------------------------------------------
 
 TECH_COMPANIES = [
-    "NovaTech Solutions", "Cascade Software Inc", "BluePeak Analytics",
-    "VertexAI Labs", "Prism Digital Corp", "Helios Cloud Systems",
-    "Zenith DevOps", "Orbital Code Works", "Luminary SaaS Inc",
-    "ByteBridge Technologies", "Synapse Data Systems", "Nimbus Platform Group",
-    "TerraCode Labs", "QuantumBit Software", "ClearStack Solutions",
-    "VelocityDev Inc", "ArcLight Computing", "Photon Micro Systems",
-    "InfiniLoop Tech", "NebulaWorks Software", "Cipher Logic Corp",
-    "DataWeave Inc", "PulseGrid Technologies", "CloudForge Systems",
+    "NovaTech Solutions",
+    "Cascade Software Inc",
+    "BluePeak Analytics",
+    "VertexAI Labs",
+    "Prism Digital Corp",
+    "Helios Cloud Systems",
+    "Zenith DevOps",
+    "Orbital Code Works",
+    "Luminary SaaS Inc",
+    "ByteBridge Technologies",
+    "Synapse Data Systems",
+    "Nimbus Platform Group",
+    "TerraCode Labs",
+    "QuantumBit Software",
+    "ClearStack Solutions",
+    "VelocityDev Inc",
+    "ArcLight Computing",
+    "Photon Micro Systems",
+    "InfiniLoop Tech",
+    "NebulaWorks Software",
+    "Cipher Logic Corp",
+    "DataWeave Inc",
+    "PulseGrid Technologies",
+    "CloudForge Systems",
     "Nextera AI Labs",
 ]
 
 HEALTHCARE_COMPANIES = [
-    "Meridian Healthcare Group", "Redwood Biotech", "Pinnacle Health Systems",
-    "CrestView Medical Center", "Horizon Diagnostics", "Beacon Therapeutics",
-    "Sapphire Health Partners", "Alder Medical Group", "Summit Care Network",
-    "TrueNorth Clinical Labs", "VitalSign Health Tech", "CedarPoint Genomics",
-    "OakBridge Health", "Pureform Pharma", "Encompass Telehealth",
-    "ProVita Medical Inc", "AscendCare Partners", "BioNexus Health",
-    "EliteMed Solutions", "PacificWell Clinics",
+    "Meridian Healthcare Group",
+    "Redwood Biotech",
+    "Pinnacle Health Systems",
+    "CrestView Medical Center",
+    "Horizon Diagnostics",
+    "Beacon Therapeutics",
+    "Sapphire Health Partners",
+    "Alder Medical Group",
+    "Summit Care Network",
+    "TrueNorth Clinical Labs",
+    "VitalSign Health Tech",
+    "CedarPoint Genomics",
+    "OakBridge Health",
+    "Pureform Pharma",
+    "Encompass Telehealth",
+    "ProVita Medical Inc",
+    "AscendCare Partners",
+    "BioNexus Health",
+    "EliteMed Solutions",
+    "PacificWell Clinics",
 ]
 
 FINANCE_COMPANIES = [
-    "Quantum Financial Services", "Alpine Wealth Management",
-    "Ironclad Capital Group", "Vanguard Risk Partners",
-    "Sterling Advisors LLC", "Apex Lending Corp", "Bridgeway Financial",
-    "Fortis Investment Group", "Pinnacle Credit Union",
-    "Meridian Savings Bank", "Cobalt FinTech", "Clearwater Capital",
-    "Granite Trust Co", "Keystone Financial", "Patriot Payments Inc",
-    "TrueVault Banking", "SilverOak Investments", "Crestline Capital",
-    "Paragon FinServ", "DigitalEdge Payments",
+    "Quantum Financial Services",
+    "Alpine Wealth Management",
+    "Ironclad Capital Group",
+    "Vanguard Risk Partners",
+    "Sterling Advisors LLC",
+    "Apex Lending Corp",
+    "Bridgeway Financial",
+    "Fortis Investment Group",
+    "Pinnacle Credit Union",
+    "Meridian Savings Bank",
+    "Cobalt FinTech",
+    "Clearwater Capital",
+    "Granite Trust Co",
+    "Keystone Financial",
+    "Patriot Payments Inc",
+    "TrueVault Banking",
+    "SilverOak Investments",
+    "Crestline Capital",
+    "Paragon FinServ",
+    "DigitalEdge Payments",
 ]
 
 RETAIL_COMPANIES = [
-    "Coastal Properties Management", "Harborview Retail Group",
-    "Summit Outdoors Co", "Urban Market Collective", "GreenLeaf Organics",
-    "Brightside Home Goods", "Evergreen Retail Chain", "Pacific Coast Stores",
-    "Mapleton Supply Co", "Ridgecrest Boutique", "TrueBlue Apparel",
-    "FreshCart Grocery", "SilverLine Retail", "Crimson Marketplace",
-    "WestEnd Shops Inc", "PrimeChoice Retail", "Sunrise Goods Co",
-    "BlueStar Commerce", "EcoVista Brands", "TrailMark Outfitters",
+    "Coastal Properties Management",
+    "Harborview Retail Group",
+    "Summit Outdoors Co",
+    "Urban Market Collective",
+    "GreenLeaf Organics",
+    "Brightside Home Goods",
+    "Evergreen Retail Chain",
+    "Pacific Coast Stores",
+    "Mapleton Supply Co",
+    "Ridgecrest Boutique",
+    "TrueBlue Apparel",
+    "FreshCart Grocery",
+    "SilverLine Retail",
+    "Crimson Marketplace",
+    "WestEnd Shops Inc",
+    "PrimeChoice Retail",
+    "Sunrise Goods Co",
+    "BlueStar Commerce",
+    "EcoVista Brands",
+    "TrailMark Outfitters",
 ]
 
 MANUFACTURING_COMPANIES = [
-    "Atlas Manufacturing Inc", "Precision Dynamics Corp",
-    "Ironworks Industrial", "SteelBridge Fabrication",
-    "NorthStar Components", "Titan Machining Group",
-    "Cornerstone Materials", "Ridgeline Plastics", "Alloy Systems Inc",
-    "Forgepoint Industries", "ClearEdge Composites", "Benchmark Mfg Co",
-    "ProLine Assembly", "Vertex Metal Works", "HarborForge Inc",
-    "SolidCore Manufacturing", "PeakForm Industries", "IronEdge Fabricators",
-    "TrueBuild Components", "AlloyTech Systems",
+    "Atlas Manufacturing Inc",
+    "Precision Dynamics Corp",
+    "Ironworks Industrial",
+    "SteelBridge Fabrication",
+    "NorthStar Components",
+    "Titan Machining Group",
+    "Cornerstone Materials",
+    "Ridgeline Plastics",
+    "Alloy Systems Inc",
+    "Forgepoint Industries",
+    "ClearEdge Composites",
+    "Benchmark Mfg Co",
+    "ProLine Assembly",
+    "Vertex Metal Works",
+    "HarborForge Inc",
+    "SolidCore Manufacturing",
+    "PeakForm Industries",
+    "IronEdge Fabricators",
+    "TrueBuild Components",
+    "AlloyTech Systems",
 ]
 
 PROFESSIONAL_SERVICES = [
-    "Pinnacle Legal Partners LLP", "Whitfield & Associates",
-    "Clearmont Consulting", "Summit Strategy Group", "Blackstone CPAs",
-    "Ironbridge Advisory", "Northwind Architects", "Oakmont Engineering",
-    "Sterling Compliance Group", "Ridgeview Law Offices",
-    "Trident HR Solutions", "Beacon Accounting", "Crestline Partners",
-    "Keystone PR Agency", "Nexus Talent Group", "Paramount Legal Group",
-    "Horizon Advisory LLC", "TrueNorth Consulting", "Granite Partners LLP",
+    "Pinnacle Legal Partners LLP",
+    "Whitfield & Associates",
+    "Clearmont Consulting",
+    "Summit Strategy Group",
+    "Blackstone CPAs",
+    "Ironbridge Advisory",
+    "Northwind Architects",
+    "Oakmont Engineering",
+    "Sterling Compliance Group",
+    "Ridgeview Law Offices",
+    "Trident HR Solutions",
+    "Beacon Accounting",
+    "Crestline Partners",
+    "Keystone PR Agency",
+    "Nexus Talent Group",
+    "Paramount Legal Group",
+    "Horizon Advisory LLC",
+    "TrueNorth Consulting",
+    "Granite Partners LLP",
     "BlueRidge Strategy",
 ]
 
 EDUCATION_COMPANIES = [
-    "Horizons Academy", "BrightPath Learning", "Keystone University",
-    "Summit Charter Schools", "Pinnacle EdTech", "EverLearn Institute",
-    "Pacific Academy Network", "ClearView Education", "TrueScholar Inc",
-    "Northstar Learning Group", "Meridian University", "Crestwood Academy",
-    "InnovaEd Solutions", "Aspire Charter Network", "BlueSky Schools",
+    "Horizons Academy",
+    "BrightPath Learning",
+    "Keystone University",
+    "Summit Charter Schools",
+    "Pinnacle EdTech",
+    "EverLearn Institute",
+    "Pacific Academy Network",
+    "ClearView Education",
+    "TrueScholar Inc",
+    "Northstar Learning Group",
+    "Meridian University",
+    "Crestwood Academy",
+    "InnovaEd Solutions",
+    "Aspire Charter Network",
+    "BlueSky Schools",
 ]
 
 ENERGY_COMPANIES = [
-    "SolarPeak Energy", "Windcrest Power Corp", "GreenGrid Utilities",
-    "Apex Renewables Inc", "TerraWatt Energy", "ClearSky Solar",
-    "BlueTide Power", "IronFlame Energy", "PeakVolt Systems",
-    "Meridian Energy Group", "SunForge Power", "WindBridge Renewables",
-    "EcoCharge Utilities", "BrightWatt Inc", "HydroNova Energy",
+    "SolarPeak Energy",
+    "Windcrest Power Corp",
+    "GreenGrid Utilities",
+    "Apex Renewables Inc",
+    "TerraWatt Energy",
+    "ClearSky Solar",
+    "BlueTide Power",
+    "IronFlame Energy",
+    "PeakVolt Systems",
+    "Meridian Energy Group",
+    "SunForge Power",
+    "WindBridge Renewables",
+    "EcoCharge Utilities",
+    "BrightWatt Inc",
+    "HydroNova Energy",
 ]
 
 ALL_COMPANIES: dict[str, list[str]] = {
@@ -232,16 +327,26 @@ CLAIM_DESCRIPTIONS: dict[str, list[str]] = {
 }
 
 REPORTED_BY_NAMES = [
-    "Dr. Sarah Chen, CISO", "James Morrison, CFO",
-    "Mike Torres, IT Director", "Lisa Park, VP Engineering",
-    "Tom Bradley, HR Director", "Rachel Kim, Cloud Architect",
-    "David Chen, CTO", "Maria Santos, Controller",
-    "Robert Walsh, COO", "Jennifer Liu, VP Operations",
-    "Mark Thompson, Security Lead", "Amy Nguyen, Privacy Officer",
-    "Chris Davies, Incident Commander", "Nicole Jordan, Risk Manager",
-    "Steve Martinez, Compliance Director", "Karen White, CISO",
-    "Brian O'Sullivan, IT Manager", "Patricia Gomez, CRO",
-    "Andrew Kim, Security Analyst", "Diana Foster, VP Technology",
+    "Dr. Sarah Chen, CISO",
+    "James Morrison, CFO",
+    "Mike Torres, IT Director",
+    "Lisa Park, VP Engineering",
+    "Tom Bradley, HR Director",
+    "Rachel Kim, Cloud Architect",
+    "David Chen, CTO",
+    "Maria Santos, Controller",
+    "Robert Walsh, COO",
+    "Jennifer Liu, VP Operations",
+    "Mark Thompson, Security Lead",
+    "Amy Nguyen, Privacy Officer",
+    "Chris Davies, Incident Commander",
+    "Nicole Jordan, Risk Manager",
+    "Steve Martinez, Compliance Director",
+    "Karen White, CISO",
+    "Brian O'Sullivan, IT Manager",
+    "Patricia Gomez, CRO",
+    "Andrew Kim, Security Analyst",
+    "Diana Foster, VP Technology",
 ]
 
 # ---------------------------------------------------------------------------
@@ -253,6 +358,7 @@ REPORTED_BY_NAMES = [
 # 2026 Q1 (3 months): ~60 avg → total ~180 (continued momentum)
 # Grand total: ~1,320  (will be trimmed to ~1,200 via distribution)
 # ---------------------------------------------------------------------------
+
 
 def _build_month_list() -> list[date]:
     """Return first-of-month dates from Jan 2023 through Mar 2026."""
@@ -303,6 +409,7 @@ TOTAL_SUBMISSIONS = sum(SUBS_PER_MONTH)  # ~1,198
 # 10% underwriting (~120), 10% triaging (~120), 10% received (~120)
 # ---------------------------------------------------------------------------
 
+
 def _build_status_pool(n: int) -> list[str]:
     """Build a shuffled pool of target statuses for *n* submissions."""
     bound = round(n * 0.35)
@@ -326,6 +433,7 @@ def _build_status_pool(n: int) -> list[str]:
 
 STATUS_POOL = _build_status_pool(TOTAL_SUBMISSIONS)
 
+
 # Channel distribution: 40% broker, 25% email, 20% portal, 15% API
 def _build_channel_pool(n: int) -> list[str]:
     pool = (
@@ -342,6 +450,7 @@ CHANNEL_POOL = _build_channel_pool(TOTAL_SUBMISSIONS)
 
 # Claim cause distribution (for 85 claims)
 NUM_CLAIMS = 85
+
 
 def _build_claim_cause_pool(n: int) -> list[str]:
     """25% ransomware, 25% data_breach, 20% social_engineering,
@@ -362,6 +471,7 @@ def _build_claim_cause_pool(n: int) -> list[str]:
 
 CLAIM_CAUSES = _build_claim_cause_pool(NUM_CLAIMS)
 
+
 # Claim severity distribution: catastrophe 5%, complex 20%, moderate 40%, simple 35%
 def _build_severity_pool(n: int) -> list[str]:
     pool = (
@@ -375,6 +485,7 @@ def _build_severity_pool(n: int) -> list[str]:
 
 
 CLAIM_SEVERITIES = _build_severity_pool(NUM_CLAIMS)
+
 
 # Claim status distribution: closed 40%, reserved 25%, investigating 20%, fnol 15%
 def _build_claim_status_pool(n: int) -> list[str]:
@@ -394,6 +505,7 @@ CLAIM_STATUS_POOL = _build_claim_status_pool(NUM_CLAIMS)
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _rand_date_in_month(month_start: date) -> date:
     """Return a random date within the given month."""
@@ -429,13 +541,7 @@ def _rand_employees(revenue: int) -> int:
 
 def _email_domain(company: str) -> str:
     """Generate a plausible email domain from company name."""
-    slug = (
-        company.lower()
-        .replace(" ", "")
-        .replace(",", "")
-        .replace(".", "")
-        .replace("&", "")
-    )
+    slug = company.lower().replace(" ", "").replace(",", "").replace(".", "").replace("&", "")
     return f"{slug[:15]}.com"
 
 
@@ -464,13 +570,15 @@ def _build_coverages(premium: float) -> list[dict[str, Any]]:
         limit = round(random.randint(lo_lim, hi_lim) / 50_000) * 50_000
         deductible = round(random.randint(lo_ded, hi_ded) / 5_000) * 5_000
 
-        coverages.append({
-            "coverage_code": tpl["coverage_code"],
-            "coverage_name": tpl["coverage_name"],
-            "limit": limit,
-            "deductible": deductible,
-            "premium": max(500, round(cov_premium)),
-        })
+        coverages.append(
+            {
+                "coverage_code": tpl["coverage_code"],
+                "coverage_name": tpl["coverage_name"],
+                "limit": limit,
+                "deductible": deductible,
+                "premium": max(500, round(cov_premium)),
+            }
+        )
     return coverages
 
 
@@ -493,6 +601,7 @@ def _fill_claim_description(cause: str) -> str:
 # ---------------------------------------------------------------------------
 # HTTP client wrapper
 # ---------------------------------------------------------------------------
+
 
 class APIClient:
     """Thin wrapper around httpx for seeding API calls."""
@@ -553,6 +662,7 @@ class APIClient:
 # Data generation
 # ---------------------------------------------------------------------------
 
+
 def generate_submissions() -> list[dict[str, Any]]:
     """Generate ~1,200 submission payloads spread across 39 months."""
     submissions: list[dict[str, Any]] = []
@@ -577,29 +687,31 @@ def generate_submissions() -> list[dict[str, Any]]:
             if status in ("quoted", "bound"):
                 quoted_premium = _rand_premium()
 
-            submissions.append({
-                "payload": {
-                    "applicant_name": company_name,
-                    "applicant_email": email,
-                    "channel": channel,
-                    "line_of_business": "cyber",
-                    "risk_data": {
-                        "annual_revenue": revenue,
-                        "employee_count": emp_count,
-                        "industry": industry,
-                        "requested_effective_date": eff_date.isoformat(),
+            submissions.append(
+                {
+                    "payload": {
+                        "applicant_name": company_name,
+                        "applicant_email": email,
+                        "channel": channel,
+                        "line_of_business": "cyber",
+                        "risk_data": {
+                            "annual_revenue": revenue,
+                            "employee_count": emp_count,
+                            "industry": industry,
+                            "requested_effective_date": eff_date.isoformat(),
+                        },
+                        "metadata": {
+                            "source": "seed_demo_business",
+                            "month": month_start.isoformat(),
+                        },
                     },
-                    "metadata": {
-                        "source": "seed_demo_business",
-                        "month": month_start.isoformat(),
-                    },
-                },
-                "target_status": status,
-                "effective_date": eff_date,
-                "company_name": company_name,
-                "industry": industry,
-                "quoted_premium": quoted_premium,
-            })
+                    "target_status": status,
+                    "effective_date": eff_date,
+                    "company_name": company_name,
+                    "industry": industry,
+                    "quoted_premium": quoted_premium,
+                }
+            )
     return submissions
 
 
@@ -639,19 +751,21 @@ def generate_policies(bound_submissions: list[dict[str, Any]]) -> list[dict[str,
         else:
             status_hint = "active"
 
-        policies.append({
-            "submission_id": sub["submission_id"],
-            "product_id": "cyber-smb",
-            "policyholder_name": sub["company_name"],
-            "effective_date": eff.isoformat(),
-            "expiration_date": exp.isoformat(),
-            "premium": premium,
-            "coverages": _build_coverages(premium),
-            "_status_hint": status_hint,
-            "_company": sub["company_name"],
-            "_effective": eff,
-            "_expiration": exp,
-        })
+        policies.append(
+            {
+                "submission_id": sub["submission_id"],
+                "product_id": "cyber-smb",
+                "policyholder_name": sub["company_name"],
+                "effective_date": eff.isoformat(),
+                "expiration_date": exp.isoformat(),
+                "premium": premium,
+                "coverages": _build_coverages(premium),
+                "_status_hint": status_hint,
+                "_company": sub["company_name"],
+                "_effective": eff,
+                "_expiration": exp,
+            }
+        )
     return policies
 
 
@@ -693,23 +807,25 @@ def generate_claims(policy_records: list[dict[str, Any]]) -> list[tuple[dict[str
         claim_type = cause_to_type.get(cause, "other")
         reporter = random.choice(REPORTED_BY_NAMES)
 
-        claims.append((
-            {
-                "policy_id": pol["policy_id"],
-                "claim_type": claim_type,
-                "description": description,
-                "date_of_loss": loss_date.isoformat(),
-                "reported_by": reporter,
-                "metadata": {
-                    "cause_of_loss": cause,
-                    "severity": severity,
-                    "source": "seed_demo_business",
+        claims.append(
+            (
+                {
+                    "policy_id": pol["policy_id"],
+                    "claim_type": claim_type,
+                    "description": description,
+                    "date_of_loss": loss_date.isoformat(),
+                    "reported_by": reporter,
+                    "metadata": {
+                        "cause_of_loss": cause,
+                        "severity": severity,
+                        "source": "seed_demo_business",
+                    },
                 },
-            },
-            cause,
-            severity,
-            claim_status,
-        ))
+                cause,
+                severity,
+                claim_status,
+            )
+        )
     return claims
 
 
@@ -726,12 +842,14 @@ def generate_reserves(severity: str) -> list[dict[str, Any]]:
     for i, (lo, hi) in enumerate(ranges):
         category = "indemnity" if i == 0 else "expense"
         amount = round(random.uniform(lo, hi) / 1_000) * 1_000
-        reserves.append({
-            "category": category,
-            "amount": float(amount),
-            "currency": "USD",
-            "notes": f"Initial {category} reserve — {severity} severity",
-        })
+        reserves.append(
+            {
+                "category": category,
+                "amount": float(amount),
+                "currency": "USD",
+                "notes": f"Initial {category} reserve — {severity} severity",
+            }
+        )
     return reserves
 
 
@@ -745,14 +863,16 @@ def generate_payments(severity: str, company: str) -> list[dict[str, Any]] | Non
     }
     lo, hi = amount_range.get(severity, (5_000, 30_000))
     amount = round(random.uniform(lo, hi) / 500) * 500
-    return [{
-        "payee": company,
-        "amount": float(amount),
-        "currency": "USD",
-        "category": "indemnity",
-        "reference": f"CHK-{random.randint(10000, 99999)}",
-        "notes": "Settlement payment",
-    }]
+    return [
+        {
+            "payee": company,
+            "amount": float(amount),
+            "currency": "USD",
+            "category": "indemnity",
+            "reference": f"CHK-{random.randint(10000, 99999)}",
+            "notes": "Settlement payment",
+        }
+    ]
 
 
 # ---------------------------------------------------------------------------
@@ -827,8 +947,16 @@ def _generate_decision_record(
             "recommendation": random.choice(["approve", "decline", "refer", "accept"]),
             "score": round(random.uniform(0.1, 9.8), 2),
             "flags": random.sample(
-                ["high_revenue", "prior_claims", "low_security", "new_customer",
-                 "large_limit", "complex_risk", "standard_risk", "preferred_risk"],
+                [
+                    "high_revenue",
+                    "prior_claims",
+                    "low_security",
+                    "new_customer",
+                    "large_limit",
+                    "complex_risk",
+                    "standard_risk",
+                    "preferred_risk",
+                ],
                 k=random.randint(0, 3),
             ),
         },
@@ -842,6 +970,7 @@ def _generate_decision_record(
 # ---------------------------------------------------------------------------
 # Main seeding logic
 # ---------------------------------------------------------------------------
+
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Seed OpenInsure with multi-year demo data")
@@ -886,7 +1015,7 @@ def main() -> None:
     current_month: str | None = None
     month_count = 0
 
-    for sub_idx, sub in enumerate(all_subs):
+    for _sub_idx, sub in enumerate(all_subs):
         month = sub["payload"]["metadata"]["month"]
         if month != current_month:
             if current_month is not None:
@@ -984,14 +1113,16 @@ def main() -> None:
             claim_id = result.get("id", "")
             claim_num = result.get("claim_number", "?")
 
-            claim_records.append({
-                "claim_id": claim_id,
-                "claim_number": claim_num,
-                "cause": cause,
-                "severity": severity,
-                "target_status": target_status,
-                "policy_id": payload["policy_id"],
-            })
+            claim_records.append(
+                {
+                    "claim_id": claim_id,
+                    "claim_number": claim_num,
+                    "cause": cause,
+                    "severity": severity,
+                    "target_status": target_status,
+                    "policy_id": payload["policy_id"],
+                }
+            )
 
             # Set reserves for claims that aren't FNOL
             if target_status != "fnol":
@@ -1018,10 +1149,13 @@ def main() -> None:
                         time.sleep(0.02)
 
                 # Close the claim
-                api.post(f"claims/{claim_id}/close", {
-                    "reason": f"Claim resolved — {cause} incident. Settlement and recovery complete.",
-                    "outcome": "resolved",
-                })
+                api.post(
+                    f"claims/{claim_id}/close",
+                    {
+                        "reason": f"Claim resolved — {cause} incident. Settlement and recovery complete.",
+                        "outcome": "resolved",
+                    },
+                )
 
             if api.stats["claims"] % 10 == 0:
                 print(f"    ... {api.stats['claims']} claims created")
@@ -1056,8 +1190,11 @@ def main() -> None:
     all_entity_ids: list[tuple[str, str]] = []  # (entity_id, entity_type)
 
     # Submissions that went through triage
-    triaged_subs = [s for s in all_subs
-                    if s.get("submission_id") and s["target_status"] in ("underwriting", "quoted", "bound", "declined")]
+    triaged_subs = [
+        s
+        for s in all_subs
+        if s.get("submission_id") and s["target_status"] in ("underwriting", "quoted", "bound", "declined")
+    ]
     for sub in triaged_subs[:120]:
         if sub.get("submission_id"):
             all_entity_ids.append((sub["submission_id"], "submission"))
@@ -1079,7 +1216,7 @@ def main() -> None:
     for i in range(min(target_decisions, len(all_entity_ids))):
         entity_id, entity_type = all_entity_ids[i % len(all_entity_ids)]
         agent = random.choice(DECISION_AGENT_TYPES)
-        decision_type, expected_entity_type, model_id, model_version = agent
+        decision_type, _expected_entity_type, model_id, model_version = agent
 
         # Use the actual entity type
         record = _generate_decision_record(
@@ -1106,12 +1243,12 @@ def main() -> None:
     total_decisions = dec_data.get("total", 0) if dec_data else decisions_created
 
     if decisions_created == 0 and total_decisions > 0:
-        print(f"\n  ℹ Decision records are auto-generated by the API pipeline.")
+        print("\n  ℹ Decision records are auto-generated by the API pipeline.")
         print(f"    {total_decisions} decision records exist in the database.")
     elif decisions_created > 0:
         print(f"\n  ✓ Created {decisions_created} decision records")
     else:
-        print(f"\n  ℹ Decision record POST not available — decisions created via pipeline operations.")
+        print("\n  ℹ Decision record POST not available — decisions created via pipeline operations.")
 
     # ------------------------------------------------------------------
     # Summary & Verification
