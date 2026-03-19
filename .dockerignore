@@ -1,0 +1,24 @@
+# Exclude everything not needed for backend Docker build
+.git
+.github
+.squad
+.mypy_cache
+.pytest_cache
+.ruff_cache
+__pycache__
+*.pyc
+
+# Dashboard (separate build)
+dashboard/
+docs/
+test-screenshots/
+tests/
+explore_dashboard.py
+explore_nav.py
+test_dashboard.py
+
+# Infrastructure / scripts not needed at runtime
+infra/
+.squad/
+*.md
+LICENSE

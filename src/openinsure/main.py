@@ -1,5 +1,8 @@
 """OpenInsure — AI-Native Insurance Platform API."""
 
+from contextlib import asynccontextmanager
+from collections.abc import AsyncIterator
+
 import structlog
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -31,6 +34,35 @@ def create_app() -> FastAPI:
     """Create and configure the FastAPI application."""
     settings = get_settings()
 
+    @asynccontextmanager
+    async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+        logger.info("openinsure.startup", version=settings.app_version)
+        logger.info("openinsure.storage_mode", mode=settings.storage_mode)
+
+        # Auto-apply SQL migrations on startup when Azure SQL is configured
+        if settings.storage_mode == "azure" and settings.sql_connection_string:
+            try:
+                from openinsure.infrastructure.auto_migrate import apply_pending_migrations
+
+                applied = await apply_pending_migrations()
+                if applied:
+                    logger.info("openinsure.migrations", applied=applied)
+                else:
+                    logger.info("openinsure.migrations", status="up-to-date")
+            except Exception as exc:
+                logger.warning("openinsure.migrations.failed", error=str(exc))
+
+        # Seed sample data only in debug / local-dev mode with in-memory storage
+        if settings.debug and settings.storage_mode == "memory":
+            from openinsure.infrastructure.seed_data import seed_sample_data
+
+            await seed_sample_data()
+            logger.info("openinsure.seed_data", status="loaded")
+
+        yield
+
+        logger.info("openinsure.shutdown")
+
     app = FastAPI(
         title="OpenInsure API",
         description=(
@@ -41,6 +73,7 @@ def create_app() -> FastAPI:
         docs_url="/docs",
         redoc_url="/redoc",
         openapi_url="/openapi.json",
+        lifespan=lifespan,
     )
 
     # CORS middleware — environment-aware origin list (no wildcard)
@@ -71,35 +104,6 @@ def create_app() -> FastAPI:
 
     # Include API router
     app.include_router(api_router)
-
-    @app.on_event("startup")
-    async def startup() -> None:
-        logger.info("openinsure.startup", version=settings.app_version)
-        logger.info("openinsure.storage_mode", mode=settings.storage_mode)
-
-        # Auto-apply SQL migrations on startup when Azure SQL is configured
-        if settings.storage_mode == "azure" and settings.sql_connection_string:
-            try:
-                from openinsure.infrastructure.auto_migrate import apply_pending_migrations
-
-                applied = await apply_pending_migrations()
-                if applied:
-                    logger.info("openinsure.migrations", applied=applied)
-                else:
-                    logger.info("openinsure.migrations", status="up-to-date")
-            except Exception as exc:
-                logger.warning("openinsure.migrations.failed", error=str(exc))
-
-        # Seed sample data only in debug / local-dev mode with in-memory storage
-        if settings.debug and settings.storage_mode == "memory":
-            from openinsure.infrastructure.seed_data import seed_sample_data
-
-            await seed_sample_data()
-            logger.info("openinsure.seed_data", status="loaded")
-
-    @app.on_event("shutdown")
-    async def shutdown() -> None:
-        logger.info("openinsure.shutdown")
 
     return app
 
