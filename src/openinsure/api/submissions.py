@@ -171,6 +171,8 @@ class LineOfBusiness(StrEnum):
 class SubmissionCreate(BaseModel):
     """Payload for creating a new submission."""
 
+    model_config = {"json_schema_extra": {"examples": [{"applicant_name": "Acme Cyber Corp", "applicant_email": "risk@acmecyber.com", "channel": "api", "line_of_business": "cyber", "risk_data": {"annual_revenue": 5000000, "employee_count": 50, "industry": "Technology"}}]}}
+
     applicant_name: str = Field(..., min_length=1, max_length=200)
     applicant_email: str | None = None
     status: SubmissionStatus | None = None
@@ -288,7 +290,14 @@ def _now() -> str:
 
 @router.post("", response_model=SubmissionResponse, status_code=201)
 async def create_submission(body: SubmissionCreate) -> SubmissionResponse:
-    """Create a new insurance submission."""
+    """Create a new insurance submission.
+
+    Accepts applicant information and risk data for a new insurance
+    submission.  The submission enters the pipeline at **received** status
+    and can be advanced through triage → quote → bind.
+
+    Returns the created submission with a generated ID.
+    """
     sid = str(uuid.uuid4())
     now = _now()
     record: dict[str, Any] = {
@@ -422,10 +431,13 @@ async def update_submission(submission_id: str, body: SubmissionUpdate) -> Submi
 
 @router.post("/{submission_id}/triage", response_model=TriageResult)
 async def triage_submission(submission_id: str) -> TriageResult:
-    """Trigger AI triage on a submission.
+    """Trigger AI-powered triage on a submission.
 
-    Calls the Foundry triage agent when available, falling back to
-    deterministic local logic.
+    Calls the Foundry triage agent to assess risk appetite, assign a risk
+    score, and recommend next steps.  Falls back to deterministic local
+    logic when Foundry is unavailable.
+
+    Advances the submission from **received** → **underwriting**.
     """
     from openinsure.agents.foundry_client import get_foundry_client
 

@@ -44,6 +44,8 @@ class DemoStepResult(BaseModel):
 
 
 class DemoWorkflowResult(BaseModel):
+    model_config = {"json_schema_extra": {"examples": [{"workflow_id": "demo-abc123", "status": "completed", "total_duration_ms": 3, "submission_id": "sub-001", "policy_id": "pol-001", "policy_number": "POL-DEMO-A1B2C3", "claim_id": "clm-001", "claim_number": "CLM-DEMO-X1Y2Z3", "premium": 18617.04, "steps": [{"step": 1, "name": "create_submission", "status": "completed", "duration_ms": 1, "detail": {}}], "summary": "Demo complete in 3ms"}]}}
+
     workflow_id: str
     status: str
     total_duration_ms: int
@@ -118,14 +120,15 @@ def _elapsed_ms(start: datetime) -> int:
 async def run_full_demo_workflow() -> DemoWorkflowResult:
     """Run the complete insurance lifecycle as a single demo call.
 
-    Steps:
-    1. Create submission (Quantum Dynamics Corp — tech company, cyber)
+    **For demo and showcase purposes.**  Executes the full pipeline in
+    one request:
+
+    1. Create submission (Quantum Dynamics Corp — tech, $12M revenue)
     2. Triage (risk assessment, appetite check)
-    3. Quote (cyber rating engine)
-    4. Bind → create policy with 5 coverages + billing account
+    3. Quote (cyber rating engine — factor-based premium calculation)
+    4. Bind → create policy with 5 cyber coverages + billing account
     5. File a ransomware claim
-    6. Set reserves ($150K)
-    7. Summary
+    6. Set reserves ($150K breakdown: forensics, negotiation, restoration)
 
     Returns a detailed trace of every step with timing.
     """

@@ -64,6 +64,8 @@ class ClaimType(StrEnum):
 class ClaimCreate(BaseModel):
     """First Notice of Loss (FNOL) payload."""
 
+    model_config = {"json_schema_extra": {"examples": [{"policy_id": "abc-123", "claim_type": "ransomware", "description": "Ransomware attack encrypted production databases", "date_of_loss": "2026-06-15", "reported_by": "CISO"}]}}
+
     policy_id: str
     claim_type: ClaimType
     description: str = Field(..., min_length=1)
@@ -259,7 +261,12 @@ async def get_claims_queue(limit: int = Query(20, ge=1, le=100)):
 
 @router.post("", response_model=ClaimResponse, status_code=201)
 async def create_claim(body: ClaimCreate) -> ClaimResponse:
-    """Report a new claim (First Notice of Loss)."""
+    """Report a new claim (First Notice of Loss).
+
+    Creates a claim record linked to an existing policy.  The claim enters
+    at **reported** status and can be advanced through investigation,
+    reserving, and settlement.
+    """
     cid = str(uuid.uuid4())
     now = _now()
     record: dict[str, Any] = {

@@ -10,6 +10,22 @@ from openinsure.config import get_settings
 
 logger = structlog.get_logger()
 
+openapi_tags = [
+    {"name": "submissions", "description": "Insurance submission intake and processing pipeline"},
+    {"name": "policies", "description": "Policy administration — bind, endorse, renew, cancel"},
+    {"name": "claims", "description": "Claims management — FNOL, reserves, payments, closure"},
+    {"name": "billing", "description": "Billing accounts, invoices, and payment recording"},
+    {"name": "compliance", "description": "AI decision audit, bias monitoring, EU AI Act compliance"},
+    {"name": "knowledge", "description": "Insurance knowledge graph — guidelines, rules, precedents"},
+    {"name": "reinsurance", "description": "Reinsurance treaties, cessions, recoveries (carrier-only)"},
+    {"name": "actuarial", "description": "Reserves, loss triangles, IBNR, rate adequacy (carrier-only)"},
+    {"name": "renewals", "description": "Policy renewal identification, terms generation, processing"},
+    {"name": "mga-oversight", "description": "MGA authority tracking, bordereaux, compliance (carrier-only)"},
+    {"name": "finance", "description": "Financial summary, cash flow, commissions, reconciliation"},
+    {"name": "demo", "description": "Live demo endpoints for showcasing the full platform"},
+    {"name": "health", "description": "Health and readiness probes"},
+]
+
 
 def create_app() -> FastAPI:
     """Create and configure the FastAPI application."""
@@ -21,6 +37,7 @@ def create_app() -> FastAPI:
             "AI-native open-source core insurance platform. Agents-first architecture for cyber insurance operations."
         ),
         version=settings.app_version,
+        openapi_tags=openapi_tags,
         docs_url="/docs",
         redoc_url="/redoc",
         openapi_url="/openapi.json",
