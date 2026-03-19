@@ -345,16 +345,16 @@ Every agent decision produces a **Decision Record** for EU AI Act compliance:
 ### Phase 1 — Core Platform & Cyber MVP ✅
 
 - ✅ Core domain model (Party, Submission, Policy, Claim, Product, Billing)
-- ✅ REST API with 35+ endpoints across 7 modules
+- ✅ REST API with 90+ endpoints across 21 modules
 - ✅ 8 AI agents with decision record logging
 - ✅ Azure infrastructure (9 Bicep modules, 13+ Azure resources)
 - ✅ Knowledge base (cyber product, underwriting guidelines, regulatory requirements)
 - ✅ EU AI Act compliance layer (decision records, audit trail, bias monitoring)
 - ✅ MCP Server interface
 - ✅ Role-based access control (19 platform roles, authority delegation)
-- ✅ React dashboard with 11 role-specific views
+- ✅ React dashboard with 22 pages
 - ✅ Cyber Liability SMB product (5 coverages, configurable rating engine)
-- ✅ CI/CD pipeline (lint, type check, security scan, 375 tests ≥80% coverage, build)
+- ✅ CI/CD pipeline (lint, type check, security scan, 445+ tests, build)
 
 ### Phase 2 — Dashboard & Workbenches ✅
 
@@ -362,34 +362,48 @@ Every agent decision produces a **Decision Record** for EU AI Act compliance:
 - ✅ Broker Portal for external self-service
 - ✅ Multi-agent orchestration workflows (new_business, claims_workflow)
 
-### Phase 3 — Reinsurance, Actuarial & MGA Oversight ✅
+### Phase 3 — Carrier Modules ✅
 
-- ✅ Reinsurance management (treaty lifecycle, cession calculation, recovery tracking)
+- ✅ Reinsurance management (treaty lifecycle, cession calculation, recovery tracking, SQL persistence)
 - ✅ Actuarial analytics (loss triangles, IBNR estimation, reserve adequacy, rate adequacy)
 - ✅ MGA oversight (delegated authority management, bordereaux, performance scoring)
-- ✅ Reinsurance Dashboard, Actuarial Workbench, MGA Oversight Dashboard
+- ✅ Reinsurance Dashboard, Actuarial Workbench, MGA Oversight Dashboard — all wired to live APIs
 
-### Phase 4 — Renewals & Finance ✅
+### Phase 4 — Renewals, Finance & Integrations ✅
 
-- ✅ Renewal workflow (90/60/30-day identification, automated term generation)
-- ✅ Financial reporting (premium/claims analytics, cash flow, commissions)
-- ✅ Finance Dashboard
+- ✅ Renewal workflow (90/60/30-day identification, AI-powered term generation, SQL persistence)
+- ✅ Financial reporting (premium/claims analytics, cash flow, commissions, reconciliation)
+- ✅ ACORD 125/126 XML ingestion with comprehensive field extraction
+- ✅ Azure Document Intelligence adapter (OCR + structured extraction for PDF/images)
+- ✅ Knowledge graph: claims precedents, compliance rules (EU AI Act, GDPR, NAIC)
+- ✅ Live demo endpoint — full lifecycle in a single API call
+- ✅ Finance Dashboard, Renewals Page — wired to live APIs
+
+### Phase 5 — Security & Quality ✅
+
+- ✅ SQL injection hardening (parameterized pagination across all repositories)
+- ✅ Production error sanitization (global exception handler)
+- ✅ Constant-time API key comparison (timing attack prevention)
+- ✅ File upload size validation (50MB limit)
+- ✅ Comprehensive E2E test (full lifecycle: submission → bind → claim → close)
+- ✅ OpenAPI documentation with tag descriptions and request examples
 
 ### In Progress
 
-- 🔄 Document intelligence (OCR, extraction)
 - 🔄 M365 Copilot publishing
+- 🔄 Azure AI Search vector indexing for knowledge retrieval
 
 ## Tech Stack
 
 | Layer | Technology |
 |-------|------------|
 | **Backend** | Python 3.12+ / FastAPI / Pydantic v2 |
-| **Dashboard** | React 18 + TypeScript + Vite |
+| **Dashboard** | React 18 + TypeScript + Vite + TanStack Query |
 | **AI Platform** | Azure AI Foundry (Agent Service, AI Search, Models) |
 | **AI Models** | GPT-5.1 (primary), 1,900+ models via Foundry Model Router |
 | **Agent Framework** | Azure AI Foundry Agent Service (Python SDK) |
-| **Database** | Azure SQL (transactional) + Cosmos DB NoSQL (knowledge, decision records) |
+| **Document AI** | Azure AI Document Intelligence (OCR + structured extraction) |
+| **Database** | Azure SQL (transactional) + Cosmos DB NoSQL (knowledge graph) |
 | **Search** | Azure AI Search (vector + keyword hybrid) |
 | **Storage** | Azure Blob Storage |
 | **Events** | Azure Event Grid + Service Bus |
@@ -397,6 +411,7 @@ Every agent decision produces a **Decision Record** for EU AI Act compliance:
 | **IaC** | Bicep (9 modules) |
 | **CI/CD** | GitHub Actions |
 | **Hosting** | Azure Container Apps |
+| **Security** | Parameterized SQL, constant-time auth, CORS, file size limits |
 
 ## Contributing
 

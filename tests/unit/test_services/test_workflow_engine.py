@@ -23,6 +23,11 @@ from openinsure.services.workflow_engine import (
 def _make_foundry_mock(responses: dict[str, dict[str, Any]] | None = None) -> MagicMock:
     """Build a mock FoundryAgentClient that returns canned responses per agent."""
     defaults: dict[str, dict[str, Any]] = {
+        "openinsure-orchestrator": {
+            "response": {"processing_path": "standard", "priority": "medium", "notes": "Standard processing", "confidence": 0.9},
+            "source": "foundry",
+            "raw": "{}",
+        },
         "openinsure-submission": {
             "response": {"appetite_match": "yes", "risk_score": 5, "priority": "medium", "confidence": 0.9},
             "source": "foundry",
@@ -30,6 +35,11 @@ def _make_foundry_mock(responses: dict[str, dict[str, Any]] | None = None) -> Ma
         },
         "openinsure-underwriting": {
             "response": {"risk_score": 35, "recommended_premium": 12500, "confidence": 0.85, "conditions": []},
+            "source": "foundry",
+            "raw": "{}",
+        },
+        "openinsure-policy": {
+            "response": {"recommendation": "issue", "coverage_adequate": True, "terms_complete": True, "notes": "All terms verified", "confidence": 0.92},
             "source": "foundry",
             "raw": "{}",
         },
@@ -75,21 +85,54 @@ class TestWorkflowDefinitions:
         assert "claims_assessment" in WORKFLOWS
         assert "renewal" in WORKFLOWS
 
-    def test_new_business_has_three_steps(self) -> None:
+    def test_new_business_has_all_five_steps(self) -> None:
         wf = WORKFLOWS["new_business"]
-        assert len(wf.steps) == 3
+        assert len(wf.steps) == 5
         names = [s.name for s in wf.steps]
-        assert names == ["intake", "underwriting", "compliance"]
+        assert "orchestration" in names
+        assert "intake" in names
+        assert "underwriting" in names
+        assert "policy_review" in names
+        assert "compliance" in names
+
+    def test_new_business_step_order(self) -> None:
+        """Orchestration → intake → underwriting → policy_review → compliance."""
+        wf = WORKFLOWS["new_business"]
+        names = [s.name for s in wf.steps]
+        assert names.index("orchestration") < names.index("intake")
+        assert names.index("intake") < names.index("underwriting")
+        assert names.index("underwriting") < names.index("policy_review")
+        assert names.index("policy_review") < names.index("compliance")
+
+    def test_new_business_agents_correct(self) -> None:
+        wf = WORKFLOWS["new_business"]
+        agent_map = {s.name: s.agent for s in wf.steps}
+        assert agent_map["orchestration"] == "openinsure-orchestrator"
+        assert agent_map["intake"] == "openinsure-submission"
+        assert agent_map["underwriting"] == "openinsure-underwriting"
+        assert agent_map["policy_review"] == "openinsure-policy"
+        assert agent_map["compliance"] == "openinsure-compliance"
 
     def test_underwriting_step_has_condition(self) -> None:
         wf = WORKFLOWS["new_business"]
-        uw_step = wf.steps[1]
+        uw_step = next(s for s in wf.steps if s.name == "underwriting")
         assert uw_step.condition is not None
         assert "appetite_match" in uw_step.condition
 
-    def test_claims_workflow_has_two_steps(self) -> None:
+    def test_claims_workflow_has_three_steps(self) -> None:
         wf = WORKFLOWS["claims_assessment"]
-        assert len(wf.steps) == 2
+        assert len(wf.steps) == 3
+        names = [s.name for s in wf.steps]
+        assert "orchestration" in names
+        assert "assessment" in names
+        assert "compliance" in names
+
+    def test_claims_agents_correct(self) -> None:
+        wf = WORKFLOWS["claims_assessment"]
+        agent_map = {s.name: s.agent for s in wf.steps}
+        assert agent_map["orchestration"] == "openinsure-orchestrator"
+        assert agent_map["assessment"] == "openinsure-claims"
+        assert agent_map["compliance"] == "openinsure-compliance"
 
     def test_renewal_workflow_has_two_steps(self) -> None:
         wf = WORKFLOWS["renewal"]
@@ -148,11 +191,31 @@ class TestExecuteWorkflow:
         assert execution.status == "completed"
         assert execution.completed_at is not None
         step_names = [s["name"] for s in execution.steps_completed]
+        # All 5 steps should be present
+        assert "orchestration" in step_names
         assert "intake" in step_names
         assert "underwriting" in step_names
+        assert "policy_review" in step_names
         assert "compliance" in step_names
-        # All three should be completed
-        assert all(s["status"] == "completed" for s in execution.steps_completed)
+        # All should be completed (not skipped/failed)
+        completed_steps = [s for s in execution.steps_completed if s["status"] == "completed"]
+        assert len(completed_steps) == 5
+
+    @patch("openinsure.services.workflow_engine.publish_domain_event", new_callable=AsyncMock)
+    @patch("openinsure.services.workflow_engine.get_foundry_client")
+    async def test_new_business_all_six_agents_invoked(self, mock_get_fc: MagicMock, mock_event: AsyncMock) -> None:
+        """Verify all 5 distinct Foundry agents are called in new_business workflow."""
+        mock = _make_foundry_mock()
+        mock_get_fc.return_value = mock
+
+        await execute_workflow("new_business", "sub-agents", "submission", {"id": "sub-agents"})
+
+        invoked_agents = [call.args[0] for call in mock.invoke.call_args_list]
+        assert "openinsure-orchestrator" in invoked_agents
+        assert "openinsure-submission" in invoked_agents
+        assert "openinsure-underwriting" in invoked_agents
+        assert "openinsure-policy" in invoked_agents
+        assert "openinsure-compliance" in invoked_agents
 
     @patch("openinsure.services.workflow_engine.publish_domain_event", new_callable=AsyncMock)
     @patch("openinsure.services.workflow_engine.get_foundry_client")
@@ -179,6 +242,11 @@ class TestExecuteWorkflow:
         uw_step = next(s for s in execution.steps_completed if s["name"] == "underwriting")
         assert uw_step["status"] == "skipped"
         assert "Condition not met" in uw_step.get("reason", "")
+        # Orchestration, intake, policy_review, compliance still ran
+        orchestration = next(s for s in execution.steps_completed if s["name"] == "orchestration")
+        assert orchestration["status"] == "completed"
+        policy = next(s for s in execution.steps_completed if s["name"] == "policy_review")
+        assert policy["status"] == "completed"
 
     @patch("openinsure.services.workflow_engine.publish_domain_event", new_callable=AsyncMock)
     @patch("openinsure.services.workflow_engine.get_foundry_client")
@@ -187,7 +255,7 @@ class TestExecuteWorkflow:
         mock = _make_foundry_mock()
 
         async def _exploding_invoke(agent_name: str, _msg: str) -> dict:
-            if agent_name == "openinsure-submission":
+            if agent_name == "openinsure-orchestrator":
                 raise RuntimeError("Foundry unreachable")
             return {"response": {}, "source": "fallback"}
 
@@ -197,9 +265,10 @@ class TestExecuteWorkflow:
         execution = await execute_workflow("new_business", "sub-789", "submission", {})
 
         assert execution.status == "failed"
-        assert "intake" in (execution.error or "")
+        assert "orchestration" in (execution.error or "")
         # Subsequent steps should NOT have been attempted
         step_names = [s["name"] for s in execution.steps_completed]
+        assert "intake" not in step_names
         assert "underwriting" not in step_names
 
     @patch("openinsure.services.workflow_engine.publish_domain_event", new_callable=AsyncMock)
@@ -243,7 +312,8 @@ class TestExecuteWorkflow:
     @patch("openinsure.services.workflow_engine.publish_domain_event", new_callable=AsyncMock)
     @patch("openinsure.services.workflow_engine.get_foundry_client")
     async def test_claims_workflow(self, mock_get_fc: MagicMock, mock_event: AsyncMock) -> None:
-        mock_get_fc.return_value = _make_foundry_mock()
+        mock = _make_foundry_mock()
+        mock_get_fc.return_value = mock
 
         execution = await execute_workflow(
             "claims_assessment",
@@ -254,8 +324,14 @@ class TestExecuteWorkflow:
 
         assert execution.status == "completed"
         step_names = [s["name"] for s in execution.steps_completed]
+        assert "orchestration" in step_names
         assert "assessment" in step_names
         assert "compliance" in step_names
+        # Verify all 3 agents were invoked
+        invoked_agents = [call.args[0] for call in mock.invoke.call_args_list]
+        assert "openinsure-orchestrator" in invoked_agents
+        assert "openinsure-claims" in invoked_agents
+        assert "openinsure-compliance" in invoked_agents
 
     @patch("openinsure.services.workflow_engine.publish_domain_event", new_callable=AsyncMock)
     @patch("openinsure.services.workflow_engine.get_foundry_client")
@@ -296,9 +372,9 @@ class TestExecuteWorkflow:
         event_types = [call.args[0] for call in mock_event.call_args_list]
         assert "workflow.claims_assessment.started" in event_types
         assert "workflow.claims_assessment.completed" in event_types
-        # One step_completed per step (assessment + compliance)
+        # One step_completed per step (orchestration + assessment + compliance = 3)
         step_events = [e for e in event_types if "step_completed" in e]
-        assert len(step_events) == 2
+        assert len(step_events) == 3
 
     @patch("openinsure.services.workflow_engine.publish_domain_event", new_callable=AsyncMock)
     @patch("openinsure.services.workflow_engine.get_foundry_client")
@@ -307,8 +383,10 @@ class TestExecuteWorkflow:
 
         execution = await execute_workflow("new_business", "sub-ctx", "submission", {"id": "sub-ctx"})
 
+        assert "orchestration_result" in execution.context
         assert "intake_result" in execution.context
         assert "underwriting_result" in execution.context
+        assert "policy_review_result" in execution.context
         assert "compliance_result" in execution.context
 
     @patch("openinsure.services.workflow_engine.publish_domain_event", new_callable=AsyncMock)
