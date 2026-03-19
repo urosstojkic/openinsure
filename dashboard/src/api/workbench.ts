@@ -5,6 +5,7 @@ import type {
   DecisionAuditItem,
   OverrideLogEntry,
   BiasChartData,
+  BiasReport,
   ExecutiveDashboardData,
   BrokerSubmission,
   BrokerPolicy,
@@ -86,6 +87,16 @@ export async function getBiasChartData(): Promise<BiasChartData> {
   } catch (error) {
     console.warn('[API] Falling back to demo data:', error);
     return mockBiasChartData;
+  }
+}
+
+export async function getBiasReport(): Promise<BiasReport> {
+  try {
+    const { data } = await client.post<BiasReport>('/compliance/bias-report');
+    return data;
+  } catch (error) {
+    console.warn('[API] Bias report unavailable:', error);
+    throw error;
   }
 }
 

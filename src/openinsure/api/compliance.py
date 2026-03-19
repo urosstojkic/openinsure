@@ -7,8 +7,6 @@ Uses in-memory storage as a placeholder until the database adapter is wired in.
 
 from __future__ import annotations
 
-import json
-import uuid
 from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any
@@ -241,70 +239,20 @@ async def get_audit_trail(
 
 
 @router.post("/bias-report", status_code=201)
-async def generate_bias_report(body: BiasReportRequest) -> dict[str, object] | BiasReportResponse:
+async def generate_bias_report_endpoint(
+    body: BiasReportRequest | None = None,
+) -> dict[str, object]:
     """Generate a bias monitoring report for AI decisions.
 
-    Uses Foundry compliance agent when available, falls back to local stub.
+    Runs the real bias-monitoring engine (4/5ths rule, statistical parity)
+    over all submissions, with an optional Foundry-powered overlay.
     """
-    from openinsure.agents.foundry_client import get_foundry_client
+    from openinsure.infrastructure.factory import get_submission_repository
+    from openinsure.services.bias_monitor import generate_bias_report
 
-    # Filter decisions in date range
-    all_decisions, _ = await _compliance_repo.list_decisions(
-        filters={"decision_type": body.decision_type}, skip=0, limit=10000
-    )
-    decisions_in_range = [
-        d for d in all_decisions if d["created_at"] >= body.date_from and d["created_at"] <= body.date_to
-    ]
-
-    # Foundry-powered bias analysis
-    foundry = get_foundry_client()
-    if foundry.is_available:
-        result = await foundry.invoke(
-            "openinsure-compliance",
-            "Analyze these insurance decisions for potential bias. Apply the 4/5ths rule.\n"
-            "Check for disparate impact across industry sectors and company sizes.\n"
-            'Respond with JSON: {"bias_detected": false, "metrics": [...], "recommendations": [...]}\n\n'
-            f"Decision sample: {json.dumps(decisions_in_range, default=str)[:800]}",
-        )
-        resp = result.get("response", {})
-        if isinstance(resp, dict) and result.get("source") == "foundry":
-            return {"report": resp, "source": "foundry", "generated_at": _now()}
-
-    # Existing local fallback
-    metrics: list[BiasMetric] = []
-    for attr in body.protected_attributes:
-        metrics.append(
-            BiasMetric(
-                attribute=attr,
-                metric_name="demographic_parity_difference",
-                value=0.03,
-                threshold=0.10,
-                status="pass",
-            )
-        )
-        metrics.append(
-            BiasMetric(
-                attribute=attr,
-                metric_name="equalised_odds_difference",
-                value=0.05,
-                threshold=0.10,
-                status="pass",
-            )
-        )
-
-    all_pass = all(m.status == "pass" for m in metrics)
-    return BiasReportResponse(
-        report_id=str(uuid.uuid4()),
-        decision_type=body.decision_type,
-        date_from=body.date_from,
-        date_to=body.date_to,
-        total_decisions=len(decisions_in_range),
-        metrics=metrics,
-        summary="All bias metrics within acceptable thresholds."
-        if all_pass
-        else "Some metrics exceeded thresholds — review recommended.",
-        generated_at=_now(),
-    )
+    repo = get_submission_repository()
+    submissions = await repo.list_all(limit=5000)
+    return await generate_bias_report(submissions)
 
 
 @router.get("/system-inventory", response_model=SystemInventoryResponse)

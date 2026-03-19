@@ -33,10 +33,13 @@ def run_sql(query: str) -> str:
     result = subprocess.run(
         [
             SQLCMD,
-            "-S", SERVER,
-            "-d", DATABASE,
+            "-S",
+            SERVER,
+            "-d",
+            DATABASE,
             "--authentication-method=ActiveDirectoryDefault",
-            "-Q", query,
+            "-Q",
+            query,
         ],
         capture_output=True,
         text=True,
@@ -53,10 +56,13 @@ def run_sql_file(path: str) -> str:
     result = subprocess.run(
         [
             SQLCMD,
-            "-S", SERVER,
-            "-d", DATABASE,
+            "-S",
+            SERVER,
+            "-d",
+            DATABASE,
             "--authentication-method=ActiveDirectoryDefault",
-            "-i", path,
+            "-i",
+            path,
         ],
         capture_output=True,
         text=True,
@@ -71,9 +77,7 @@ def run_sql_file(path: str) -> str:
 def main() -> None:
     # -- Current state ------------------------------------------------------
     print("Current status distribution:")
-    output = run_sql(
-        "SELECT status, COUNT(*) as cnt FROM submissions GROUP BY status ORDER BY status"
-    )
+    output = run_sql("SELECT status, COUNT(*) as cnt FROM submissions GROUP BY status ORDER BY status")
     print(output)
 
     # -- Get all submission IDs ---------------------------------------------
@@ -100,21 +104,19 @@ def main() -> None:
     counts[-1] = total - sum(counts[:-1])  # remainder goes to 'received'
 
     print(f"\nTarget distribution ({total} total):")
-    for status, count in zip(STATUSES, counts):
+    for status, count in zip(STATUSES, counts, strict=False):
         print(f"  {status:15s}: {count}")
 
     # -- Generate SQL UPDATE batch ------------------------------------------
     assignments: list[tuple[str, str]] = []
     offset = 0
-    for status, count in zip(STATUSES, counts):
+    for status, count in zip(STATUSES, counts, strict=False):
         for i in range(count):
             assignments.append((ids[offset + i], status))
         offset += count
 
     # Write a batch SQL file to update all records
-    with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".sql", delete=False, encoding="utf-8"
-    ) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".sql", delete=False, encoding="utf-8") as f:
         sql_path = f.name
         f.write("SET NOCOUNT ON;\n")
         f.write("BEGIN TRANSACTION;\n")
@@ -122,9 +124,7 @@ def main() -> None:
             if status == "received":
                 continue  # already 'received', skip
             escaped_id = sid.replace("'", "''")
-            f.write(
-                f"UPDATE submissions SET status = '{status}' WHERE id = '{escaped_id}';\n"
-            )
+            f.write(f"UPDATE submissions SET status = '{status}' WHERE id = '{escaped_id}';\n")
         f.write("COMMIT;\n")
         f.write("SET NOCOUNT OFF;\n")
 
@@ -138,9 +138,7 @@ def main() -> None:
 
     # -- Verify -------------------------------------------------------------
     print("\nFinal status distribution:")
-    output = run_sql(
-        "SELECT status, COUNT(*) as cnt FROM submissions GROUP BY status ORDER BY status"
-    )
+    output = run_sql("SELECT status, COUNT(*) as cnt FROM submissions GROUP BY status ORDER BY status")
     print(output)
     print("Done.")
 

@@ -1,15 +1,22 @@
 import React, { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine, Cell } from 'recharts';
 import StatusBadge from '../components/StatusBadge';
 import ConfidenceBar from '../components/ConfidenceBar';
-import { getDecisionAudit, getOverrideLog, getBiasChartData, getComplianceWorkbenchData } from '../api/workbench';
+import { getDecisionAudit, getOverrideLog, getBiasChartData, getComplianceWorkbenchData, getBiasReport } from '../api/workbench';
+import type { BiasAnalysis } from '../types';
 
 const ComplianceWorkbench: React.FC = () => {
   const { data: compliance } = useQuery({ queryKey: ['compliance-wb'], queryFn: getComplianceWorkbenchData });
   const { data: auditItems = [] } = useQuery({ queryKey: ['decision-audit'], queryFn: getDecisionAudit });
   const { data: overrides = [] } = useQuery({ queryKey: ['override-log'], queryFn: getOverrideLog });
   const { data: biasData } = useQuery({ queryKey: ['bias-charts'], queryFn: getBiasChartData });
+  const queryClient = useQueryClient();
+  const { data: biasReport, isLoading: biasReportLoading } = useQuery({ queryKey: ['bias-report'], queryFn: getBiasReport, retry: false });
+  const generateReport = useMutation({
+    mutationFn: getBiasReport,
+    onSuccess: (data) => queryClient.setQueryData(['bias-report'], data),
+  });
 
   const [auditState, setAuditState] = useState<Record<string, { reviewed: boolean; flagged: boolean }>>({});
 
@@ -122,10 +129,97 @@ const ComplianceWorkbench: React.FC = () => {
         </div>
 
         {/* ── Panel 3: Bias Monitoring ── */}
-        <div className="rounded-lg border border-slate-200 bg-white p-5">
-          <h2 className="mb-4 text-sm font-semibold text-slate-700">Bias Monitoring</h2>
+        <div className="rounded-lg border border-slate-200 bg-white p-5 lg:col-span-2">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-sm font-semibold text-slate-700">Bias Monitoring</h2>
+            <div className="flex items-center gap-3">
+              {biasReport && (
+                <StatusBadge
+                  label={biasReport.overall_status === 'compliant' ? 'Compliant' : 'Flagged'}
+                  variant={biasReport.overall_status === 'compliant' ? 'green' : 'red'}
+                />
+              )}
+              <button
+                onClick={() => generateReport.mutate()}
+                disabled={generateReport.isPending}
+                className="rounded bg-blue-600 px-3 py-1 text-xs text-white hover:bg-blue-700 disabled:opacity-50"
+              >
+                {generateReport.isPending ? 'Generating…' : 'Generate Report'}
+              </button>
+            </div>
+          </div>
 
-          {biasData && (
+          {/* Real bias report results */}
+          {biasReport && (
+            <div className="space-y-5">
+              <div className="grid grid-cols-3 gap-3 text-xs">
+                <div className="rounded bg-slate-50 px-3 py-2">
+                  <span className="text-slate-500">Submissions Analyzed</span>
+                  <p className="text-lg font-semibold text-slate-900">{biasReport.total_submissions_analyzed.toLocaleString()}</p>
+                </div>
+                <div className="rounded bg-slate-50 px-3 py-2">
+                  <span className="text-slate-500">EU AI Act</span>
+                  <p className="text-xs font-medium text-slate-700 mt-1">{biasReport.eu_ai_act_reference}</p>
+                </div>
+                <div className="rounded bg-slate-50 px-3 py-2">
+                  <span className="text-slate-500">Recommendation</span>
+                  <p className="text-xs font-medium text-slate-700 mt-1">{biasReport.recommendation}</p>
+                </div>
+              </div>
+
+              {biasReport.analyses.map((analysis: BiasAnalysis, idx: number) => {
+                const chartData = Object.entries(analysis.groups).map(([name, g]) => ({
+                  name,
+                  rate: g.rate,
+                  total: g.total,
+                  flagged: analysis.flagged_groups.includes(name),
+                }));
+                return (
+                  <div key={idx} className="rounded border border-slate-100 p-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <h3 className="text-xs font-semibold text-slate-600">{analysis.metric}</h3>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-slate-500">4/5ths ratio:</span>
+                        <span className={`text-xs font-mono font-bold ${analysis.passes_threshold ? 'text-green-600' : 'text-red-600'}`}>
+                          {analysis.four_fifths_ratio.toFixed(4)}
+                        </span>
+                        <StatusBadge
+                          label={analysis.passes_threshold ? 'PASS' : 'FAIL'}
+                          variant={analysis.passes_threshold ? 'green' : 'red'}
+                        />
+                      </div>
+                    </div>
+                    <ResponsiveContainer width="100%" height={180}>
+                      <BarChart data={chartData}>
+                        <XAxis dataKey="name" tick={{ fontSize: 10 }} />
+                        <YAxis domain={[0, 1]} tick={{ fontSize: 10 }} tickFormatter={(v: number) => `${Math.round(v * 100)}%`} />
+                        <Tooltip
+                          formatter={(v) => [
+                            `${Math.round(Number(v) * 100)}%`,
+                            'Approval Rate',
+                          ]}
+                        />
+                        <Bar dataKey="rate" radius={[3, 3, 0, 0]}>
+                          {chartData.map((entry, i) => (
+                            <Cell key={i} fill={entry.flagged ? '#ef4444' : '#3b82f6'} />
+                          ))}
+                        </Bar>
+                        <ReferenceLine y={0.8} stroke="#ef4444" strokeDasharray="4 4" label={{ value: '4/5ths', fill: '#ef4444', fontSize: 10 }} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                    {analysis.flagged_groups.length > 0 && (
+                      <div className="mt-2 rounded bg-red-50 px-3 py-2 text-xs text-red-700">
+                        <strong>⚠ Flagged groups:</strong> {analysis.flagged_groups.join(', ')}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Fallback: static mock charts when no report loaded yet */}
+          {!biasReport && biasData && (
             <div className="space-y-5">
               {/* Approval rates by sector */}
               <div>
@@ -183,6 +277,10 @@ const ComplianceWorkbench: React.FC = () => {
                 </div>
               </div>
             </div>
+          )}
+
+          {biasReportLoading && (
+            <p className="text-xs text-slate-400 text-center py-8">Loading bias report…</p>
           )}
         </div>
 

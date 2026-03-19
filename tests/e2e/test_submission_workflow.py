@@ -203,7 +203,8 @@ class TestComplianceEndpoints:
         assert report.status_code == 201
         data = report.json()
         assert "report_id" in data
-        assert data["decision_type"] == "triage"
+        assert "overall_status" in data
+        assert data["overall_status"] in ("compliant", "flagged")
 
 
 class TestKnowledgeEndpoints:

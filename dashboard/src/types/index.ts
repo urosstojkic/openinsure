@@ -389,6 +389,33 @@ export interface BiasChartData {
   disparate_impact: { category: string; ratio: number; threshold: number }[];
 }
 
+export interface BiasGroupData {
+  total: number;
+  positive: number;
+  rate: number;
+}
+
+export interface BiasAnalysis {
+  metric: string;
+  group_field: string;
+  groups: Record<string, BiasGroupData>;
+  four_fifths_ratio: number;
+  passes_threshold: boolean;
+  flagged_groups: string[];
+  timestamp: string;
+}
+
+export interface BiasReport {
+  report_id: string;
+  generated_at: string;
+  period: string;
+  total_submissions_analyzed: number;
+  analyses: BiasAnalysis[];
+  overall_status: 'compliant' | 'flagged';
+  eu_ai_act_reference: string;
+  recommendation: string;
+}
+
 // ── Executive Dashboard ──
 
 export interface ExecutiveKPIs {
