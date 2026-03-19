@@ -6,12 +6,22 @@ const USE_MOCK = import.meta.env.VITE_USE_MOCK !== 'false';
 
 export async function getDecisions(): Promise<AgentDecision[]> {
   if (USE_MOCK) return mockDecisions;
-  const { data } = await client.get('/decisions');
-  return Array.isArray(data) ? data : (data.items || []);
+  try {
+    const { data } = await client.get('/decisions');
+    return Array.isArray(data) ? data : (data.items || []);
+  } catch (error) {
+    console.warn('[API] Falling back to demo data:', error);
+    return mockDecisions;
+  }
 }
 
 export async function getComplianceSummary(): Promise<ComplianceSummary> {
   if (USE_MOCK) return mockCompliance;
-  const { data } = await client.get<ComplianceSummary>('/compliance/summary');
-  return data;
+  try {
+    const { data } = await client.get<ComplianceSummary>('/compliance/summary');
+    return data;
+  } catch (error) {
+    console.warn('[API] Falling back to demo data:', error);
+    return mockCompliance;
+  }
 }

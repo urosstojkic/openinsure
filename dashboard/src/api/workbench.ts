@@ -36,86 +36,156 @@ const USE_MOCK = import.meta.env.VITE_USE_MOCK !== 'false';
 
 export async function getUnderwriterQueue(): Promise<UnderwriterQueueItem[]> {
   if (USE_MOCK) return mockUnderwriterQueue;
-  const { data } = await client.get('/underwriter/queue');
-  return Array.isArray(data) ? data : (data.items || []);
+  try {
+    const { data } = await client.get('/underwriter/queue');
+    return Array.isArray(data) ? data : (data.items || []);
+  } catch (error) {
+    console.warn('[API] Falling back to demo data:', error);
+    return mockUnderwriterQueue;
+  }
 }
 
 export async function getClaimsQueue(): Promise<ClaimsQueueItem[]> {
   if (USE_MOCK) return mockClaimsQueue;
-  const { data } = await client.get('/claims/queue');
-  return Array.isArray(data) ? data : (data.items || []);
+  try {
+    const { data } = await client.get('/claims/queue');
+    return Array.isArray(data) ? data : (data.items || []);
+  } catch (error) {
+    console.warn('[API] Falling back to demo data:', error);
+    return mockClaimsQueue;
+  }
 }
 
 export async function getDecisionAudit(): Promise<DecisionAuditItem[]> {
   if (USE_MOCK) return mockDecisionAudit;
-  const { data } = await client.get('/decisions/audit');
-  return Array.isArray(data) ? data : (data.items || []);
+  try {
+    const { data } = await client.get('/decisions/audit');
+    return Array.isArray(data) ? data : (data.items || []);
+  } catch (error) {
+    console.warn('[API] Falling back to demo data:', error);
+    return mockDecisionAudit;
+  }
 }
 
 export async function getOverrideLog(): Promise<OverrideLogEntry[]> {
   if (USE_MOCK) return mockOverrideLog;
-  const { data } = await client.get('/decisions/overrides');
-  return Array.isArray(data) ? data : (data.items || []);
+  try {
+    const { data } = await client.get('/decisions/overrides');
+    return Array.isArray(data) ? data : (data.items || []);
+  } catch (error) {
+    console.warn('[API] Falling back to demo data:', error);
+    return mockOverrideLog;
+  }
 }
 
 export async function getBiasChartData(): Promise<BiasChartData> {
   if (USE_MOCK) return mockBiasChartData;
-  const { data } = await client.get<BiasChartData>('/compliance/bias');
-  return data;
+  try {
+    const { data } = await client.get<BiasChartData>('/compliance/bias');
+    return data;
+  } catch (error) {
+    console.warn('[API] Falling back to demo data:', error);
+    return mockBiasChartData;
+  }
 }
 
 export async function getComplianceWorkbenchData(): Promise<ComplianceSummary> {
   if (USE_MOCK) return mockCompliance;
-  const { data } = await client.get<ComplianceSummary>('/compliance/summary');
-  return data;
+  try {
+    const { data } = await client.get<ComplianceSummary>('/compliance/summary');
+    return data;
+  } catch (error) {
+    console.warn('[API] Falling back to demo data:', error);
+    return mockCompliance;
+  }
 }
 
 export async function getExecutiveDashboard(): Promise<ExecutiveDashboardData> {
   if (USE_MOCK) return mockExecutiveData;
-  const { data } = await client.get<ExecutiveDashboardData>('/dashboard/executive');
-  return data;
+  try {
+    const { data } = await client.get<ExecutiveDashboardData>('/dashboard/executive');
+    return data;
+  } catch (error) {
+    console.warn('[API] Falling back to demo data:', error);
+    return mockExecutiveData;
+  }
 }
 
 export async function getBrokerSubmissions(): Promise<BrokerSubmission[]> {
   if (USE_MOCK) return mockBrokerSubmissions;
-  const { data } = await client.get('/broker/submissions');
-  return Array.isArray(data) ? data : (data.items || []);
+  try {
+    const { data } = await client.get('/broker/submissions');
+    return Array.isArray(data) ? data : (data.items || []);
+  } catch (error) {
+    console.warn('[API] Falling back to demo data:', error);
+    return mockBrokerSubmissions;
+  }
 }
 
 export async function getBrokerPolicies(): Promise<BrokerPolicy[]> {
   if (USE_MOCK) return mockBrokerPolicies;
-  const { data } = await client.get('/broker/policies');
-  return Array.isArray(data) ? data : (data.items || []);
+  try {
+    const { data } = await client.get('/broker/policies');
+    return Array.isArray(data) ? data : (data.items || []);
+  } catch (error) {
+    console.warn('[API] Falling back to demo data:', error);
+    return mockBrokerPolicies;
+  }
 }
 
 export async function getBrokerClaims(): Promise<BrokerClaim[]> {
   if (USE_MOCK) return mockBrokerClaims;
-  const { data } = await client.get('/broker/claims');
-  return Array.isArray(data) ? data : (data.items || []);
+  try {
+    const { data } = await client.get('/broker/claims');
+    return Array.isArray(data) ? data : (data.items || []);
+  } catch (error) {
+    console.warn('[API] Falling back to demo data:', error);
+    return mockBrokerClaims;
+  }
 }
 
 // ── Actuarial Workbench ──
 
 export async function getActuarialReserves(): Promise<ActuarialReserve[]> {
   if (USE_MOCK) return mockActuarialReserves;
-  const { data } = await client.get('/actuarial/reserves');
-  return Array.isArray(data) ? data : (data.items || []);
+  try {
+    const { data } = await client.get('/actuarial/reserves');
+    return Array.isArray(data) ? data : (data.items || []);
+  } catch (error) {
+    console.warn('[API] Falling back to demo data:', error);
+    return mockActuarialReserves;
+  }
 }
 
 export async function getTriangleData(lob = 'cyber'): Promise<TriangleData> {
   if (USE_MOCK) return mockTriangleData;
-  const { data } = await client.get<TriangleData>(`/actuarial/triangles/${lob}`);
-  return data;
+  try {
+    const { data } = await client.get<TriangleData>(`/actuarial/triangles/${lob}`);
+    return data;
+  } catch (error) {
+    console.warn('[API] Falling back to demo data:', error);
+    return mockTriangleData;
+  }
 }
 
 export async function getIBNR(lob = 'cyber'): Promise<IBNRResult> {
   if (USE_MOCK) return mockIBNR;
-  const { data } = await client.get<IBNRResult>(`/actuarial/ibnr/${lob}`);
-  return data;
+  try {
+    const { data } = await client.get<IBNRResult>(`/actuarial/ibnr/${lob}`);
+    return data;
+  } catch (error) {
+    console.warn('[API] Falling back to demo data:', error);
+    return mockIBNR;
+  }
 }
 
 export async function getRateAdequacy(): Promise<RateAdequacyItem[]> {
   if (USE_MOCK) return mockRateAdequacy;
-  const { data } = await client.get('/actuarial/rate-adequacy');
-  return Array.isArray(data) ? data : (data.items || []);
+  try {
+    const { data } = await client.get('/actuarial/rate-adequacy');
+    return Array.isArray(data) ? data : (data.items || []);
+  } catch (error) {
+    console.warn('[API] Falling back to demo data:', error);
+    return mockRateAdequacy;
+  }
 }
