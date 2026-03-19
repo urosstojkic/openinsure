@@ -14,6 +14,13 @@ if TYPE_CHECKING:
     from uuid import UUID
 
 
+def safe_pagination_clause(order_by: str, skip: int, limit: int) -> tuple[str, list[int]]:
+    """Return a safe OFFSET/FETCH clause with validated pagination parameters."""
+    skip = max(0, int(skip))
+    limit = max(1, min(int(limit), 1000))
+    return f" ORDER BY {order_by} OFFSET ? ROWS FETCH NEXT ? ROWS ONLY", [skip, limit]
+
+
 class BaseRepository(ABC):
     """Abstract base class for entity repositories."""
 

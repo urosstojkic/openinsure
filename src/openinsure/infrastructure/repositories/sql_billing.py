@@ -12,7 +12,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 from uuid import UUID, uuid4
 
-from openinsure.infrastructure.repository import BaseRepository
+from openinsure.infrastructure.repository import BaseRepository, safe_pagination_clause
 
 if TYPE_CHECKING:
     from openinsure.infrastructure.database import DatabaseAdapter
@@ -166,7 +166,9 @@ class SqlBillingRepository(BaseRepository):
                 params.append(filters["policy_id"])
         if where:
             query += " WHERE " + " AND ".join(where)
-        query += f" ORDER BY created_at DESC OFFSET {skip} ROWS FETCH NEXT {limit} ROWS ONLY"
+        pag_clause, pag_params = safe_pagination_clause("created_at DESC", skip, limit)
+        query += pag_clause
+        params.extend(pag_params)
         rows = await self.db.fetch_all(query, params)
         return [self._from_sql_row(r) for r in rows]
 

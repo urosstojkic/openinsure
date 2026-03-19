@@ -1,8 +1,9 @@
 """OpenInsure — AI-Native Insurance Platform API."""
 
 import structlog
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from openinsure.api.router import api_router
 from openinsure.config import get_settings
@@ -40,6 +41,16 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    @app.exception_handler(Exception)
+    async def _global_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+        if settings.debug:
+            return JSONResponse(
+                status_code=500,
+                content={"detail": str(exc), "type": type(exc).__name__},
+            )
+        logger.error("unhandled_exception", path=request.url.path, error=str(exc))
+        return JSONResponse(status_code=500, content={"detail": "Internal server error"})
 
     # Include API router
     app.include_router(api_router)

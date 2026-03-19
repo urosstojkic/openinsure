@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import base64
 import json
+import secrets
 from dataclasses import dataclass
 from typing import Any
 
@@ -105,7 +106,7 @@ async def get_current_user(
     # 2. API key mode
     api_key = request.headers.get("x-api-key")
     if api_key:
-        if api_key != settings.api_key:
+        if not secrets.compare_digest(api_key, settings.api_key):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Invalid API key.",
@@ -127,7 +128,7 @@ async def get_current_user(
         except (ValueError, json.JSONDecodeError) as exc:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail=f"Invalid bearer token: {exc}",
+                detail="Invalid bearer token",
             ) from exc
         return CurrentUser(
             user_id=claims.get("sub", "unknown"),

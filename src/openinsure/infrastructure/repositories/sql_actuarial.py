@@ -11,7 +11,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 from uuid import UUID, uuid4
 
-from openinsure.infrastructure.repository import BaseRepository
+from openinsure.infrastructure.repository import BaseRepository, safe_pagination_clause
 
 if TYPE_CHECKING:
     from openinsure.infrastructure.database import DatabaseAdapter
@@ -137,7 +137,9 @@ class SqlActuarialReserveRepository(BaseRepository):
                 params.append(filters["reserve_type"])
         if where:
             query += " WHERE " + " AND ".join(where)
-        query += f" ORDER BY accident_year DESC, reserve_type OFFSET {skip} ROWS FETCH NEXT {limit} ROWS ONLY"
+        pag_clause, pag_params = safe_pagination_clause("accident_year DESC, reserve_type", skip, limit)
+        query += pag_clause
+        params.extend(pag_params)
         rows = await self.db.fetch_all(query, params)
         return [_reserve_from_sql(r) for r in rows]
 
@@ -237,7 +239,9 @@ class SqlTriangleRepository(BaseRepository):
                 params.append(filters["accident_year"])
         if where:
             query += " WHERE " + " AND ".join(where)
-        query += f" ORDER BY accident_year, development_month OFFSET {skip} ROWS FETCH NEXT {limit} ROWS ONLY"
+        pag_clause, pag_params = safe_pagination_clause("accident_year, development_month", skip, limit)
+        query += pag_clause
+        params.extend(pag_params)
         rows = await self.db.fetch_all(query, params)
         return [_triangle_from_sql(r) for r in rows]
 
@@ -328,7 +332,9 @@ class SqlRateAdequacyRepository(BaseRepository):
                 params.append(filters["line_of_business"])
         if where:
             query += " WHERE " + " AND ".join(where)
-        query += f" ORDER BY line_of_business, segment OFFSET {skip} ROWS FETCH NEXT {limit} ROWS ONLY"
+        pag_clause, pag_params = safe_pagination_clause("line_of_business, segment", skip, limit)
+        query += pag_clause
+        params.extend(pag_params)
         rows = await self.db.fetch_all(query, params)
         return [_rate_from_sql(r) for r in rows]
 

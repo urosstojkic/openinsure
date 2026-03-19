@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING, Any
 
+from openinsure.infrastructure.repository import safe_pagination_clause
+
 if TYPE_CHECKING:
     from openinsure.infrastructure.database import DatabaseAdapter
 
@@ -75,7 +77,9 @@ class SqlComplianceRepository:
         count_result = await self.db.fetch_one(count_query, params)
         total = count_result.get("cnt", 0) if count_result else 0
 
-        query += f" ORDER BY created_at DESC OFFSET {skip} ROWS FETCH NEXT {limit} ROWS ONLY"
+        pag_clause, pag_params = safe_pagination_clause("created_at DESC", skip, limit)
+        query += pag_clause
+        params.extend(pag_params)
         rows = await self.db.fetch_all(query, params)
         return [_deserialize_decision(r) for r in rows], total
 
@@ -133,7 +137,9 @@ class SqlComplianceRepository:
         count_result = await self.db.fetch_one(count_query, params)
         total = count_result.get("cnt", 0) if count_result else 0
 
-        query += f" ORDER BY timestamp DESC OFFSET {skip} ROWS FETCH NEXT {limit} ROWS ONLY"
+        pag_clause, pag_params = safe_pagination_clause("timestamp DESC", skip, limit)
+        query += pag_clause
+        params.extend(pag_params)
         rows = await self.db.fetch_all(query, params)
         return [_deserialize_audit_event(r) for r in rows], total
 

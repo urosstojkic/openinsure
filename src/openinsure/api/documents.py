@@ -20,7 +20,10 @@ async def upload_document(
     """Upload a document, classify it, and extract data via Document Intelligence."""
     from openinsure.services.document_processing import DocumentProcessingService, DocumentType
 
+    MAX_UPLOAD_SIZE = 50 * 1024 * 1024  # 50 MB
     content = await file.read()
+    if len(content) > MAX_UPLOAD_SIZE:
+        raise HTTPException(status_code=413, detail="File too large (max 50 MB)")
     filename = file.filename or "untitled"
     svc = DocumentProcessingService()
 

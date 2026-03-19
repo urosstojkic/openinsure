@@ -321,9 +321,12 @@ async def ingest_acord_xml(file: UploadFile = File(...)) -> SubmissionResponse:
     """
     from openinsure.services.acord_parser import parse_acord_xml
 
+    MAX_UPLOAD_SIZE = 50 * 1024 * 1024  # 50 MB
     content = await file.read()
     if not content:
         raise HTTPException(status_code=400, detail="Empty file")
+    if len(content) > MAX_UPLOAD_SIZE:
+        raise HTTPException(status_code=413, detail="File too large (max 50 MB)")
 
     result = parse_acord_xml(content)
     if not result.applicant_name or result.applicant_name == "Unknown Applicant":
@@ -766,7 +769,10 @@ async def upload_documents(
         doc_ids.append(doc_id)
         record["documents"].append(doc_id)
 
+        MAX_UPLOAD_SIZE = 50 * 1024 * 1024  # 50 MB
         content = await f.read()
+        if len(content) > MAX_UPLOAD_SIZE:
+            raise HTTPException(status_code=413, detail="File too large (max 50 MB)")
         if storage:
             blob_name = f"submission/{submission_id}/{doc_id}/{f.filename}"
             await storage.upload_document(
