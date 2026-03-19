@@ -7,27 +7,20 @@ const USE_MOCK = import.meta.env.VITE_USE_MOCK !== 'false';
 export async function getDashboardStats(): Promise<DashboardStats> {
   if (USE_MOCK) return mockDashboardStats;
   try {
-    const [subs, pols, claims] = await Promise.all([
-      client.get('/submissions'),
-      client.get('/policies'),
-      client.get('/claims'),
-    ]);
-    const subTotal = subs.data?.total ?? (Array.isArray(subs.data) ? subs.data : (subs.data.items || [])).length;
-    const polTotal = pols.data?.total ?? (Array.isArray(pols.data) ? pols.data : (pols.data.items || [])).length;
-    const claimTotal = claims.data?.total ?? (Array.isArray(claims.data) ? claims.data : (claims.data.items || [])).length;
+    const { data } = await client.get('/metrics/summary');
     return {
-      total_submissions: subTotal,
-      active_policies: polTotal,
-      open_claims: claimTotal,
-      pending_decisions: 0,
-      approval_rate: 0.73,
-      avg_processing_time_hours: 4.2,
-      escalation_rate: 0.08,
+      total_submissions: data.submissions.total,
+      active_policies: data.policies.active,
+      open_claims: data.claims.by_status?.open || data.kpis.open_claims || 0,
+      pending_decisions: data.kpis.pending_escalations || 0,
+      approval_rate: data.submissions.bind_rate / 100,
+      avg_processing_time_hours: 0,
+      escalation_rate: (100 - data.submissions.bind_rate - data.submissions.decline_rate) / 100,
       recent_activity: [],
       agent_statuses: [],
     };
   } catch (error) {
-    console.warn('[API] Falling back to demo data:', error);
+    console.warn('[API] Metrics fallback:', error);
     return mockDashboardStats;
   }
 }

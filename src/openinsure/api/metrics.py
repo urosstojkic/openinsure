@@ -1,0 +1,142 @@
+"""Real-time operational metrics for OpenInsure dashboards.
+
+Computes KPIs from Azure SQL data for CEO, CUO, and operations views.
+"""
+
+from fastapi import APIRouter
+
+from openinsure.infrastructure.factory import (
+    get_claim_repository,
+    get_policy_repository,
+    get_submission_repository,
+)
+
+router = APIRouter()
+
+
+@router.get("/summary")
+async def get_summary_metrics():
+    """Top-level KPIs for the main dashboard."""
+    from openinsure.services.escalation import count_pending
+
+    sub_repo = get_submission_repository()
+    pol_repo = get_policy_repository()
+    clm_repo = get_claim_repository()
+
+    total_subs = await sub_repo.count()
+    total_pols = await pol_repo.count()
+    total_claims = await clm_repo.count()
+
+    # Count submissions by status
+    subs = await sub_repo.list_all(limit=5000)
+    status_counts: dict[str, int] = {}
+    for s in subs:
+        st = s.get("status", "unknown")
+        status_counts[st] = status_counts.get(st, 0) + 1
+
+    # Policies by status and total premium
+    pols = await pol_repo.list_all(limit=5000)
+    pol_status: dict[str, int] = {}
+    total_premium = 0.0
+    for p in pols:
+        st = p.get("status", "unknown")
+        pol_status[st] = pol_status.get(st, 0) + 1
+        total_premium += float(p.get("premium", 0) or p.get("total_premium", 0) or 0)
+
+    active_pols = pol_status.get("active", 0)
+
+    # Claims by status and total incurred
+    claims = await clm_repo.list_all(limit=5000)
+    claim_status: dict[str, int] = {}
+    total_incurred = 0.0
+    for c in claims:
+        st = c.get("status", "unknown")
+        claim_status[st] = claim_status.get(st, 0) + 1
+        total_incurred += float(c.get("total_incurred", 0) or 0)
+
+    # Compute ratios
+    loss_ratio = round(total_incurred / total_premium * 100, 1) if total_premium > 0 else 0
+    bind_rate = round(status_counts.get("bound", 0) / total_subs * 100, 1) if total_subs > 0 else 0
+    decline_rate = round(status_counts.get("declined", 0) / total_subs * 100, 1) if total_subs > 0 else 0
+
+    return {
+        "submissions": {
+            "total": total_subs,
+            "by_status": status_counts,
+            "bind_rate": bind_rate,
+            "decline_rate": decline_rate,
+        },
+        "policies": {
+            "total": total_pols,
+            "active": active_pols,
+            "by_status": pol_status,
+            "total_premium": round(total_premium, 2),
+            "avg_premium": round(total_premium / total_pols, 2) if total_pols > 0 else 0,
+        },
+        "claims": {
+            "total": total_claims,
+            "by_status": claim_status,
+            "total_incurred": round(total_incurred, 2),
+            "loss_ratio": loss_ratio,
+        },
+        "kpis": {
+            "gwp": round(total_premium, 2),
+            "loss_ratio": loss_ratio,
+            "bind_rate": bind_rate,
+            "active_policies": active_pols,
+            "open_claims": total_claims - claim_status.get("closed", 0),
+            "pending_escalations": await count_pending(),
+        },
+    }
+
+
+@router.get("/pipeline")
+async def get_pipeline_metrics():
+    """Submission pipeline funnel."""
+    repo = get_submission_repository()
+    subs = await repo.list_all(limit=5000)
+    pipeline = {"received": 0, "triaging": 0, "underwriting": 0, "quoted": 0, "bound": 0, "declined": 0}
+    for s in subs:
+        st = s.get("status", "unknown")
+        if st in pipeline:
+            pipeline[st] += 1
+    return {"pipeline": pipeline, "total": len(subs)}
+
+
+@router.get("/agents")
+async def get_agent_metrics():
+    """Agent performance metrics (from decision records)."""
+    from openinsure.services.event_publisher import get_recent_events
+
+    events = get_recent_events(100)
+
+    agent_events: dict[str, int] = {}
+    for e in events:
+        etype = e.get("event_type", "")
+        if "." in etype:
+            parts = etype.split(".")
+            agent = parts[0] if parts[0] != "workflow" else parts[1] if len(parts) > 1 else "unknown"
+            agent_events[agent] = agent_events.get(agent, 0) + 1
+
+    return {
+        "agent_activity": agent_events,
+        "total_events": len(events),
+    }
+
+
+@router.get("/premium-trend")
+async def get_premium_trend():
+    """Monthly premium trend from policies."""
+    repo = get_policy_repository()
+    pols = await repo.list_all(limit=5000)
+
+    monthly: dict[str, float] = {}
+    for p in pols:
+        eff = str(p.get("effective_date", ""))[:7]  # "2025-06"
+        if eff:
+            premium = float(p.get("premium", 0) or p.get("total_premium", 0) or 0)
+            monthly[eff] = monthly.get(eff, 0) + premium
+
+    # Sort by month
+    trend = [{"month": k, "premium": round(v, 2)} for k, v in sorted(monthly.items())]
+    return {"trend": trend}

@@ -20,6 +20,7 @@ import ExecutiveDashboard from './pages/ExecutiveDashboard';
 import BrokerPortal from './pages/BrokerPortal';
 import ReinsuranceDashboard from './pages/ReinsuranceDashboard';
 import ActuarialWorkbench from './pages/ActuarialWorkbench';
+import Escalations from './pages/Escalations';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -75,6 +76,7 @@ function AppRoutes() {
         <Route path="claims" element={<RouteGuard path="claims"><Claims /></RouteGuard>} />
         <Route path="claims/new" element={<SubRouteGuard parentPath="/claims"><NewClaim /></SubRouteGuard>} />
         <Route path="decisions" element={<RouteGuard path="decisions"><AgentDecisions /></RouteGuard>} />
+        <Route path="escalations" element={<RouteGuard path="escalations"><Escalations /></RouteGuard>} />
         <Route path="compliance" element={<RouteGuard path="compliance"><Compliance /></RouteGuard>} />
         <Route path="workbench/underwriting" element={<RouteGuard path="workbench/underwriting"><UnderwriterWorkbench /></RouteGuard>} />
         <Route path="workbench/claims" element={<RouteGuard path="workbench/claims"><ClaimsWorkbench /></RouteGuard>} />

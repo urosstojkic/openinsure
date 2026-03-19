@@ -469,10 +469,32 @@ async def generate_quote(submission_id: str, user: CurrentUser = Depends(get_cur
             user_role = user.roles[0] if user.roles else "openinsure-uw-analyst"
             auth_result = engine.check_quote_authority(Decimal(str(premium)), user_role)
             if auth_result.decision == AuthorityDecision.ESCALATE:
-                raise HTTPException(
-                    403,
-                    detail=f"Quote authority exceeded. {auth_result.reason}. "
-                    f"Escalate to: {', '.join(auth_result.escalation_chain)}",
+                from starlette.responses import JSONResponse
+
+                from openinsure.services.escalation import escalate
+
+                esc = await escalate(
+                    action="quote",
+                    entity_type="submission",
+                    entity_id=submission_id,
+                    requested_by=user.display_name,
+                    requested_role=user_role,
+                    amount=float(premium),
+                    authority_result={
+                        "required_role": auth_result.required_role,
+                        "escalation_chain": auth_result.escalation_chain,
+                        "reason": auth_result.reason,
+                    },
+                )
+                return JSONResponse(
+                    status_code=202,
+                    content={
+                        "status": "escalated",
+                        "escalation_id": esc["id"],
+                        "reason": auth_result.reason,
+                        "required_role": auth_result.required_role,
+                        "message": f"Action requires approval from {auth_result.required_role}",
+                    },
                 )
             await publish_domain_event(
                 "authority.checked",
@@ -514,10 +536,32 @@ async def generate_quote(submission_id: str, user: CurrentUser = Depends(get_cur
     user_role = user.roles[0] if user.roles else "openinsure-uw-analyst"
     auth_result = engine.check_quote_authority(Decimal(str(premium)), user_role)
     if auth_result.decision == AuthorityDecision.ESCALATE:
-        raise HTTPException(
-            403,
-            detail=f"Quote authority exceeded. {auth_result.reason}. "
-            f"Escalate to: {', '.join(auth_result.escalation_chain)}",
+        from starlette.responses import JSONResponse
+
+        from openinsure.services.escalation import escalate
+
+        esc = await escalate(
+            action="quote",
+            entity_type="submission",
+            entity_id=submission_id,
+            requested_by=user.display_name,
+            requested_role=user_role,
+            amount=float(premium),
+            authority_result={
+                "required_role": auth_result.required_role,
+                "escalation_chain": auth_result.escalation_chain,
+                "reason": auth_result.reason,
+            },
+        )
+        return JSONResponse(
+            status_code=202,
+            content={
+                "status": "escalated",
+                "escalation_id": esc["id"],
+                "reason": auth_result.reason,
+                "required_role": auth_result.required_role,
+                "message": f"Action requires approval from {auth_result.required_role}",
+            },
         )
     await publish_domain_event(
         "authority.checked",
@@ -569,10 +613,32 @@ async def bind_submission(submission_id: str, user: CurrentUser = Depends(get_cu
     limit = Decimal(str(cyber_data.get("requested_limit", 1000000) if cyber_data else 1000000))
     auth_result = engine.check_bind_authority(Decimal(str(premium)), user_role, limit)
     if auth_result.decision == AuthorityDecision.ESCALATE:
-        raise HTTPException(
-            403,
-            detail=f"Bind authority exceeded. {auth_result.reason}. "
-            f"Escalate to: {', '.join(auth_result.escalation_chain)}",
+        from starlette.responses import JSONResponse
+
+        from openinsure.services.escalation import escalate
+
+        esc = await escalate(
+            action="bind",
+            entity_type="submission",
+            entity_id=submission_id,
+            requested_by=user.display_name,
+            requested_role=user_role,
+            amount=float(premium),
+            authority_result={
+                "required_role": auth_result.required_role,
+                "escalation_chain": auth_result.escalation_chain,
+                "reason": auth_result.reason,
+            },
+        )
+        return JSONResponse(
+            status_code=202,
+            content={
+                "status": "escalated",
+                "escalation_id": esc["id"],
+                "reason": auth_result.reason,
+                "required_role": auth_result.required_role,
+                "message": f"Action requires approval from {auth_result.required_role}",
+            },
         )
 
     # Create the actual policy record
@@ -663,55 +729,40 @@ async def upload_documents(
 
 @router.post("/{submission_id}/process")
 async def process_submission(submission_id: str, user: CurrentUser = Depends(get_current_user)) -> dict[str, object]:
-    """Run the full multi-agent new business workflow via Foundry agents.
+    """Run the full multi-agent new business workflow via the workflow engine.
 
-    This is the real end-to-end pipeline:
-    1. Triage (AI) → updates submission status
-    2. Underwriting (AI) → sets quoted premium
-    3. Policy bind → creates policy + billing records
-    4. Compliance audit → logs decision records
+    Delegates agent orchestration (triage → underwriting → compliance) to
+    :func:`execute_workflow`, then applies business logic (authority checks,
+    policy creation, billing) based on the workflow results.
     """
-    from openinsure.agents.foundry_client import get_foundry_client
     from openinsure.infrastructure.factory import (
         get_billing_repository,
         get_compliance_repository,
         get_policy_repository,
     )
     from openinsure.services.event_publisher import publish_domain_event
-
-    foundry = get_foundry_client()
+    from openinsure.services.workflow_engine import execute_workflow
 
     submission = await _repo.get_by_id(submission_id)
     if not submission:
         raise HTTPException(status_code=404, detail="Submission not found")
 
-    results: dict[str, Any] = {}
+    # --- Run multi-agent workflow ---
+    execution = await execute_workflow("new_business", submission_id, "submission", submission)
+
     now = _now()
+    results: dict[str, Any] = {s["name"]: s for s in execution.steps_completed}
 
-    # Step 1: Triage
-    triage = await foundry.invoke(
-        "openinsure-submission",
-        (
-            "You are triaging a cyber insurance submission. Our appetite accepts:\n"
-            "- IT/Tech companies (SIC 7xxx), Financial (SIC 6xxx), Professional Services\n"
-            "- Revenue $500K to $50M\n"
-            "- Security maturity score 4+ out of 10\n"
-            "- Max 3 prior cyber incidents\n\n"
-            "Respond ONLY with this exact JSON structure:\n"
-            '{"appetite_match": "yes", "risk_score": 5, "priority": "medium", "confidence": 0.9, "reasoning": "..."}\n\n'
-            f"Submission data:\n{json.dumps(submission, default=str)[:1000]}"
-        ),
-    )
-    results["triage"] = triage
-
-    # Update submission with triage results
-    triage_resp = triage.get("response", {})
-    appetite = "yes"  # default to yes
+    # --- Interpret triage result ---
+    intake_step = results.get("intake", {})
+    triage_resp = intake_step.get("response", {})
+    appetite = "yes"
     if isinstance(triage_resp, dict):
         match_val = str(triage_resp.get("appetite_match", "yes")).lower().strip()
         appetite = "no" if match_val in ("no", "decline", "false", "reject", "outside") else "yes"
     elif isinstance(triage_resp, str):
         appetite = "no" if any(w in triage_resp.lower() for w in ["decline", "reject", "outside appetite"]) else "yes"
+
     await _repo.update(
         submission_id,
         {
@@ -722,7 +773,7 @@ async def process_submission(submission_id: str, user: CurrentUser = Depends(get
     )
     await publish_domain_event("submission.triaged", f"/submissions/{submission_id}", {"submission_id": submission_id})
 
-    # Step 2: Underwriting & Pricing
+    # Early decline if outside appetite
     if appetite in ("no", "decline", "false"):
         await _repo.update(submission_id, {"status": "declined", "updated_at": now})
         await publish_domain_event(
@@ -735,6 +786,7 @@ async def process_submission(submission_id: str, user: CurrentUser = Depends(get
                 {
                     "submission_id": submission_id,
                     "workflow": "new_business",
+                    "workflow_id": execution.id,
                     "outcome": "declined",
                     "reason": "outside_appetite",
                     "policy_id": None,
@@ -750,24 +802,9 @@ async def process_submission(submission_id: str, user: CurrentUser = Depends(get
             )
         )
 
-    uw = await foundry.invoke(
-        "openinsure-underwriting",
-        (
-            "You are pricing a cyber insurance submission. Calculate a premium.\n"
-            "Base rate: $1.50 per $1000 revenue. Adjust for:\n"
-            "- Industry risk (IT=1.0x, Healthcare=1.6x, Finance=1.5x)\n"
-            "- Security maturity (8+=0.7x, 6+=0.85x, 4+=1.0x, <4=1.3x)\n"
-            "- Prior incidents (0=1.0x, 1=1.25x, 2+=1.5x)\n\n"
-            "Respond ONLY with this JSON:\n"
-            '{"risk_score": 35, "recommended_premium": 12500, "confidence": 0.85, "key_factors": ["factor1", "factor2"]}\n\n'
-            f"Submission:\n{json.dumps(submission, default=str)[:500]}\n"
-            f"Triage: {json.dumps(triage_resp, default=str)[:300]}"
-        ),
-    )
-    results["underwriting"] = uw
-
-    # Extract premium from AI response
-    uw_resp = uw.get("response", {})
+    # --- Extract underwriting premium ---
+    uw_step = results.get("underwriting", {})
+    uw_resp = uw_step.get("response", {})
     premium: float = 10000  # fallback
     if isinstance(uw_resp, dict):
         premium = float(uw_resp.get("recommended_premium", uw_resp.get("premium", 10000)) or 10000)
@@ -776,7 +813,7 @@ async def process_submission(submission_id: str, user: CurrentUser = Depends(get
         "submission.quoted", f"/submissions/{submission_id}", {"submission_id": submission_id, "premium": premium}
     )
 
-    # Step 3: Auto-bind if premium within authority (uses AuthorityEngine)
+    # --- Authority check & auto-bind ---
     engine = AuthorityEngine()
     user_role = user.roles[0] if user.roles else "openinsure-uw-analyst"
     cyber_data = submission.get("cyber_risk_data", submission.get("risk_data", {}))
@@ -800,7 +837,25 @@ async def process_submission(submission_id: str, user: CurrentUser = Depends(get
     )
     policy_id = None
     policy_number = None
-    if bind_auth.decision != AuthorityDecision.ESCALATE:
+    escalation_id = None
+    if bind_auth.decision == AuthorityDecision.ESCALATE:
+        from openinsure.services.escalation import escalate
+
+        esc = await escalate(
+            action="bind",
+            entity_type="submission",
+            entity_id=submission_id,
+            requested_by=user.display_name,
+            requested_role=user_role,
+            amount=float(premium),
+            authority_result={
+                "required_role": bind_auth.required_role,
+                "escalation_chain": bind_auth.escalation_chain,
+                "reason": bind_auth.reason,
+            },
+        )
+        escalation_id = esc["id"]
+    else:
         policy_id = str(uuid.uuid4())
         policy_number = f"POL-{datetime.now(UTC).strftime('%Y')}-{uuid.uuid4().hex[:6].upper()}"
         policy_repo = get_policy_repository()
@@ -832,14 +887,7 @@ async def process_submission(submission_id: str, user: CurrentUser = Depends(get
             },
         )
 
-    # Step 4: Compliance audit
-    comp = await foundry.invoke(
-        "openinsure-compliance",
-        f"Audit this workflow for EU AI Act compliance.\nTriage={json.dumps(triage_resp, default=str)[:200]}\nUW={json.dumps(uw_resp, default=str)[:200]}",
-    )
-    results["compliance"] = comp
-
-    # Store decision record
+    # --- Store compliance decision ---
     compliance_repo = get_compliance_repository()
     if compliance_repo:
         await compliance_repo.store_decision(
@@ -858,10 +906,12 @@ async def process_submission(submission_id: str, user: CurrentUser = Depends(get
     result: dict[str, Any] = {
         "submission_id": submission_id,
         "workflow": "new_business",
+        "workflow_id": execution.id,
         "outcome": outcome,
         "policy_id": policy_id,
         "policy_number": policy_number,
         "premium": premium,
+        "escalation_id": escalation_id,
         "steps": results,
         "authority": {
             "decision": bind_auth.decision,

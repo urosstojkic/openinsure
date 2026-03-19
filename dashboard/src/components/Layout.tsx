@@ -16,6 +16,7 @@ import {
   ChevronDown,
   LogOut,
   ArrowLeftRight,
+  ArrowUpFromLine,
   Calculator,
   Repeat2,
 } from 'lucide-react';
@@ -26,7 +27,8 @@ const navItems = [
   { to: '/submissions', label: 'Submissions',      icon: Inbox },
   { to: '/policies',    label: 'Policies',         icon: FileText },
   { to: '/claims',      label: 'Claims',           icon: AlertTriangle },
-  { to: '/decisions',   label: 'Agent Decisions',  icon: Brain },
+  { to: '/decisions',    label: 'Agent Decisions',  icon: Brain },
+  { to: '/escalations', label: 'Escalations',      icon: ArrowUpFromLine },
   { to: '/compliance',  label: 'Compliance',       icon: ShieldCheck },
 ];
 
@@ -58,6 +60,7 @@ function getBreadcrumb(pathname: string): string {
     '/policies': 'Policies',
     '/claims': 'Claims',
     '/decisions': 'Agent Decisions',
+    '/escalations': 'Escalation Queue',
     '/compliance': 'Compliance',
     '/workbench/underwriting': 'Underwriter Workbench',
     '/workbench/claims': 'Claims Workbench',

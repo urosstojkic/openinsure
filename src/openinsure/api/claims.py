@@ -18,7 +18,7 @@ from pydantic import BaseModel, Field
 
 from openinsure.infrastructure.factory import get_claim_repository, get_compliance_repository
 from openinsure.rbac.auth import CurrentUser, get_current_user
-from openinsure.rbac.authority import AuthorityEngine
+from openinsure.rbac.authority import AuthorityDecision, AuthorityEngine
 
 router = APIRouter()
 
@@ -324,6 +324,36 @@ async def set_reserve(
     engine = AuthorityEngine()
     user_role = user.roles[0] if user.roles else "openinsure-claims-adjuster"
     auth_result = engine.check_reserve_authority(Decimal(str(body.amount)), user_role)
+
+    if auth_result.decision == AuthorityDecision.ESCALATE:
+        from starlette.responses import JSONResponse
+
+        from openinsure.services.escalation import escalate
+
+        esc = await escalate(
+            action="reserve",
+            entity_type="claim",
+            entity_id=claim_id,
+            requested_by=user.display_name,
+            requested_role=user_role,
+            amount=float(body.amount),
+            authority_result={
+                "required_role": auth_result.required_role,
+                "escalation_chain": auth_result.escalation_chain,
+                "reason": auth_result.reason,
+            },
+        )
+        return JSONResponse(
+            status_code=202,
+            content={
+                "status": "escalated",
+                "escalation_id": esc["id"],
+                "reason": auth_result.reason,
+                "required_role": auth_result.required_role,
+                "message": f"Action requires approval from {auth_result.required_role}",
+            },
+        )
+
     await publish_domain_event(
         "authority.checked",
         f"/claims/{claim_id}",
@@ -445,6 +475,36 @@ async def close_claim(
     user_role = user.roles[0] if user.roles else "openinsure-claims-adjuster"
     settlement_amount = Decimal(str(record.get("total_paid", 0)))
     auth_result = engine.check_settlement_authority(settlement_amount, user_role)
+
+    if auth_result.decision == AuthorityDecision.ESCALATE:
+        from starlette.responses import JSONResponse
+
+        from openinsure.services.escalation import escalate
+
+        esc = await escalate(
+            action="settle",
+            entity_type="claim",
+            entity_id=claim_id,
+            requested_by=user.display_name,
+            requested_role=user_role,
+            amount=float(settlement_amount),
+            authority_result={
+                "required_role": auth_result.required_role,
+                "escalation_chain": auth_result.escalation_chain,
+                "reason": auth_result.reason,
+            },
+        )
+        return JSONResponse(
+            status_code=202,
+            content={
+                "status": "escalated",
+                "escalation_id": esc["id"],
+                "reason": auth_result.reason,
+                "required_role": auth_result.required_role,
+                "message": f"Action requires approval from {auth_result.required_role}",
+            },
+        )
+
     await publish_domain_event(
         "authority.checked",
         f"/claims/{claim_id}",
@@ -492,37 +552,29 @@ async def reopen_claim(claim_id: str, body: ReopenRequest) -> ReopenResponse:
 
 @router.post("/{claim_id}/process")
 async def process_claim(claim_id: str, user: CurrentUser = Depends(get_current_user)) -> dict[str, object]:
-    """Run the claims workflow via Foundry agents.
+    """Run the claims workflow via the workflow engine.
 
-    1. Coverage verification / triage (AI)
-    2. Reserve estimation (AI)
-    3. Compliance audit (AI)
-    4. Authority check
-    Updates the claim record with results.
+    Delegates agent orchestration (assessment → compliance) to
+    :func:`execute_workflow`, then applies business logic (authority checks,
+    claim updates) based on the workflow results.
     """
-    from openinsure.agents.foundry_client import get_foundry_client
     from openinsure.services.event_publisher import publish_domain_event
+    from openinsure.services.workflow_engine import execute_workflow
 
-    foundry = get_foundry_client()
     claim = await _repo.get_by_id(claim_id)
     if not claim:
         raise HTTPException(status_code=404, detail="Claim not found")
 
-    results: dict[str, Any] = {}
+    # --- Run multi-agent workflow ---
+    execution = await execute_workflow("claims_assessment", claim_id, "claim", claim)
 
-    # Step 1: Coverage verification & assessment (triage)
-    assessment = await foundry.invoke(
-        "openinsure-claims",
-        "Assess this cyber insurance claim. Respond ONLY with JSON:\n"
-        '{"coverage_confirmed": true, "severity_tier": "moderate", "initial_reserve": 50000, '
-        '"fraud_score": 0.1, "confidence": 0.85, "reasoning": "..."}\n\n'
-        f"Claim: {json.dumps(claim, default=str)[:800]}",
-    )
-    results["triage"] = assessment
-    results["assessment"] = assessment
+    results: dict[str, Any] = {s["name"]: s for s in execution.steps_completed}
 
-    # Extract and update claim
-    resp = assessment.get("response", {})
+    # Extract assessment response
+    assessment_step = results.get("assessment", {})
+    resp = assessment_step.get("response", {})
+
+    # Update claim with AI results
     reserve_amount = 0.0
     if isinstance(resp, dict):
         updates: dict[str, Any] = {"status": "reserved", "updated_at": _now()}
@@ -535,10 +587,30 @@ async def process_claim(claim_id: str, user: CurrentUser = Depends(get_current_u
             updates["fraud_score"] = resp["fraud_score"]
         await _repo.update(claim_id, updates)
 
-    # Step 2: Authority check for reserve
+    # Authority check for reserve
     engine = AuthorityEngine()
     user_role = user.roles[0] if user.roles else "openinsure-claims-adjuster"
     reserve_auth = engine.check_reserve_authority(Decimal(str(reserve_amount or 25000)), user_role)
+
+    escalation_id = None
+    if reserve_auth.decision == AuthorityDecision.ESCALATE:
+        from openinsure.services.escalation import escalate
+
+        esc = await escalate(
+            action="reserve",
+            entity_type="claim",
+            entity_id=claim_id,
+            requested_by=user.display_name,
+            requested_role=user_role,
+            amount=float(reserve_amount or 25000),
+            authority_result={
+                "required_role": reserve_auth.required_role,
+                "escalation_chain": reserve_auth.escalation_chain,
+                "reason": reserve_auth.reason,
+            },
+        )
+        escalation_id = esc["id"]
+
     await publish_domain_event(
         "authority.checked",
         f"/claims/{claim_id}",
@@ -551,20 +623,13 @@ async def process_claim(claim_id: str, user: CurrentUser = Depends(get_current_u
         },
     )
 
-    # Step 3: Compliance
-    comp = await foundry.invoke(
-        "openinsure-compliance",
-        f"Audit this claims assessment for EU AI Act compliance.\nAssessment: {json.dumps(resp, default=str)[:300]}",
-    )
-    results["compliance"] = comp
-
     await publish_domain_event(
         "claim.assessed",
         f"/claims/{claim_id}",
-        {"claim_id": claim_id, "source": assessment.get("source", "unknown")},
+        {"claim_id": claim_id, "source": assessment_step.get("source", "unknown")},
     )
 
-    # Store decision
+    # Store compliance decision
     compliance_repo = get_compliance_repository()
     if compliance_repo:
         await compliance_repo.store_decision(
@@ -589,7 +654,9 @@ async def process_claim(claim_id: str, user: CurrentUser = Depends(get_current_u
     result: dict[str, Any] = {
         "claim_id": claim_id,
         "workflow": "claims_assessment",
+        "workflow_id": execution.id,
         "outcome": outcome,
+        "escalation_id": escalation_id,
         "steps": results,
         "authority": {
             "decision": reserve_auth.decision,

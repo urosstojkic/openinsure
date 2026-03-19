@@ -64,6 +64,7 @@ export const NAV_ACCESS: Record<string, UserRole[]> = {
   '/policies':               ['cuo', 'senior_uw', 'uw_analyst', 'claims_manager', 'cfo', 'compliance'],
   '/claims':                 ['cuo', 'claims_manager', 'adjuster', 'compliance'],
   '/decisions':              ['cuo', 'compliance', 'product_mgr', 'ceo'],
+  '/escalations':            ['cuo', 'senior_uw', 'claims_manager', 'cfo', 'ceo'],
   '/compliance':             ['compliance', 'cuo', 'ceo'],
   '/workbench/underwriting': ['cuo', 'senior_uw', 'uw_analyst'],
   '/workbench/claims':       ['claims_manager', 'adjuster'],
