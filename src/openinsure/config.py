@@ -49,6 +49,9 @@ class Settings(BaseSettings):
     foundry_project_endpoint: str = ""
     foundry_model_deployment: str = "gpt-5.2"
 
+    # Azure AI Document Intelligence
+    document_intelligence_endpoint: str = ""
+
     # CORS
     cors_origins: str = ""
 

@@ -237,6 +237,17 @@ def get_search_adapter():
 
 
 @lru_cache
+def get_document_intelligence():
+    """Return a DocumentIntelligenceAdapter, or ``None`` when not configured."""
+    settings = get_settings()
+    if settings.document_intelligence_endpoint:
+        from openinsure.infrastructure.document_intelligence import DocumentIntelligenceAdapter
+
+        return DocumentIntelligenceAdapter(settings.document_intelligence_endpoint)
+    return None
+
+
+@lru_cache
 def get_renewal_repository() -> BaseRepository:
     from openinsure.infrastructure.repositories.renewals import InMemoryRenewalRepository
 

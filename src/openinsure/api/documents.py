@@ -17,43 +17,67 @@ async def upload_document(
     claim_id: str | None = Query(None),
     document_type: str = Query("other"),
 ) -> dict[str, object]:
-    """Upload a document to Azure Blob Storage."""
-    storage = get_blob_storage()
-    if not storage:
-        # In-memory fallback
-        return {
-            "filename": file.filename,
-            "size": 0,
-            "storage": "memory",
-            "url": f"/documents/{file.filename}",
-            "message": "Document received (in-memory mode — not persisted)",
-        }
-
-    # Build blob path: documents/{type}/{entity_id}/{filename}
-    entity_id = submission_id or policy_id or claim_id or "unattached"
-    blob_name = f"{document_type}/{entity_id}/{file.filename}"
+    """Upload a document, classify it, and extract data via Document Intelligence."""
+    from openinsure.services.document_processing import DocumentProcessingService, DocumentType
 
     content = await file.read()
-    result = await storage.upload_document(
-        blob_name=blob_name,
-        data=content,
+    filename = file.filename or "untitled"
+    svc = DocumentProcessingService()
+
+    # Classify
+    classification = svc.classify_document(content, filename)
+    detected_type = classification.document_type.value
+    if document_type == "other":
+        document_type = detected_type
+
+    # Extract data (async — uses DI when available, regex fallback otherwise)
+    try:
+        doc_type_enum = DocumentType(document_type) if document_type in DocumentType.__members__ else DocumentType.unknown
+    except ValueError:
+        doc_type_enum = DocumentType.unknown
+
+    extraction = await svc.extract_data_async(
+        content, doc_type_enum,
         content_type=file.content_type or "application/octet-stream",
-        metadata={
-            "submission_id": submission_id or "",
-            "policy_id": policy_id or "",
-            "claim_id": claim_id or "",
-            "document_type": document_type,
-            "original_filename": file.filename or "",
-        },
     )
 
+    # Upload to storage
+    storage = get_blob_storage()
+    upload_result: dict[str, object] = {}
+    if storage:
+        entity_id = submission_id or policy_id or claim_id or "unattached"
+        blob_name = f"{document_type}/{entity_id}/{filename}"
+        upload_result = await storage.upload_document(
+            blob_name=blob_name,
+            data=content,
+            content_type=file.content_type or "application/octet-stream",
+            metadata={
+                "submission_id": submission_id or "",
+                "policy_id": policy_id or "",
+                "claim_id": claim_id or "",
+                "document_type": document_type,
+                "original_filename": filename,
+                "detected_type": detected_type,
+                "extraction_confidence": str(extraction.confidence),
+            },
+        )
+
     return {
-        "filename": file.filename,
-        "blob_name": blob_name,
+        "filename": filename,
+        "blob_name": upload_result.get("blob_name", f"{document_type}/{filename}"),
         "size": len(content),
-        "storage": "azure",
-        "url": result.get("url", ""),
-        "etag": result.get("etag", ""),
+        "storage": "azure" if storage else "memory",
+        "url": upload_result.get("url", f"/documents/{filename}"),
+        "classification": {
+            "document_type": detected_type,
+            "confidence": classification.confidence,
+        },
+        "extraction": {
+            "fields": extraction.extracted_fields,
+            "confidence": extraction.confidence,
+            "warnings": extraction.warnings,
+            "source": "document_intelligence" if extraction.confidence > 0.6 else "fallback",
+        },
     }
 
 
