@@ -1,7 +1,8 @@
 """Actuarial API — carrier-only endpoints for reserves, triangles & rate adequacy.
 
-Uses in-memory storage with seed data.  Backed by the actuarial service layer
-for chain-ladder IBNR estimation and rate-adequacy calculations.
+Uses factory-provided repositories that route to in-memory or SQL backends
+depending on configuration.  Backed by the actuarial service layer for
+chain-ladder IBNR estimation and rate-adequacy calculations.
 """
 
 from __future__ import annotations
@@ -14,6 +15,11 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
+from openinsure.infrastructure.factory import (
+    get_actuarial_reserve_repository,
+    get_rate_adequacy_repository,
+    get_triangle_repository,
+)
 from openinsure.services.actuarial import (
     Triangle,
     estimate_ibnr,
@@ -23,275 +29,11 @@ from openinsure.services.actuarial import (
 router = APIRouter()
 
 # ---------------------------------------------------------------------------
-# In-memory stores
+# Repositories — resolved by factory (in-memory or SQL depending on config)
 # ---------------------------------------------------------------------------
-_reserves: dict[str, dict[str, Any]] = {}
-_triangles: dict[str, list[dict[str, Any]]] = {}  # lob -> entries
-
-
-# ---------------------------------------------------------------------------
-# Seed data
-# ---------------------------------------------------------------------------
-
-_SEED_RESERVES: list[dict[str, Any]] = [
-    {
-        "id": "res-001",
-        "line_of_business": "cyber",
-        "accident_year": 2023,
-        "reserve_type": "case",
-        "carried_amount": 4_500_000,
-        "indicated_amount": 4_800_000,
-        "selected_amount": 4_650_000,
-        "as_of_date": "2026-03-31",
-        "analyst": "Sarah Chen",
-        "approved_by": "Michael Torres",
-        "notes": "Q1 2026 review — slight deterioration in large-loss corridor.",
-    },
-    {
-        "id": "res-002",
-        "line_of_business": "cyber",
-        "accident_year": 2023,
-        "reserve_type": "ibnr",
-        "carried_amount": 2_100_000,
-        "indicated_amount": 2_350_000,
-        "selected_amount": 2_200_000,
-        "as_of_date": "2026-03-31",
-        "analyst": "Sarah Chen",
-        "approved_by": "Michael Torres",
-        "notes": "Chain-ladder indication; BF cross-check within 5%.",
-    },
-    {
-        "id": "res-003",
-        "line_of_business": "cyber",
-        "accident_year": 2024,
-        "reserve_type": "case",
-        "carried_amount": 3_200_000,
-        "indicated_amount": 3_400_000,
-        "selected_amount": 3_300_000,
-        "as_of_date": "2026-03-31",
-        "analyst": "Sarah Chen",
-        "approved_by": "",
-        "notes": "Pending CFO approval.",
-    },
-    {
-        "id": "res-004",
-        "line_of_business": "cyber",
-        "accident_year": 2024,
-        "reserve_type": "ibnr",
-        "carried_amount": 1_800_000,
-        "indicated_amount": 2_000_000,
-        "selected_amount": 1_900_000,
-        "as_of_date": "2026-03-31",
-        "analyst": "Sarah Chen",
-        "approved_by": "",
-        "notes": "",
-    },
-    {
-        "id": "res-005",
-        "line_of_business": "professional_liability",
-        "accident_year": 2023,
-        "reserve_type": "case",
-        "carried_amount": 6_000_000,
-        "indicated_amount": 6_200_000,
-        "selected_amount": 6_100_000,
-        "as_of_date": "2026-03-31",
-        "analyst": "James Wright",
-        "approved_by": "Michael Torres",
-        "notes": "",
-    },
-    {
-        "id": "res-006",
-        "line_of_business": "professional_liability",
-        "accident_year": 2023,
-        "reserve_type": "ibnr",
-        "carried_amount": 3_500_000,
-        "indicated_amount": 3_800_000,
-        "selected_amount": 3_600_000,
-        "as_of_date": "2026-03-31",
-        "analyst": "James Wright",
-        "approved_by": "Michael Torres",
-        "notes": "Long-tail development — monitoring closely.",
-    },
-]
-
-_SEED_TRIANGLE_CYBER: list[dict[str, Any]] = [
-    # Cyber triangle — accident years 2021-2024, dev months 12-60
-    {
-        "accident_year": 2021,
-        "development_month": 12,
-        "incurred_amount": 1_200_000,
-        "paid_amount": 600_000,
-        "case_reserve": 600_000,
-        "claim_count": 15,
-    },
-    {
-        "accident_year": 2021,
-        "development_month": 24,
-        "incurred_amount": 2_100_000,
-        "paid_amount": 1_400_000,
-        "case_reserve": 700_000,
-        "claim_count": 18,
-    },
-    {
-        "accident_year": 2021,
-        "development_month": 36,
-        "incurred_amount": 2_600_000,
-        "paid_amount": 2_000_000,
-        "case_reserve": 600_000,
-        "claim_count": 19,
-    },
-    {
-        "accident_year": 2021,
-        "development_month": 48,
-        "incurred_amount": 2_800_000,
-        "paid_amount": 2_500_000,
-        "case_reserve": 300_000,
-        "claim_count": 19,
-    },
-    {
-        "accident_year": 2021,
-        "development_month": 60,
-        "incurred_amount": 2_850_000,
-        "paid_amount": 2_700_000,
-        "case_reserve": 150_000,
-        "claim_count": 19,
-    },
-    {
-        "accident_year": 2022,
-        "development_month": 12,
-        "incurred_amount": 1_500_000,
-        "paid_amount": 700_000,
-        "case_reserve": 800_000,
-        "claim_count": 20,
-    },
-    {
-        "accident_year": 2022,
-        "development_month": 24,
-        "incurred_amount": 2_500_000,
-        "paid_amount": 1_600_000,
-        "case_reserve": 900_000,
-        "claim_count": 24,
-    },
-    {
-        "accident_year": 2022,
-        "development_month": 36,
-        "incurred_amount": 3_100_000,
-        "paid_amount": 2_400_000,
-        "case_reserve": 700_000,
-        "claim_count": 25,
-    },
-    {
-        "accident_year": 2022,
-        "development_month": 48,
-        "incurred_amount": 3_400_000,
-        "paid_amount": 3_000_000,
-        "case_reserve": 400_000,
-        "claim_count": 25,
-    },
-    {
-        "accident_year": 2023,
-        "development_month": 12,
-        "incurred_amount": 1_800_000,
-        "paid_amount": 800_000,
-        "case_reserve": 1_000_000,
-        "claim_count": 25,
-    },
-    {
-        "accident_year": 2023,
-        "development_month": 24,
-        "incurred_amount": 3_000_000,
-        "paid_amount": 1_900_000,
-        "case_reserve": 1_100_000,
-        "claim_count": 30,
-    },
-    {
-        "accident_year": 2023,
-        "development_month": 36,
-        "incurred_amount": 3_800_000,
-        "paid_amount": 2_800_000,
-        "case_reserve": 1_000_000,
-        "claim_count": 32,
-    },
-    {
-        "accident_year": 2024,
-        "development_month": 12,
-        "incurred_amount": 2_000_000,
-        "paid_amount": 900_000,
-        "case_reserve": 1_100_000,
-        "claim_count": 28,
-    },
-    {
-        "accident_year": 2024,
-        "development_month": 24,
-        "incurred_amount": 3_400_000,
-        "paid_amount": 2_100_000,
-        "case_reserve": 1_300_000,
-        "claim_count": 34,
-    },
-]
-
-_SEED_RATE_ADEQUACY: list[dict[str, Any]] = [
-    {
-        "line_of_business": "cyber",
-        "segment": "smb-technology",
-        "current_rate": "1.50",
-        "indicated_rate": "1.72",
-        "adequacy_ratio": "1.1467",
-    },
-    {
-        "line_of_business": "cyber",
-        "segment": "smb-healthcare",
-        "current_rate": "2.20",
-        "indicated_rate": "2.85",
-        "adequacy_ratio": "1.2955",
-    },
-    {
-        "line_of_business": "cyber",
-        "segment": "smb-financial",
-        "current_rate": "1.80",
-        "indicated_rate": "1.95",
-        "adequacy_ratio": "1.0833",
-    },
-    {
-        "line_of_business": "cyber",
-        "segment": "mid-market-technology",
-        "current_rate": "1.20",
-        "indicated_rate": "1.35",
-        "adequacy_ratio": "1.1250",
-    },
-    {
-        "line_of_business": "cyber",
-        "segment": "mid-market-retail",
-        "current_rate": "0.90",
-        "indicated_rate": "0.82",
-        "adequacy_ratio": "0.9111",
-    },
-    {
-        "line_of_business": "professional_liability",
-        "segment": "law-firms",
-        "current_rate": "3.10",
-        "indicated_rate": "3.45",
-        "adequacy_ratio": "1.1129",
-    },
-    {
-        "line_of_business": "professional_liability",
-        "segment": "accounting",
-        "current_rate": "2.50",
-        "indicated_rate": "2.30",
-        "adequacy_ratio": "0.9200",
-    },
-]
-
-
-def _seed() -> None:
-    if not _reserves:
-        for r in _SEED_RESERVES:
-            _reserves[r["id"]] = r
-    if not _triangles:
-        _triangles["cyber"] = _SEED_TRIANGLE_CYBER
-
-
-_seed()
+_reserve_repo = get_actuarial_reserve_repository()
+_triangle_repo = get_triangle_repository()
+_rate_adequacy_repo = get_rate_adequacy_repository()
 
 
 def _now() -> str:
@@ -379,19 +121,18 @@ async def list_reserves(
     accident_year: int | None = Query(None, description="Filter by accident year"),
 ) -> list[ReserveResponse]:
     """List actuarial reserves, optionally filtered by LOB and accident year."""
-    _seed()
-    items = list(_reserves.values())
+    filters: dict[str, Any] = {}
     if lob:
-        items = [r for r in items if r.get("line_of_business") == lob]
+        filters["line_of_business"] = lob
     if accident_year:
-        items = [r for r in items if r.get("accident_year") == accident_year]
+        filters["accident_year"] = accident_year
+    items = await _reserve_repo.list_all(filters=filters or None, skip=0, limit=200)
     return [ReserveResponse(**r) for r in items]
 
 
 @router.post("/reserves", response_model=ReserveResponse, status_code=201)
 async def set_reserve(body: ReserveCreate) -> ReserveResponse:
     """Create or update an actuarial reserve."""
-    _seed()
     rid = f"res-{uuid.uuid4().hex[:8]}"
     record: dict[str, Any] = {
         "id": rid,
@@ -406,15 +147,16 @@ async def set_reserve(body: ReserveCreate) -> ReserveResponse:
         "approved_by": body.approved_by,
         "notes": body.notes,
     }
-    _reserves[rid] = record
+    await _reserve_repo.create(record)
     return ReserveResponse(**record)
 
 
 @router.get("/triangles/{lob}", response_model=TriangleResponse)
 async def get_loss_triangle(lob: str) -> TriangleResponse:
     """Get the loss-development triangle for a line of business."""
-    _seed()
-    entries = _triangles.get(lob, [])
+    entries = await _triangle_repo.list_all(
+        filters={"line_of_business": lob}, skip=0, limit=500
+    )
     if not entries:
         raise HTTPException(
             status_code=404,
@@ -437,8 +179,9 @@ async def generate_triangle(lob: str) -> TriangleResponse:
     In the seed implementation this re-processes the existing triangle entries.
     In production it would pull from the claims data store.
     """
-    _seed()
-    entries = _triangles.get(lob, [])
+    entries = await _triangle_repo.list_all(
+        filters={"line_of_business": lob}, skip=0, limit=500
+    )
     if not entries:
         raise HTTPException(
             status_code=404,
@@ -468,9 +211,6 @@ async def generate_triangle(lob: str) -> TriangleResponse:
                 }
             )
 
-    # Update in-memory store
-    _triangles[lob] = generated
-
     accident_years = sorted({e["accident_year"] for e in generated})
     dev_months = sorted({e["development_month"] for e in generated})
     return TriangleResponse(
@@ -486,10 +226,10 @@ async def rate_adequacy(
     lob: str | None = Query(None, description="Filter by line of business"),
 ) -> RateAdequacyResponse:
     """Return rate-adequacy analysis by segment."""
-    _seed()
-    items = _SEED_RATE_ADEQUACY
+    filters: dict[str, Any] = {}
     if lob:
-        items = [i for i in items if i.get("line_of_business") == lob]
+        filters["line_of_business"] = lob
+    items = await _rate_adequacy_repo.list_all(filters=filters or None, skip=0, limit=200)
     return RateAdequacyResponse(
         items=[RateAdequacyItem(**i) for i in items],
         total=len(items),
@@ -502,8 +242,9 @@ async def get_ibnr(
     method: str = Query("chain_ladder", description="IBNR estimation method"),
 ) -> IBNRResponse:
     """Estimate IBNR reserves for a line of business using the specified method."""
-    _seed()
-    entries = _triangles.get(lob, [])
+    entries = await _triangle_repo.list_all(
+        filters={"line_of_business": lob}, skip=0, limit=500
+    )
     if not entries:
         raise HTTPException(
             status_code=404,

@@ -35,6 +35,9 @@ AUDIT_IDS = [str(uuid.uuid4()) for _ in range(4)]
 TREATY_IDS = [str(uuid.uuid4()) for _ in range(3)]
 CESSION_IDS = [str(uuid.uuid4()) for _ in range(4)]
 RECOVERY_IDS = [str(uuid.uuid4()) for _ in range(2)]
+RESERVE_IDS = [f"res-{i:03d}" for i in range(1, 7)]
+TRIANGLE_IDS = [str(uuid.uuid4()) for _ in range(14)]
+RATE_ADEQUACY_IDS = [str(uuid.uuid4()) for _ in range(7)]
 
 
 def _sample_submissions() -> list[dict[str, Any]]:
@@ -525,12 +528,154 @@ def _sample_recoveries() -> list[dict[str, Any]]:
     ]
 
 
+def _sample_actuarial_reserves() -> list[dict[str, Any]]:
+    return [
+        {
+            "id": RESERVE_IDS[0],
+            "line_of_business": "cyber",
+            "accident_year": 2023,
+            "reserve_type": "case",
+            "carried_amount": 4_500_000,
+            "indicated_amount": 4_800_000,
+            "selected_amount": 4_650_000,
+            "as_of_date": "2026-03-31",
+            "analyst": "Sarah Chen",
+            "approved_by": "Michael Torres",
+            "notes": "Q1 2026 review — slight deterioration in large-loss corridor.",
+        },
+        {
+            "id": RESERVE_IDS[1],
+            "line_of_business": "cyber",
+            "accident_year": 2023,
+            "reserve_type": "ibnr",
+            "carried_amount": 2_100_000,
+            "indicated_amount": 2_350_000,
+            "selected_amount": 2_200_000,
+            "as_of_date": "2026-03-31",
+            "analyst": "Sarah Chen",
+            "approved_by": "Michael Torres",
+            "notes": "Chain-ladder indication; BF cross-check within 5%.",
+        },
+        {
+            "id": RESERVE_IDS[2],
+            "line_of_business": "cyber",
+            "accident_year": 2024,
+            "reserve_type": "case",
+            "carried_amount": 3_200_000,
+            "indicated_amount": 3_400_000,
+            "selected_amount": 3_300_000,
+            "as_of_date": "2026-03-31",
+            "analyst": "Sarah Chen",
+            "approved_by": "",
+            "notes": "Pending CFO approval.",
+        },
+        {
+            "id": RESERVE_IDS[3],
+            "line_of_business": "cyber",
+            "accident_year": 2024,
+            "reserve_type": "ibnr",
+            "carried_amount": 1_800_000,
+            "indicated_amount": 2_000_000,
+            "selected_amount": 1_900_000,
+            "as_of_date": "2026-03-31",
+            "analyst": "Sarah Chen",
+            "approved_by": "",
+            "notes": "",
+        },
+        {
+            "id": RESERVE_IDS[4],
+            "line_of_business": "professional_liability",
+            "accident_year": 2023,
+            "reserve_type": "case",
+            "carried_amount": 6_000_000,
+            "indicated_amount": 6_200_000,
+            "selected_amount": 6_100_000,
+            "as_of_date": "2026-03-31",
+            "analyst": "James Wright",
+            "approved_by": "Michael Torres",
+            "notes": "",
+        },
+        {
+            "id": RESERVE_IDS[5],
+            "line_of_business": "professional_liability",
+            "accident_year": 2023,
+            "reserve_type": "ibnr",
+            "carried_amount": 3_500_000,
+            "indicated_amount": 3_800_000,
+            "selected_amount": 3_600_000,
+            "as_of_date": "2026-03-31",
+            "analyst": "James Wright",
+            "approved_by": "Michael Torres",
+            "notes": "Long-tail development — monitoring closely.",
+        },
+    ]
+
+
+def _sample_triangle_entries() -> list[dict[str, Any]]:
+    """Cyber loss development triangle — accident years 2021-2024."""
+    raw = [
+        (2021, 12, 1_200_000, 600_000, 600_000, 15),
+        (2021, 24, 2_100_000, 1_400_000, 700_000, 18),
+        (2021, 36, 2_600_000, 2_000_000, 600_000, 19),
+        (2021, 48, 2_800_000, 2_500_000, 300_000, 19),
+        (2021, 60, 2_850_000, 2_700_000, 150_000, 19),
+        (2022, 12, 1_500_000, 700_000, 800_000, 20),
+        (2022, 24, 2_500_000, 1_600_000, 900_000, 24),
+        (2022, 36, 3_100_000, 2_400_000, 700_000, 25),
+        (2022, 48, 3_400_000, 3_000_000, 400_000, 25),
+        (2023, 12, 1_800_000, 800_000, 1_000_000, 25),
+        (2023, 24, 3_000_000, 1_900_000, 1_100_000, 30),
+        (2023, 36, 3_800_000, 2_800_000, 1_000_000, 32),
+        (2024, 12, 2_000_000, 900_000, 1_100_000, 28),
+        (2024, 24, 3_400_000, 2_100_000, 1_300_000, 34),
+    ]
+    return [
+        {
+            "id": TRIANGLE_IDS[i],
+            "line_of_business": "cyber",
+            "accident_year": ay,
+            "development_month": dm,
+            "incurred_amount": inc,
+            "paid_amount": paid,
+            "case_reserve": case,
+            "claim_count": cnt,
+        }
+        for i, (ay, dm, inc, paid, case, cnt) in enumerate(raw)
+    ]
+
+
+def _sample_rate_adequacy() -> list[dict[str, Any]]:
+    raw = [
+        ("cyber", "smb-technology", "1.50", "1.72", "1.1467"),
+        ("cyber", "smb-healthcare", "2.20", "2.85", "1.2955"),
+        ("cyber", "smb-financial", "1.80", "1.95", "1.0833"),
+        ("cyber", "mid-market-technology", "1.20", "1.35", "1.1250"),
+        ("cyber", "mid-market-retail", "0.90", "0.82", "0.9111"),
+        ("professional_liability", "law-firms", "3.10", "3.45", "1.1129"),
+        ("professional_liability", "accounting", "2.50", "2.30", "0.9200"),
+    ]
+    return [
+        {
+            "id": RATE_ADEQUACY_IDS[i],
+            "line_of_business": lob,
+            "segment": seg,
+            "current_rate": cr,
+            "indicated_rate": ir,
+            "adequacy_ratio": ar,
+        }
+        for i, (lob, seg, cr, ir, ar) in enumerate(raw)
+    ]
+
+
 async def seed_sample_data() -> None:
     """Populate the factory-provided repositories with sample data.
 
     Uses the same singleton repos that the API endpoints consume, so
     seeded data is immediately visible via the REST API.
     """
+    from openinsure.api.actuarial import _rate_adequacy_repo as rate_adequacy_repo
+    from openinsure.api.actuarial import _reserve_repo as reserve_repo
+    from openinsure.api.actuarial import _triangle_repo as triangle_repo
     from openinsure.api.billing import _repo as billing_repo
     from openinsure.api.claims import _repo as claims_repo
     from openinsure.api.compliance import _compliance_repo as compliance_repo
@@ -604,3 +749,13 @@ async def seed_sample_data() -> None:
 
     for recovery in _sample_recoveries():
         await recovery_repo.create(recovery)
+
+    # Actuarial — reserves, triangles, rate adequacy
+    for reserve in _sample_actuarial_reserves():
+        await reserve_repo.create(reserve)
+
+    for entry in _sample_triangle_entries():
+        await triangle_repo.create(entry)
+
+    for ra in _sample_rate_adequacy():
+        await rate_adequacy_repo.create(ra)

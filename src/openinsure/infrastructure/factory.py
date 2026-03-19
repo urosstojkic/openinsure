@@ -85,6 +85,48 @@ def get_billing_repository() -> BaseRepository:
     return InMemoryBillingRepository()
 
 
+# -- actuarial repositories -------------------------------------------------
+
+
+@lru_cache
+def get_actuarial_reserve_repository() -> BaseRepository:
+    settings = get_settings()
+    if settings.storage_mode == "azure" and settings.sql_connection_string:
+        from openinsure.infrastructure.repositories.sql_actuarial import SqlActuarialReserveRepository
+
+        db = get_database_adapter()
+        return SqlActuarialReserveRepository(db)  # type: ignore[arg-type]
+    from openinsure.infrastructure.repositories.actuarial import InMemoryActuarialReserveRepository
+
+    return InMemoryActuarialReserveRepository()
+
+
+@lru_cache
+def get_triangle_repository() -> BaseRepository:
+    settings = get_settings()
+    if settings.storage_mode == "azure" and settings.sql_connection_string:
+        from openinsure.infrastructure.repositories.sql_actuarial import SqlTriangleRepository
+
+        db = get_database_adapter()
+        return SqlTriangleRepository(db)  # type: ignore[arg-type]
+    from openinsure.infrastructure.repositories.actuarial import InMemoryTriangleRepository
+
+    return InMemoryTriangleRepository()
+
+
+@lru_cache
+def get_rate_adequacy_repository() -> BaseRepository:
+    settings = get_settings()
+    if settings.storage_mode == "azure" and settings.sql_connection_string:
+        from openinsure.infrastructure.repositories.sql_actuarial import SqlRateAdequacyRepository
+
+        db = get_database_adapter()
+        return SqlRateAdequacyRepository(db)  # type: ignore[arg-type]
+    from openinsure.infrastructure.repositories.actuarial import InMemoryRateAdequacyRepository
+
+    return InMemoryRateAdequacyRepository()
+
+
 @lru_cache
 def get_event_bus():
     """Return a shared EventBusAdapter, or ``None`` when not configured."""
