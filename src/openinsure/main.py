@@ -49,6 +49,19 @@ def create_app() -> FastAPI:
         logger.info("openinsure.startup", version=settings.app_version)
         logger.info("openinsure.storage_mode", mode=settings.storage_mode)
 
+        # Auto-apply SQL migrations on startup when Azure SQL is configured
+        if settings.storage_mode == "azure" and settings.sql_connection_string:
+            try:
+                from openinsure.infrastructure.auto_migrate import apply_pending_migrations
+
+                applied = await apply_pending_migrations()
+                if applied:
+                    logger.info("openinsure.migrations", applied=applied)
+                else:
+                    logger.info("openinsure.migrations", status="up-to-date")
+            except Exception as exc:
+                logger.warning("openinsure.migrations.failed", error=str(exc))
+
         # Seed sample data only in debug / local-dev mode with in-memory storage
         if settings.debug and settings.storage_mode == "memory":
             from openinsure.infrastructure.seed_data import seed_sample_data

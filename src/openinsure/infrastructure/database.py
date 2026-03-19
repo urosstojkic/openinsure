@@ -26,6 +26,15 @@ logger = structlog.get_logger()
 _SQL_RESOURCE = "https://database.windows.net/.default"
 
 
+def _detect_odbc_driver() -> str:
+    """Return the best available SQL Server ODBC driver."""
+    drivers = pyodbc.drivers()
+    for preferred in ("ODBC Driver 18 for SQL Server", "ODBC Driver 17 for SQL Server"):
+        if preferred in drivers:
+            return preferred
+    return "ODBC Driver 18 for SQL Server"
+
+
 class DatabaseAdapter:
     """Async-friendly wrapper around ``pyodbc`` for Azure SQL.
 
@@ -58,16 +67,19 @@ class DatabaseAdapter:
         if "Driver=" in connection_string_or_server or "driver=" in connection_string_or_server:
             # Full connection string — strip any Authentication= clause (we use token auth)
             cs = connection_string_or_server
-            # Remove Authentication=... segments since we use access token
             import re
 
             cs = re.sub(r"Authentication=[^;]*;?", "", cs)
+            # Replace driver with best available on this system
+            driver = _detect_odbc_driver()
+            cs = re.sub(r"Driver=\{[^}]+\}", f"Driver={{{driver}}}", cs)
             self._connection_string = cs
         else:
             self._server = connection_string_or_server
             self._database = database
+            driver = _detect_odbc_driver()
             self._connection_string = (
-                f"Driver={{ODBC Driver 18 for SQL Server}};"
+                f"Driver={{{driver}}};"
                 f"Server={connection_string_or_server};"
                 f"Database={database};"
                 f"Encrypt=yes;TrustServerCertificate=no;"

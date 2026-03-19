@@ -71,6 +71,16 @@ CREATE TABLE _migration_history (
 # ---------------------------------------------------------------------------
 
 
+def _detect_odbc_driver() -> str:
+    """Return the best available SQL Server ODBC driver."""
+    drivers = pyodbc.drivers()
+    for preferred in ("ODBC Driver 18 for SQL Server", "ODBC Driver 17 for SQL Server"):
+        if preferred in drivers:
+            return preferred
+    # Last resort
+    return "ODBC Driver 17 for SQL Server"
+
+
 def connect(conn_str_or_server: str, database: str) -> pyodbc.Connection:
     """Create a pyodbc connection using AAD access-token authentication."""
     credential = DefaultAzureCredential()
@@ -80,9 +90,13 @@ def connect(conn_str_or_server: str, database: str) -> pyodbc.Connection:
 
     if "Driver=" in conn_str_or_server or "driver=" in conn_str_or_server:
         odbc_str = re.sub(r"Authentication=[^;]*;?", "", conn_str_or_server)
+        # Replace driver if the specified one isn't available
+        driver = _detect_odbc_driver()
+        odbc_str = re.sub(r"Driver=\{[^}]+\}", f"Driver={{{driver}}}", odbc_str)
     else:
+        driver = _detect_odbc_driver()
         odbc_str = (
-            f"Driver={{ODBC Driver 18 for SQL Server}};"
+            f"Driver={{{driver}}};"
             f"Server={conn_str_or_server};"
             f"Database={database};"
             f"Encrypt=yes;TrustServerCertificate=no;"

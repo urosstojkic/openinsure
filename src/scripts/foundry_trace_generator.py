@@ -153,13 +153,15 @@ async def run_process_workflow(client: httpx.AsyncClient, sid: str, name: str) -
 
 async def create_and_assess_claim(client: httpx.AsyncClient, policy_id: str, name: str, idx: int) -> bool:
     """Create a claim and set reserve → invokes openinsure-claims agent."""
+    claim_type = random.choice(["data_breach", "ransomware", "business_interruption", "social_engineering"])
     payload = {
         "policy_id": policy_id,
-        "claimant_name": f"Claimant for {name}",
-        "loss_date": "2025-06-15",
-        "reported_date": "2025-06-20",
-        "loss_type": random.choice(["data_breach", "ransomware", "business_interruption", "social_engineering"]),
+        "claim_type": claim_type,
+        "date_of_loss": "2025-06-15",
+        "reported_by": f"Risk Manager at {name}",
+        "contact_email": f"claims@{name.lower().replace(' ', '')}.com",
         "description": f"Cyber incident at {name} - {random.choice(['unauthorized access to customer DB', 'ransomware encryption of file servers', 'phishing attack on finance team', 'DDoS attack on e-commerce platform'])}",
+        "metadata": {"source": "trace_generator", "severity": random.choice(["low", "medium", "high", "critical"])},
     }
     try:
         resp = await client.post(f"{API}/claims", json=payload, timeout=60)
