@@ -9,13 +9,19 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
+from openinsure.infrastructure.factory import (
+    get_mga_authority_repository,
+    get_mga_bordereau_repository,
+)
+
 router = APIRouter()
 
 # ---------------------------------------------------------------------------
-# In-memory stores
+# Repositories
 # ---------------------------------------------------------------------------
-_authorities: dict[str, dict[str, Any]] = {}
-_bordereaux: dict[str, dict[str, Any]] = {}
+_authority_repo = get_mga_authority_repository()
+_bordereau_repo = get_mga_bordereau_repository()
+_seeded = False
 
 # Seed sample MGA data
 _SEED_MGAS: list[dict[str, Any]] = [
@@ -104,15 +110,23 @@ _SEED_BORDEREAUX: list[dict[str, Any]] = [
 
 
 def _seed() -> None:
-    if not _authorities:
+    global _seeded  # noqa: PLW0603
+    if _seeded:
+        return
+    _seeded = True
+    import asyncio
+
+    async def _do_seed() -> None:
         for m in _SEED_MGAS:
-            _authorities[m["mga_id"]] = {**m, "id": m["mga_id"]}
-    if not _bordereaux:
+            await _authority_repo.create({**m, "id": m["mga_id"]})
         for b in _SEED_BORDEREAUX:
-            _bordereaux[b["id"]] = b
+            await _bordereau_repo.create(b)
 
-
-_seed()
+    try:
+        loop = asyncio.get_running_loop()
+        loop.create_task(_do_seed())
+    except RuntimeError:
+        asyncio.run(_do_seed())
 
 
 def _now() -> str:
@@ -146,6 +160,18 @@ class BordereauSubmit(BaseModel):
     claims_reported: float = 0
     policy_count: int = 0
     claim_count: int = 0
+
+
+class AuthorityCreate(BaseModel):
+    """Payload for creating a new MGA authority."""
+
+    mga_id: str | None = None
+    mga_name: str
+    effective_date: str
+    expiration_date: str
+    lines_of_business: list[str] = Field(default_factory=list)
+    premium_authority: float = 0
+    claims_authority: float = 0
 
 
 class BordereauResponse(BaseModel):
@@ -183,9 +209,10 @@ async def list_authorities(
 ) -> list[AuthorityResponse]:
     """List all MGA authorities."""
     _seed()
-    items = list(_authorities.values())
+    filters: dict[str, Any] = {}
     if status:
-        items = [a for a in items if a.get("status") == status]
+        filters["status"] = status
+    items = await _authority_repo.list_all(filters=filters or None)
     return [AuthorityResponse(**a) for a in items]
 
 
@@ -193,17 +220,44 @@ async def list_authorities(
 async def get_authority(mga_id: str) -> AuthorityResponse:
     """Get MGA detail + performance."""
     _seed()
-    auth = _authorities.get(mga_id)
+    auth = await _authority_repo.get_by_id(mga_id)
     if not auth:
         raise HTTPException(status_code=404, detail=f"MGA {mga_id} not found")
     return AuthorityResponse(**auth)
+
+
+@router.post("/authorities", response_model=AuthorityResponse, status_code=201)
+async def create_authority(body: AuthorityCreate) -> AuthorityResponse:
+    """Create a new MGA authority."""
+    mga_id = body.mga_id or f"mga-{uuid.uuid4().hex[:8]}"
+    now = _now()
+    record: dict[str, Any] = {
+        "id": mga_id,
+        "mga_id": mga_id,
+        "mga_name": body.mga_name,
+        "status": "active",
+        "effective_date": body.effective_date,
+        "expiration_date": body.expiration_date,
+        "lines_of_business": body.lines_of_business,
+        "premium_authority": body.premium_authority,
+        "premium_written": 0,
+        "claims_authority": body.claims_authority,
+        "loss_ratio": 0,
+        "compliance_score": 100,
+        "last_audit_date": None,
+        "created_at": now,
+        "updated_at": now,
+    }
+    await _authority_repo.create(record)
+    return AuthorityResponse(**record)
 
 
 @router.post("/bordereaux", response_model=BordereauResponse, status_code=201)
 async def submit_bordereau(body: BordereauSubmit) -> BordereauResponse:
     """Submit a bordereau for an MGA."""
     _seed()
-    if body.mga_id not in _authorities:
+    auth = await _authority_repo.get_by_id(body.mga_id)
+    if not auth:
         raise HTTPException(status_code=404, detail=f"MGA {body.mga_id} not found")
 
     bid = f"bx-{uuid.uuid4().hex[:8]}"
@@ -220,7 +274,12 @@ async def submit_bordereau(body: BordereauSubmit) -> BordereauResponse:
         "status": "pending",
         "exceptions": [],
     }
-    _bordereaux[bid] = record
+    await _bordereau_repo.create(record)
+
+    # Update MGA premium_written
+    auth["premium_written"] = auth.get("premium_written", 0) + body.premium_reported
+    await _authority_repo.update(body.mga_id, {"premium_written": auth["premium_written"]})
+
     return BordereauResponse(**record)
 
 
@@ -230,9 +289,10 @@ async def list_bordereaux(
 ) -> list[BordereauResponse]:
     """List bordereaux."""
     _seed()
-    items = list(_bordereaux.values())
+    filters: dict[str, Any] = {}
     if mga_id:
-        items = [b for b in items if b.get("mga_id") == mga_id]
+        filters["mga_id"] = mga_id
+    items = await _bordereau_repo.list_all(filters=filters or None)
     return [BordereauResponse(**b) for b in items]
 
 
@@ -240,7 +300,7 @@ async def list_bordereaux(
 async def mga_performance() -> PerformanceSummary:
     """MGA performance summary across all authorities."""
     _seed()
-    auths = list(_authorities.values())
+    auths = await _authority_repo.list_all()
     active = [a for a in auths if a.get("status") == "active"]
     suspended = [a for a in auths if a.get("status") == "suspended"]
     total_written = sum(a.get("premium_written", 0) for a in auths)

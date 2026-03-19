@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell,
 } from 'recharts';
@@ -6,24 +7,19 @@ import {
   Building2, ShieldCheck, AlertTriangle, TrendingUp,
 } from 'lucide-react';
 import StatCard from '../components/StatCard';
+import {
+  getMGAPerformance,
+  getMGABordereaux,
+  type MGAPerformance,
+  type MGAAuthority,
+  type MGABordereau,
+} from '../api/mga';
 
 const money = (n: number) =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n);
 const pct = (n: number) => `${(n * 100).toFixed(1)}%`;
 
-// ── Mock MGA data ──
-const mgaAuthorities = [
-  { mga_id: 'mga-001', mga_name: 'Pacific Specialty MGA', status: 'active', premium_written: 3_200_000, premium_authority: 5_000_000, loss_ratio: 0.42, compliance_score: 94, lines_of_business: ['Cyber', 'Prof Liability'], last_audit_date: '2025-09-15' },
-  { mga_id: 'mga-002', mga_name: 'Coastal Risk Partners', status: 'active', premium_written: 6_500_000, premium_authority: 8_000_000, loss_ratio: 0.58, compliance_score: 87, lines_of_business: ['GL', 'EPLI'], last_audit_date: '2025-07-20' },
-  { mga_id: 'mga-003', mga_name: 'Summit Delegated Authority', status: 'suspended', premium_written: 2_900_000, premium_authority: 3_000_000, loss_ratio: 0.71, compliance_score: 62, lines_of_business: ['D&O'], last_audit_date: '2025-04-10' },
-];
-
-const bordereaux = [
-  { id: 'bx-001', mga_id: 'mga-001', mga_name: 'Pacific Specialty MGA', period: '2026-Q1', premium_reported: 820_000, claims_reported: 340_000, loss_ratio: 0.41, policy_count: 145, status: 'validated', exceptions: [] },
-  { id: 'bx-002', mga_id: 'mga-002', mga_name: 'Coastal Risk Partners', period: '2026-Q1', premium_reported: 1_650_000, claims_reported: 980_000, loss_ratio: 0.59, policy_count: 312, status: 'exceptions', exceptions: ['3 policies missing coverage verification', 'Late submission'] },
-  { id: 'bx-003', mga_id: 'mga-003', mga_name: 'Summit Delegated Authority', period: '2025-Q4', premium_reported: 710_000, claims_reported: 520_000, loss_ratio: 0.73, policy_count: 98, status: 'pending', exceptions: ['Authority suspended — review required'] },
-];
-
+// Audit findings remain static until audit module is built
 const auditFindings = [
   { id: 1, mga: 'Summit Delegated Authority', date: '2025-04-10', severity: 'high', finding: 'Premium authority exceeded by 96.7% — near breach of limit', status: 'open' },
   { id: 2, mga: 'Coastal Risk Partners', date: '2025-07-20', severity: 'medium', finding: 'Late bordereau submissions for 2 consecutive quarters', status: 'remediated' },
@@ -57,7 +53,24 @@ const statusBadge = (s: string) => {
 const MGAOversightDashboard: React.FC = () => {
   const [tab, setTab] = useState<'scorecard' | 'bordereaux' | 'audit'>('scorecard');
 
-  const totalWritten = mgaAuthorities.reduce((s, a) => s + a.premium_written, 0);
+  const { data: perfData, isLoading: perfLoading } = useQuery<MGAPerformance>({
+    queryKey: ['mga-performance'],
+    queryFn: getMGAPerformance,
+  });
+
+  const { data: bxData, isLoading: bxLoading } = useQuery<MGABordereau[]>({
+    queryKey: ['mga-bordereaux'],
+    queryFn: () => getMGABordereaux(),
+  });
+
+  if (perfLoading || bxLoading || !perfData) {
+    return <div className="flex h-64 items-center justify-center text-slate-400">Loading…</div>;
+  }
+
+  const mgaAuthorities = perfData.authorities;
+  const bordereaux = bxData ?? [];
+
+  const totalWritten = perfData.total_premium_written;
   const totalAuthority = mgaAuthorities.reduce((s, a) => s + a.premium_authority, 0);
   const activeMgas = mgaAuthorities.filter(a => a.status === 'active').length;
   const avgCompliance = Math.round(mgaAuthorities.reduce((s, a) => s + a.compliance_score, 0) / mgaAuthorities.length);
@@ -183,7 +196,7 @@ const MGAOversightDashboard: React.FC = () => {
             <tbody className="divide-y divide-slate-100">
               {bordereaux.map(b => (
                 <tr key={b.id} className="hover:bg-slate-50 transition">
-                  <td className="px-4 py-3 font-medium text-slate-900">{b.mga_name}</td>
+                  <td className="px-4 py-3 font-medium text-slate-900">{mgaAuthorities.find(a => a.mga_id === b.mga_id)?.mga_name ?? b.mga_id}</td>
                   <td className="px-4 py-3 text-slate-600">{b.period}</td>
                   <td className="px-4 py-3 font-mono text-xs">{money(b.premium_reported)}</td>
                   <td className="px-4 py-3 font-mono text-xs">{money(b.claims_reported)}</td>
