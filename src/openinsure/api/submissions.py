@@ -775,7 +775,7 @@ async def process_submission(submission_id: str, user: CurrentUser = Depends(get
     await _repo.update(
         submission_id,
         {
-            "status": "triaged",
+            "status": "underwriting",
             "triage_result": json.dumps(triage_resp) if isinstance(triage_resp, dict) else str(triage_resp),
             "updated_at": now,
         },
