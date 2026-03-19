@@ -403,6 +403,7 @@ async def triage_submission(submission_id: str) -> TriageResult:
             record["status"] = SubmissionStatus.UNDERWRITING
             record["triage_result"] = resp
             record["updated_at"] = _now()
+            await _repo.update(submission_id, {"status": "underwriting", "updated_at": record["updated_at"]})
             from openinsure.services.event_publisher import publish_domain_event
 
             await publish_domain_event(
@@ -426,6 +427,7 @@ async def triage_submission(submission_id: str) -> TriageResult:
     # Local fallback
     record["status"] = SubmissionStatus.UNDERWRITING
     record["updated_at"] = _now()
+    await _repo.update(submission_id, {"status": "underwriting", "updated_at": record["updated_at"]})
 
     return TriageResult(
         submission_id=submission_id,
@@ -466,6 +468,7 @@ async def generate_quote(submission_id: str, user: CurrentUser = Depends(get_cur
             record["status"] = SubmissionStatus.QUOTED
             record["quoted_premium"] = premium
             record["updated_at"] = _now()
+            await _repo.update(submission_id, {"status": "quoted", "quoted_premium": premium, "updated_at": record["updated_at"]})
             from openinsure.services.event_publisher import publish_domain_event
 
             # Authority check
@@ -531,6 +534,7 @@ async def generate_quote(submission_id: str, user: CurrentUser = Depends(get_cur
     premium = 5000.00
     record["status"] = SubmissionStatus.QUOTED
     record["updated_at"] = _now()
+    await _repo.update(submission_id, {"status": "quoted", "quoted_premium": premium, "updated_at": record["updated_at"]})
     valid_until = datetime(2099, 12, 31, tzinfo=UTC).isoformat()
 
     # Authority check
@@ -666,6 +670,7 @@ async def bind_submission(submission_id: str, user: CurrentUser = Depends(get_cu
     # Update submission status
     record["status"] = SubmissionStatus.BOUND
     record["updated_at"] = now
+    await _repo.update(submission_id, {"status": "bound", "updated_at": now})
 
     # Publish domain events
     await publish_domain_event(
