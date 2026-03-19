@@ -308,6 +308,53 @@ async def create_submission(body: SubmissionCreate) -> SubmissionResponse:
     return SubmissionResponse(**record)
 
 
+@router.post("/acord-ingest", response_model=SubmissionResponse, status_code=201)
+async def ingest_acord_xml(file: UploadFile = File(...)) -> SubmissionResponse:
+    """Ingest an ACORD 125/126 XML application and create a submission.
+
+    Accepts an XML file upload, parses the ACORD commercial insurance
+    application form, and feeds the extracted data into the submission
+    pipeline as a new submission with ``channel='api'`` and
+    ``metadata.source='acord_xml'``.
+
+    Addresses issue #38 (ACORD ingestion).
+    """
+    from openinsure.services.acord_parser import parse_acord_xml
+
+    content = await file.read()
+    if not content:
+        raise HTTPException(status_code=400, detail="Empty file")
+
+    result = parse_acord_xml(content)
+    if not result.applicant_name or result.applicant_name == "Unknown Applicant":
+        if result.parse_warnings:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Could not extract applicant from ACORD XML: {'; '.join(result.parse_warnings)}",
+            )
+
+    payload = result.to_submission()
+
+    sid = str(uuid.uuid4())
+    now = _now()
+    record: dict[str, Any] = {
+        "id": sid,
+        "applicant_name": payload["applicant_name"],
+        "applicant_email": payload.get("applicant_email"),
+        "status": SubmissionStatus.RECEIVED,
+        "channel": "api",
+        "line_of_business": payload.get("line_of_business", "cyber"),
+        "risk_data": payload.get("risk_data", {}),
+        "cyber_risk_data": payload.get("cyber_risk_data", {}),
+        "metadata": payload.get("metadata", {}),
+        "documents": [file.filename] if file.filename else [],
+        "created_at": now,
+        "updated_at": now,
+    }
+    await _repo.create(record)
+    return SubmissionResponse(**record)
+
+
 @router.get("", response_model=SubmissionList)
 async def list_submissions(
     status: SubmissionStatus | None = Query(None, description="Filter by status"),
