@@ -173,6 +173,7 @@ class SubmissionCreate(BaseModel):
 
     applicant_name: str = Field(..., min_length=1, max_length=200)
     applicant_email: str | None = None
+    status: SubmissionStatus | None = None
     channel: SubmissionChannel = SubmissionChannel.API
     line_of_business: LineOfBusiness = LineOfBusiness.CYBER
     risk_data: dict[str, Any] = Field(default_factory=dict)
@@ -294,7 +295,7 @@ async def create_submission(body: SubmissionCreate) -> SubmissionResponse:
         "id": sid,
         "applicant_name": body.applicant_name,
         "applicant_email": body.applicant_email,
-        "status": SubmissionStatus.RECEIVED,
+        "status": body.status or SubmissionStatus.RECEIVED,
         "channel": body.channel,
         "line_of_business": body.line_of_business,
         "risk_data": body.risk_data,
@@ -356,13 +357,16 @@ async def update_submission(submission_id: str, body: SubmissionUpdate) -> Submi
     updates = body.model_dump(exclude_unset=True)
     if "risk_data" in updates and updates["risk_data"] is not None:
         record["risk_data"].update(updates.pop("risk_data"))
+        updates["risk_data"] = record["risk_data"]
     if "metadata" in updates and updates["metadata"] is not None:
         record["metadata"].update(updates.pop("metadata"))
+        updates["metadata"] = record["metadata"]
     for key, val in updates.items():
         if val is not None:
             record[key] = val
 
     record["updated_at"] = _now()
+    await _repo.update(submission_id, updates)
     return SubmissionResponse(**record)
 
 

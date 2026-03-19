@@ -692,6 +692,7 @@ def generate_submissions() -> list[dict[str, Any]]:
                     "payload": {
                         "applicant_name": company_name,
                         "applicant_email": email,
+                        "status": status,
                         "channel": channel,
                         "line_of_business": "cyber",
                         "risk_data": {
