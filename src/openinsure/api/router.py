@@ -4,14 +4,14 @@ from fastapi import APIRouter, Depends
 
 from openinsure.api.actuarial import router as actuarial_router
 from openinsure.api.billing import router as billing_router
-from openinsure.api.escalations import router as escalations_router
-from openinsure.api.metrics import router as metrics_router
 from openinsure.api.claims import router as claims_router
 from openinsure.api.compliance import router as compliance_router
 from openinsure.api.documents import router as documents_router
+from openinsure.api.escalations import router as escalations_router
 from openinsure.api.events import router as events_router
 from openinsure.api.health import router as health_router
 from openinsure.api.knowledge import router as knowledge_router
+from openinsure.api.metrics import router as metrics_router
 from openinsure.api.policies import router as policies_router
 from openinsure.api.products import router as products_router
 from openinsure.api.reinsurance import router as reinsurance_router

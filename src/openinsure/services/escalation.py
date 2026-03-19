@@ -56,11 +56,7 @@ async def get_queue(status: str | None = None, role: str | None = None) -> list[
     if status:
         items = [i for i in items if i["status"] == status]
     if role:
-        items = [
-            i
-            for i in items
-            if role in i.get("escalation_chain", []) or i.get("required_role") == role
-        ]
+        items = [i for i in items if role in i.get("escalation_chain", []) or i.get("required_role") == role]
     return sorted(items, key=lambda x: x["created_at"], reverse=True)
 
 

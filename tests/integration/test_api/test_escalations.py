@@ -53,12 +53,22 @@ async def test_escalate_creates_item():
 @pytest.mark.asyncio
 async def test_get_queue_filters_by_status():
     await escalation.escalate(
-        action="bind", entity_type="submission", entity_id="s1",
-        requested_by="A", requested_role="r", amount=100, authority_result={},
+        action="bind",
+        entity_type="submission",
+        entity_id="s1",
+        requested_by="A",
+        requested_role="r",
+        amount=100,
+        authority_result={},
     )
     await escalation.escalate(
-        action="quote", entity_type="submission", entity_id="s2",
-        requested_by="B", requested_role="r", amount=200, authority_result={},
+        action="quote",
+        entity_type="submission",
+        entity_id="s2",
+        requested_by="B",
+        requested_role="r",
+        amount=200,
+        authority_result={},
     )
 
     # Resolve one
@@ -75,14 +85,28 @@ async def test_get_queue_filters_by_status():
 @pytest.mark.asyncio
 async def test_get_queue_filters_by_role():
     await escalation.escalate(
-        action="bind", entity_type="submission", entity_id="s1",
-        requested_by="A", requested_role="r", amount=100,
-        authority_result={"required_role": "openinsure-senior-underwriter", "escalation_chain": ["openinsure-senior-underwriter"]},
+        action="bind",
+        entity_type="submission",
+        entity_id="s1",
+        requested_by="A",
+        requested_role="r",
+        amount=100,
+        authority_result={
+            "required_role": "openinsure-senior-underwriter",
+            "escalation_chain": ["openinsure-senior-underwriter"],
+        },
     )
     await escalation.escalate(
-        action="reserve", entity_type="claim", entity_id="c1",
-        requested_by="B", requested_role="r", amount=200,
-        authority_result={"required_role": "openinsure-claims-manager", "escalation_chain": ["openinsure-claims-manager"]},
+        action="reserve",
+        entity_type="claim",
+        entity_id="c1",
+        requested_by="B",
+        requested_role="r",
+        amount=200,
+        authority_result={
+            "required_role": "openinsure-claims-manager",
+            "escalation_chain": ["openinsure-claims-manager"],
+        },
     )
 
     uw_items = await escalation.get_queue(role="openinsure-senior-underwriter")
@@ -93,8 +117,13 @@ async def test_get_queue_filters_by_role():
 @pytest.mark.asyncio
 async def test_resolve_approves():
     item = await escalation.escalate(
-        action="settle", entity_type="claim", entity_id="c-1",
-        requested_by="A", requested_role="r", amount=50000, authority_result={},
+        action="settle",
+        entity_type="claim",
+        entity_id="c-1",
+        requested_by="A",
+        requested_role="r",
+        amount=50000,
+        authority_result={},
     )
     resolved = await escalation.resolve(item["id"], "approved", "CUO", "Within limits")
     assert resolved is not None
@@ -106,8 +135,13 @@ async def test_resolve_approves():
 @pytest.mark.asyncio
 async def test_resolve_rejects():
     item = await escalation.escalate(
-        action="bind", entity_type="submission", entity_id="s-1",
-        requested_by="A", requested_role="r", amount=999999, authority_result={},
+        action="bind",
+        entity_type="submission",
+        entity_id="s-1",
+        requested_by="A",
+        requested_role="r",
+        amount=999999,
+        authority_result={},
     )
     resolved = await escalation.resolve(item["id"], "rejected", "CEO", "Too risky")
     assert resolved is not None
@@ -123,8 +157,13 @@ async def test_resolve_missing_returns_none():
 @pytest.mark.asyncio
 async def test_get_by_id():
     item = await escalation.escalate(
-        action="quote", entity_type="submission", entity_id="s-1",
-        requested_by="A", requested_role="r", amount=1000, authority_result={},
+        action="quote",
+        entity_type="submission",
+        entity_id="s-1",
+        requested_by="A",
+        requested_role="r",
+        amount=1000,
+        authority_result={},
     )
     found = await escalation.get_by_id(item["id"])
     assert found is not None
@@ -158,11 +197,17 @@ def test_escalation_crud_flow(client: TestClient):
     import asyncio
 
     loop = asyncio.new_event_loop()
-    item = loop.run_until_complete(escalation.escalate(
-        action="bind", entity_type="submission", entity_id="sub-999",
-        requested_by="Dev User", requested_role="openinsure-uw-analyst",
-        amount=75000, authority_result={"required_role": "openinsure-senior-underwriter", "escalation_chain": []},
-    ))
+    item = loop.run_until_complete(
+        escalation.escalate(
+            action="bind",
+            entity_type="submission",
+            entity_id="sub-999",
+            requested_by="Dev User",
+            requested_role="openinsure-uw-analyst",
+            amount=75000,
+            authority_result={"required_role": "openinsure-senior-underwriter", "escalation_chain": []},
+        )
+    )
     loop.close()
 
     # Count should be 1
@@ -180,10 +225,13 @@ def test_escalation_crud_flow(client: TestClient):
     assert resp.json()["action"] == "bind"
 
     # Approve
-    resp = client.post(f"/api/v1/escalations/{item['id']}/approve", json={
-        "resolved_by": "Sarah Chen",
-        "reason": "Premium within acceptable range",
-    })
+    resp = client.post(
+        f"/api/v1/escalations/{item['id']}/approve",
+        json={
+            "resolved_by": "Sarah Chen",
+            "reason": "Premium within acceptable range",
+        },
+    )
     assert resp.status_code == 200
     assert resp.json()["status"] == "approved"
 
@@ -196,17 +244,26 @@ def test_reject_escalation(client: TestClient):
     import asyncio
 
     loop = asyncio.new_event_loop()
-    item = loop.run_until_complete(escalation.escalate(
-        action="settle", entity_type="claim", entity_id="clm-001",
-        requested_by="Dev User", requested_role="openinsure-claims-adjuster",
-        amount=500000, authority_result={"required_role": "openinsure-cuo"},
-    ))
+    item = loop.run_until_complete(
+        escalation.escalate(
+            action="settle",
+            entity_type="claim",
+            entity_id="clm-001",
+            requested_by="Dev User",
+            requested_role="openinsure-claims-adjuster",
+            amount=500000,
+            authority_result={"required_role": "openinsure-cuo"},
+        )
+    )
     loop.close()
 
-    resp = client.post(f"/api/v1/escalations/{item['id']}/reject", json={
-        "resolved_by": "Alexandra Reed",
-        "reason": "Insufficient documentation",
-    })
+    resp = client.post(
+        f"/api/v1/escalations/{item['id']}/reject",
+        json={
+            "resolved_by": "Alexandra Reed",
+            "reason": "Insufficient documentation",
+        },
+    )
     assert resp.status_code == 200
     assert resp.json()["status"] == "rejected"
 
@@ -217,7 +274,11 @@ def test_get_nonexistent_escalation_returns_404(client: TestClient):
 
 
 def test_approve_nonexistent_escalation_returns_404(client: TestClient):
-    resp = client.post(f"/api/v1/escalations/{uuid.uuid4()}/approve", json={
-        "resolved_by": "X", "reason": "Y",
-    })
+    resp = client.post(
+        f"/api/v1/escalations/{uuid.uuid4()}/approve",
+        json={
+            "resolved_by": "X",
+            "reason": "Y",
+        },
+    )
     assert resp.status_code == 404
