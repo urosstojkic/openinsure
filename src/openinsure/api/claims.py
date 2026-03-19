@@ -16,7 +16,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from openinsure.infrastructure.factory import get_claim_repository, get_compliance_repository
+from openinsure.infrastructure.factory import get_claim_repository, get_compliance_repository, get_policy_repository
 from openinsure.rbac.auth import CurrentUser, get_current_user
 from openinsure.rbac.authority import AuthorityDecision, AuthorityEngine
 
@@ -269,14 +269,27 @@ async def create_claim(body: ClaimCreate) -> ClaimResponse:
     """
     cid = str(uuid.uuid4())
     now = _now()
+
+    # Resolve policy number from the linked policy
+    policy_number = ""
+    try:
+        pol_repo = get_policy_repository()
+        policy = await pol_repo.get_by_id(body.policy_id)
+        if policy:
+            policy_number = policy.get("policy_number", "")
+    except Exception:
+        pass
+
     record: dict[str, Any] = {
         "id": cid,
         "claim_number": _generate_claim_number(),
         "policy_id": body.policy_id,
+        "policy_number": policy_number,
         "claim_type": body.claim_type,
         "status": ClaimStatus.REPORTED,
         "description": body.description,
         "date_of_loss": body.date_of_loss,
+        "loss_date": body.date_of_loss,
         "reported_by": body.reported_by,
         "contact_email": body.contact_email,
         "contact_phone": body.contact_phone,

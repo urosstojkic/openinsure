@@ -77,6 +77,9 @@ def _policy_from_sql_row(row: dict[str, Any]) -> dict[str, Any]:
             return ""
         # Convert SQL datetime objects to ISO 8601 string
         if hasattr(val, "isoformat"):
+            # Treat SQL sentinel dates (e.g. 1900-01-01) as empty
+            if hasattr(val, "year") and val.year < 1970:
+                return ""
             return val.isoformat()
         return str(val)
 
