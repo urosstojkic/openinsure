@@ -10,12 +10,15 @@ from openinsure.api.compliance import router as compliance_router
 from openinsure.api.documents import router as documents_router
 from openinsure.api.escalations import router as escalations_router
 from openinsure.api.events import router as events_router
+from openinsure.api.finance import router as finance_router
 from openinsure.api.health import router as health_router
 from openinsure.api.knowledge import router as knowledge_router
 from openinsure.api.metrics import router as metrics_router
+from openinsure.api.mga_oversight import router as mga_router
 from openinsure.api.policies import router as policies_router
 from openinsure.api.products import router as products_router
 from openinsure.api.reinsurance import router as reinsurance_router
+from openinsure.api.renewals import router as renewals_router
 from openinsure.api.submissions import router as submissions_router
 from openinsure.api.underwriter import router as underwriter_router
 from openinsure.api.workflows import router as workflows_router
@@ -44,5 +47,8 @@ api_v1_router.include_router(escalations_router, prefix="/escalations", tags=["e
 api_v1_router.include_router(workflows_router, prefix="/workflows", tags=["workflows"])
 api_v1_router.include_router(underwriter_router, prefix="/underwriter", tags=["underwriter"])
 api_v1_router.include_router(broker_router, prefix="/broker", tags=["broker"])
+api_v1_router.include_router(renewals_router, prefix="/renewals", tags=["renewals"])
+api_v1_router.include_router(mga_router, prefix="/mga", tags=["mga-oversight"])
+api_v1_router.include_router(finance_router, prefix="/finance", tags=["finance"])
 
 api_router.include_router(api_v1_router)

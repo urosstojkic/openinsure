@@ -234,3 +234,24 @@ def get_search_adapter():
 
         return SearchAdapter(settings.search_endpoint, settings.search_index_name)
     return None
+
+
+@lru_cache
+def get_renewal_repository() -> BaseRepository:
+    from openinsure.infrastructure.repositories.renewals import InMemoryRenewalRepository
+
+    return InMemoryRenewalRepository()
+
+
+@lru_cache
+def get_mga_authority_repository() -> BaseRepository:
+    from openinsure.infrastructure.repositories.mga import InMemoryMGAAuthorityRepository
+
+    return InMemoryMGAAuthorityRepository()
+
+
+@lru_cache
+def get_mga_bordereau_repository() -> BaseRepository:
+    from openinsure.infrastructure.repositories.mga import InMemoryMGABordereauRepository
+
+    return InMemoryMGABordereauRepository()

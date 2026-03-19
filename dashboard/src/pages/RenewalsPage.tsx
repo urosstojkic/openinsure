@@ -1,20 +1,18 @@
 import React, { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   RefreshCw, Clock, AlertCircle, CheckCircle2,
 } from 'lucide-react';
 import StatCard from '../components/StatCard';
+import {
+  getUpcomingRenewals,
+  processRenewal,
+  type UpcomingRenewals,
+  type RenewalCandidate,
+} from '../api/renewals';
 
 const money = (n: number) =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n);
-
-// ── Mock renewal candidates ──
-const renewalCandidates = [
-  { id: 'pol-001', policy_number: 'POL-7A3B2C1D', policyholder_name: 'TechCorp Inc.', status: 'active', effective_date: '2025-01-15', expiration_date: '2026-01-15', premium: 45_000, days_to_expiry: 22, lob: 'Cyber' },
-  { id: 'pol-002', policy_number: 'POL-8E4F5G6H', policyholder_name: 'Global Logistics LLC', status: 'active', effective_date: '2025-02-01', expiration_date: '2026-02-01', premium: 72_000, days_to_expiry: 38, lob: 'GL' },
-  { id: 'pol-003', policy_number: 'POL-9I0J1K2L', policyholder_name: 'Apex Financial Group', status: 'active', effective_date: '2025-03-01', expiration_date: '2026-03-01', premium: 120_000, days_to_expiry: 66, lob: 'D&O' },
-  { id: 'pol-004', policy_number: 'POL-3M4N5O6P', policyholder_name: 'Sunrise Healthcare', status: 'active', effective_date: '2025-04-15', expiration_date: '2026-04-15', premium: 95_000, days_to_expiry: 111, lob: 'Prof Liability' },
-  { id: 'pol-005', policy_number: 'POL-7Q8R9S0T', policyholder_name: 'Metro Construction', status: 'active', effective_date: '2024-12-01', expiration_date: '2025-12-01', premium: 58_000, days_to_expiry: -24, lob: 'GL' },
-];
 
 const urgencyBadge = (days: number) => {
   if (days <= 0) return <span className="inline-flex items-center rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-700">Expired</span>;
@@ -26,18 +24,31 @@ const urgencyBadge = (days: number) => {
 
 const RenewalsPage: React.FC = () => {
   const [filter, setFilter] = useState<'all' | '30' | '60' | '90'>('all');
+  const queryClient = useQueryClient();
 
-  const filtered = renewalCandidates.filter(r => {
+  const { data, isLoading } = useQuery<UpcomingRenewals>({
+    queryKey: ['renewals-upcoming'],
+    queryFn: () => getUpcomingRenewals(365),
+  });
+
+  const renewMutation = useMutation({
+    mutationFn: (policyId: string) => processRenewal(policyId),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['renewals-upcoming'] }),
+  });
+
+  if (isLoading || !data) {
+    return <div className="flex h-64 items-center justify-center text-slate-400">Loading…</div>;
+  }
+
+  const renewals = data.renewals;
+  const filtered = renewals.filter((r: RenewalCandidate) => {
     if (filter === '30') return r.days_to_expiry <= 30;
     if (filter === '60') return r.days_to_expiry <= 60;
     if (filter === '90') return r.days_to_expiry <= 90;
     return true;
   });
 
-  const within30 = renewalCandidates.filter(r => r.days_to_expiry <= 30).length;
-  const within60 = renewalCandidates.filter(r => r.days_to_expiry <= 60).length;
-  const within90 = renewalCandidates.filter(r => r.days_to_expiry <= 90).length;
-  const totalPremium = renewalCandidates.reduce((s, r) => s + r.premium, 0);
+  const totalPremium = renewals.reduce((s: number, r: RenewalCandidate) => s + r.premium, 0);
 
   return (
     <div className="space-y-6">
@@ -48,10 +59,10 @@ const RenewalsPage: React.FC = () => {
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard title="Total Candidates" value={renewalCandidates.length} icon={<RefreshCw size={20} />} subtitle={`${money(totalPremium)} premium at risk`} />
-        <StatCard title="Within 30 Days" value={within30} icon={<AlertCircle size={20} />} subtitle="Urgent attention" />
-        <StatCard title="Within 60 Days" value={within60} icon={<Clock size={20} />} subtitle="Action needed" />
-        <StatCard title="Within 90 Days" value={within90} icon={<CheckCircle2 size={20} />} subtitle="Planning window" />
+        <StatCard title="Total Candidates" value={data.total} icon={<RefreshCw size={20} />} subtitle={`${money(totalPremium)} premium at risk`} />
+        <StatCard title="Within 30 Days" value={data.within_30_days} icon={<AlertCircle size={20} />} subtitle="Urgent attention" />
+        <StatCard title="Within 60 Days" value={data.within_60_days} icon={<Clock size={20} />} subtitle="Action needed" />
+        <StatCard title="Within 90 Days" value={data.within_90_days} icon={<CheckCircle2 size={20} />} subtitle="Planning window" />
       </div>
 
       {/* Filter buttons */}
@@ -76,7 +87,6 @@ const RenewalsPage: React.FC = () => {
             <tr>
               <th className="px-4 py-3">Policy #</th>
               <th className="px-4 py-3">Policyholder</th>
-              <th className="px-4 py-3">LOB</th>
               <th className="px-4 py-3">Expiration</th>
               <th className="px-4 py-3">Urgency</th>
               <th className="px-4 py-3">Current Premium</th>
@@ -85,25 +95,28 @@ const RenewalsPage: React.FC = () => {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {filtered.map(r => (
+            {filtered.map((r: RenewalCandidate) => (
               <tr key={r.id} className="hover:bg-slate-50 transition">
                 <td className="px-4 py-3 font-mono text-xs font-medium text-slate-900">{r.policy_number}</td>
                 <td className="px-4 py-3 font-medium text-slate-900">{r.policyholder_name}</td>
-                <td className="px-4 py-3 text-slate-600">{r.lob}</td>
                 <td className="px-4 py-3 text-slate-600">{r.expiration_date}</td>
                 <td className="px-4 py-3">{urgencyBadge(r.days_to_expiry)}</td>
                 <td className="px-4 py-3 font-mono text-xs">{money(r.premium)}</td>
                 <td className="px-4 py-3 font-mono text-xs text-blue-600">{money(Math.round(r.premium * 1.05))}</td>
                 <td className="px-4 py-3">
-                  <button className="rounded-md bg-indigo-50 px-3 py-1.5 text-xs font-medium text-indigo-700 hover:bg-indigo-100 transition">
-                    Generate Terms
+                  <button
+                    onClick={() => renewMutation.mutate(r.id)}
+                    disabled={renewMutation.isPending}
+                    className="rounded-md bg-indigo-50 px-3 py-1.5 text-xs font-medium text-indigo-700 hover:bg-indigo-100 transition disabled:opacity-50"
+                  >
+                    {renewMutation.isPending ? 'Processing…' : 'Process Renewal'}
                   </button>
                 </td>
               </tr>
             ))}
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={8} className="px-4 py-8 text-center text-slate-400">
+                <td colSpan={7} className="px-4 py-8 text-center text-slate-400">
                   No renewals in this window
                 </td>
               </tr>

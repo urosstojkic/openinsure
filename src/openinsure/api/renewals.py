@@ -10,12 +10,13 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from openinsure.infrastructure.factory import get_policy_repository
+from openinsure.infrastructure.factory import get_policy_repository, get_renewal_repository
 from openinsure.services.renewal import generate_renewal_terms, identify_renewals
 
 router = APIRouter()
 
 _repo = get_policy_repository()
+_renewal_repo = get_renewal_repository()
 
 
 # ---------------------------------------------------------------------------
@@ -56,6 +57,26 @@ class UpcomingRenewals(BaseModel):
     within_60_days: int
     within_90_days: int
     renewals: list[RenewalCandidate]
+
+
+class RenewalRecordResponse(BaseModel):
+    id: str
+    original_policy_id: str
+    renewal_policy_id: str | None = None
+    status: str = "pending"
+    expiring_premium: float = 0
+    renewal_premium: float = 0
+    rate_change_pct: float = 0
+    recommendation: str = "review_required"
+    conditions: list[str] = Field(default_factory=list)
+    generated_by: str = "system"
+    created_at: str = ""
+    updated_at: str = ""
+
+
+class RenewalRecordList(BaseModel):
+    items: list[RenewalRecordResponse]
+    total: int
 
 
 # ---------------------------------------------------------------------------
@@ -225,4 +246,43 @@ async def process_renewal(policy_id: str) -> dict[str, object]:
         "renewal_premium": renewal_premium,
         "steps": results,
     }
+
+    # Persist the renewal record
+    expiring_premium = float(policy.get("total_premium", policy.get("premium", 0)) or 0)
+    rate_pct = ((renewal_premium - expiring_premium) / expiring_premium * 100) if expiring_premium else 0
+    now = datetime.now(UTC).isoformat()
+    renewal_record: dict[str, Any] = {
+        "id": str(uuid.uuid4()),
+        "original_policy_id": policy_id,
+        "renewal_policy_id": new_policy_id,
+        "status": "accepted" if new_policy_id else "non_renewed",
+        "expiring_premium": expiring_premium,
+        "renewal_premium": renewal_premium,
+        "rate_change_pct": round(rate_pct, 2),
+        "recommendation": recommendation,
+        "conditions": [],
+        "generated_by": "foundry" if foundry.is_available else "system",
+        "created_at": now,
+        "updated_at": now,
+    }
+    await _renewal_repo.create(renewal_record)
+
     return json.loads(json.dumps(result, default=str))
+
+
+@router.get("/records", response_model=RenewalRecordList)
+async def list_renewal_records(
+    status: str | None = Query(None, description="Filter by renewal status"),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=100),
+) -> RenewalRecordList:
+    """List all renewal records."""
+    filters: dict[str, Any] = {}
+    if status:
+        filters["status"] = status
+    total = await _renewal_repo.count(filters or None)
+    items = await _renewal_repo.list_all(filters=filters or None, skip=skip, limit=limit)
+    return RenewalRecordList(
+        items=[RenewalRecordResponse(**r) for r in items],
+        total=total,
+    )
