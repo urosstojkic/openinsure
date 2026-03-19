@@ -403,7 +403,7 @@ async def triage_submission(submission_id: str) -> TriageResult:
             record["status"] = SubmissionStatus.UNDERWRITING
             record["triage_result"] = resp
             record["updated_at"] = _now()
-            await _repo.update(submission_id, {"status": "underwriting", "updated_at": record["updated_at"]})
+            await _repo.update(submission_id, {"status": "underwriting", "triage_result": json.dumps(resp), "updated_at": record["updated_at"]})
             from openinsure.services.event_publisher import publish_domain_event
 
             await publish_domain_event(
@@ -427,7 +427,8 @@ async def triage_submission(submission_id: str) -> TriageResult:
     # Local fallback
     record["status"] = SubmissionStatus.UNDERWRITING
     record["updated_at"] = _now()
-    await _repo.update(submission_id, {"status": "underwriting", "updated_at": record["updated_at"]})
+    fallback_triage = json.dumps({"risk_score": 0.42, "recommendation": "proceed_to_quote", "source": "local"})
+    await _repo.update(submission_id, {"status": "underwriting", "triage_result": fallback_triage, "updated_at": record["updated_at"]})
 
     return TriageResult(
         submission_id=submission_id,
