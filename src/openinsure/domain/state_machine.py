@@ -32,7 +32,7 @@ class DomainInvariantError(ValueError):
 
 # Valid state transitions
 SUBMISSION_TRANSITIONS: dict[str, set[str]] = {
-    "received": {"triaging", "declined"},
+    "received": {"triaging", "underwriting", "declined"},
     "triaging": {"underwriting", "declined"},
     "underwriting": {"quoted", "declined"},
     "quoted": {"bound", "declined", "expired"},
