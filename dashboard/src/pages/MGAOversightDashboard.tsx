@@ -11,7 +11,6 @@ import {
   getMGAPerformance,
   getMGABordereaux,
   type MGAPerformance,
-  type MGAAuthority,
   type MGABordereau,
 } from '../api/mga';
 
