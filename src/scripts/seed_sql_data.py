@@ -10,9 +10,7 @@ Example:
     python src/scripts/seed_sql_data.py https://openinsure-backend.braveriver-f92a9f28.swedencentral.azurecontainerapps.io
 """
 
-import json
 import sys
-import time
 
 import httpx
 
@@ -202,9 +200,27 @@ POLICY_TEMPLATES = [
         "expiration_date": "2027-01-01",
         "premium": 45000.00,
         "coverages": [
-            {"coverage_code": "BREACH-RESP", "coverage_name": "Breach Response", "limit": 2000000, "deductible": 25000, "premium": 15000},
-            {"coverage_code": "REG-DEFENSE", "coverage_name": "Regulatory Defense", "limit": 1000000, "deductible": 10000, "premium": 12000},
-            {"coverage_code": "BUS-INTRPT", "coverage_name": "Business Interruption", "limit": 1500000, "deductible": 50000, "premium": 18000},
+            {
+                "coverage_code": "BREACH-RESP",
+                "coverage_name": "Breach Response",
+                "limit": 2000000,
+                "deductible": 25000,
+                "premium": 15000,
+            },
+            {
+                "coverage_code": "REG-DEFENSE",
+                "coverage_name": "Regulatory Defense",
+                "limit": 1000000,
+                "deductible": 10000,
+                "premium": 12000,
+            },
+            {
+                "coverage_code": "BUS-INTRPT",
+                "coverage_name": "Business Interruption",
+                "limit": 1500000,
+                "deductible": 50000,
+                "premium": 18000,
+            },
         ],
     },
     {
@@ -215,9 +231,27 @@ POLICY_TEMPLATES = [
         "expiration_date": "2027-02-01",
         "premium": 78000.00,
         "coverages": [
-            {"coverage_code": "THIRD-PARTY", "coverage_name": "Third-Party Liability", "limit": 5000000, "deductible": 50000, "premium": 35000},
-            {"coverage_code": "BREACH-RESP", "coverage_name": "Breach Response", "limit": 3000000, "deductible": 25000, "premium": 22000},
-            {"coverage_code": "CYBER-CRIME", "coverage_name": "Cyber Crime / Fraud", "limit": 2000000, "deductible": 25000, "premium": 21000},
+            {
+                "coverage_code": "THIRD-PARTY",
+                "coverage_name": "Third-Party Liability",
+                "limit": 5000000,
+                "deductible": 50000,
+                "premium": 35000,
+            },
+            {
+                "coverage_code": "BREACH-RESP",
+                "coverage_name": "Breach Response",
+                "limit": 3000000,
+                "deductible": 25000,
+                "premium": 22000,
+            },
+            {
+                "coverage_code": "CYBER-CRIME",
+                "coverage_name": "Cyber Crime / Fraud",
+                "limit": 2000000,
+                "deductible": 25000,
+                "premium": 21000,
+            },
         ],
     },
     {
@@ -228,8 +262,20 @@ POLICY_TEMPLATES = [
         "expiration_date": "2027-01-15",
         "premium": 32000.00,
         "coverages": [
-            {"coverage_code": "BUS-INTRPT", "coverage_name": "Business Interruption", "limit": 2000000, "deductible": 75000, "premium": 18000},
-            {"coverage_code": "BREACH-RESP", "coverage_name": "Breach Response", "limit": 1000000, "deductible": 15000, "premium": 14000},
+            {
+                "coverage_code": "BUS-INTRPT",
+                "coverage_name": "Business Interruption",
+                "limit": 2000000,
+                "deductible": 75000,
+                "premium": 18000,
+            },
+            {
+                "coverage_code": "BREACH-RESP",
+                "coverage_name": "Breach Response",
+                "limit": 1000000,
+                "deductible": 15000,
+                "premium": 14000,
+            },
         ],
     },
     {
@@ -240,8 +286,20 @@ POLICY_TEMPLATES = [
         "expiration_date": "2027-03-01",
         "premium": 18500.00,
         "coverages": [
-            {"coverage_code": "BREACH-RESP", "coverage_name": "Breach Response", "limit": 1000000, "deductible": 10000, "premium": 9500},
-            {"coverage_code": "THIRD-PARTY", "coverage_name": "Third-Party Liability", "limit": 1000000, "deductible": 15000, "premium": 9000},
+            {
+                "coverage_code": "BREACH-RESP",
+                "coverage_name": "Breach Response",
+                "limit": 1000000,
+                "deductible": 10000,
+                "premium": 9500,
+            },
+            {
+                "coverage_code": "THIRD-PARTY",
+                "coverage_name": "Third-Party Liability",
+                "limit": 1000000,
+                "deductible": 15000,
+                "premium": 9000,
+            },
         ],
     },
     {
@@ -252,8 +310,20 @@ POLICY_TEMPLATES = [
         "expiration_date": "2026-06-01",
         "premium": 22000.00,
         "coverages": [
-            {"coverage_code": "BREACH-RESP", "coverage_name": "Breach Response", "limit": 1000000, "deductible": 10000, "premium": 12000},
-            {"coverage_code": "BUS-INTRPT", "coverage_name": "Business Interruption", "limit": 500000, "deductible": 25000, "premium": 10000},
+            {
+                "coverage_code": "BREACH-RESP",
+                "coverage_name": "Breach Response",
+                "limit": 1000000,
+                "deductible": 10000,
+                "premium": 12000,
+            },
+            {
+                "coverage_code": "BUS-INTRPT",
+                "coverage_name": "Business Interruption",
+                "limit": 500000,
+                "deductible": 25000,
+                "premium": 10000,
+            },
         ],
     },
     {
@@ -264,8 +334,20 @@ POLICY_TEMPLATES = [
         "expiration_date": "2026-09-01",
         "premium": 55000.00,
         "coverages": [
-            {"coverage_code": "THIRD-PARTY", "coverage_name": "Third-Party Liability", "limit": 5000000, "deductible": 50000, "premium": 30000},
-            {"coverage_code": "CYBER-CRIME", "coverage_name": "Cyber Crime / Fraud", "limit": 2000000, "deductible": 25000, "premium": 25000},
+            {
+                "coverage_code": "THIRD-PARTY",
+                "coverage_name": "Third-Party Liability",
+                "limit": 5000000,
+                "deductible": 50000,
+                "premium": 30000,
+            },
+            {
+                "coverage_code": "CYBER-CRIME",
+                "coverage_name": "Cyber Crime / Fraud",
+                "limit": 2000000,
+                "deductible": 25000,
+                "premium": 25000,
+            },
         ],
     },
     {
@@ -276,8 +358,20 @@ POLICY_TEMPLATES = [
         "expiration_date": "2027-01-01",
         "premium": 28000.00,
         "coverages": [
-            {"coverage_code": "BREACH-RESP", "coverage_name": "Breach Response", "limit": 2000000, "deductible": 25000, "premium": 16000},
-            {"coverage_code": "PCI-DSS", "coverage_name": "PCI-DSS Fines & Penalties", "limit": 500000, "deductible": 10000, "premium": 12000},
+            {
+                "coverage_code": "BREACH-RESP",
+                "coverage_name": "Breach Response",
+                "limit": 2000000,
+                "deductible": 25000,
+                "premium": 16000,
+            },
+            {
+                "coverage_code": "PCI-DSS",
+                "coverage_name": "PCI-DSS Fines & Penalties",
+                "limit": 500000,
+                "deductible": 10000,
+                "premium": 12000,
+            },
         ],
     },
     {
@@ -288,8 +382,20 @@ POLICY_TEMPLATES = [
         "expiration_date": "2026-11-01",
         "premium": 41000.00,
         "coverages": [
-            {"coverage_code": "BREACH-RESP", "coverage_name": "Breach Response", "limit": 2000000, "deductible": 20000, "premium": 18000},
-            {"coverage_code": "THIRD-PARTY", "coverage_name": "Third-Party Liability", "limit": 3000000, "deductible": 25000, "premium": 23000},
+            {
+                "coverage_code": "BREACH-RESP",
+                "coverage_name": "Breach Response",
+                "limit": 2000000,
+                "deductible": 20000,
+                "premium": 18000,
+            },
+            {
+                "coverage_code": "THIRD-PARTY",
+                "coverage_name": "Third-Party Liability",
+                "limit": 3000000,
+                "deductible": 25000,
+                "premium": 23000,
+            },
         ],
     },
     {
@@ -300,8 +406,20 @@ POLICY_TEMPLATES = [
         "expiration_date": "2026-01-01",
         "premium": 35000.00,
         "coverages": [
-            {"coverage_code": "THIRD-PARTY", "coverage_name": "Third-Party Liability", "limit": 3000000, "deductible": 25000, "premium": 20000},
-            {"coverage_code": "REG-DEFENSE", "coverage_name": "Regulatory Defense", "limit": 1000000, "deductible": 15000, "premium": 15000},
+            {
+                "coverage_code": "THIRD-PARTY",
+                "coverage_name": "Third-Party Liability",
+                "limit": 3000000,
+                "deductible": 25000,
+                "premium": 20000,
+            },
+            {
+                "coverage_code": "REG-DEFENSE",
+                "coverage_name": "Regulatory Defense",
+                "limit": 1000000,
+                "deductible": 15000,
+                "premium": 15000,
+            },
         ],
     },
     {
@@ -312,8 +430,20 @@ POLICY_TEMPLATES = [
         "expiration_date": "2026-06-01",
         "premium": 19000.00,
         "coverages": [
-            {"coverage_code": "BREACH-RESP", "coverage_name": "Breach Response", "limit": 500000, "deductible": 10000, "premium": 11000},
-            {"coverage_code": "BUS-INTRPT", "coverage_name": "Business Interruption", "limit": 500000, "deductible": 25000, "premium": 8000},
+            {
+                "coverage_code": "BREACH-RESP",
+                "coverage_name": "Breach Response",
+                "limit": 500000,
+                "deductible": 10000,
+                "premium": 11000,
+            },
+            {
+                "coverage_code": "BUS-INTRPT",
+                "coverage_name": "Business Interruption",
+                "limit": 500000,
+                "deductible": 25000,
+                "premium": 8000,
+            },
         ],
     },
     {
@@ -324,9 +454,27 @@ POLICY_TEMPLATES = [
         "expiration_date": "2027-02-15",
         "premium": 62000.00,
         "coverages": [
-            {"coverage_code": "BREACH-RESP", "coverage_name": "Breach Response", "limit": 5000000, "deductible": 50000, "premium": 28000},
-            {"coverage_code": "REG-DEFENSE", "coverage_name": "Regulatory Defense", "limit": 2000000, "deductible": 25000, "premium": 18000},
-            {"coverage_code": "THIRD-PARTY", "coverage_name": "Third-Party Liability", "limit": 3000000, "deductible": 25000, "premium": 16000},
+            {
+                "coverage_code": "BREACH-RESP",
+                "coverage_name": "Breach Response",
+                "limit": 5000000,
+                "deductible": 50000,
+                "premium": 28000,
+            },
+            {
+                "coverage_code": "REG-DEFENSE",
+                "coverage_name": "Regulatory Defense",
+                "limit": 2000000,
+                "deductible": 25000,
+                "premium": 18000,
+            },
+            {
+                "coverage_code": "THIRD-PARTY",
+                "coverage_name": "Third-Party Liability",
+                "limit": 3000000,
+                "deductible": 25000,
+                "premium": 16000,
+            },
         ],
     },
     {
@@ -337,8 +485,20 @@ POLICY_TEMPLATES = [
         "expiration_date": "2027-03-01",
         "premium": 15000.00,
         "coverages": [
-            {"coverage_code": "BREACH-RESP", "coverage_name": "Breach Response", "limit": 500000, "deductible": 5000, "premium": 8000},
-            {"coverage_code": "CYBER-CRIME", "coverage_name": "Cyber Crime / Fraud", "limit": 250000, "deductible": 5000, "premium": 7000},
+            {
+                "coverage_code": "BREACH-RESP",
+                "coverage_name": "Breach Response",
+                "limit": 500000,
+                "deductible": 5000,
+                "premium": 8000,
+            },
+            {
+                "coverage_code": "CYBER-CRIME",
+                "coverage_name": "Cyber Crime / Fraud",
+                "limit": 250000,
+                "deductible": 5000,
+                "premium": 7000,
+            },
         ],
     },
 ]
@@ -492,7 +652,7 @@ def main() -> None:
 
     # ── Summary ──────────────────────────────────────────────────────────
     print(f"\n{'=' * 60}")
-    print(f"  SEED COMPLETE")
+    print("  SEED COMPLETE")
     print(f"{'=' * 60}")
     print(f"  Submissions created: {stats['submissions']}")
     print(f"  Policies created:    {stats['policies']}")
@@ -500,7 +660,7 @@ def main() -> None:
     print(f"  Errors:              {stats['errors']}")
 
     # Verify counts via API
-    print(f"\n  Verifying via API...")
+    print("\n  Verifying via API...")
     for entity in ("submissions", "policies", "claims"):
         try:
             r = client.get(f"/api/v1/{entity}")

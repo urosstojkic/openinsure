@@ -1,10 +1,11 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Plus } from 'lucide-react';
+import { Plus, Play, Sparkles } from 'lucide-react';
 import DataTable, { type Column } from '../components/DataTable';
 import StatusBadge from '../components/StatusBadge';
-import { getClaims } from '../api/claims';
+import ProcessWorkflowModal from '../components/ProcessWorkflowModal';
+import { getClaims, processClaim } from '../api/claims';
 import type { Claim, ClaimStatus, ClaimSeverity } from '../types';
 
 const statusVariant: Record<ClaimStatus, 'blue' | 'yellow' | 'orange' | 'green' | 'red' | 'purple'> = {
@@ -27,9 +28,15 @@ const money = (n: number) =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n);
 
 const Claims: React.FC = () => {
-  const { data: claims = [], isLoading } = useQuery({ queryKey: ['claims'], queryFn: getClaims });
+  const { data: claims = [], isLoading, refetch } = useQuery({ queryKey: ['claims'], queryFn: getClaims });
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [severityFilter, setSeverityFilter] = useState<string>('all');
+  const [processingItem, setProcessingItem] = useState<{ id: string; label: string } | null>(null);
+
+  const handleProcess = useCallback((id: string, label: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setProcessingItem({ id, label });
+  }, []);
 
   const filtered = useMemo(() => {
     let list = claims;
@@ -40,12 +47,24 @@ const Claims: React.FC = () => {
 
   const columns: Column<Claim>[] = [
     { key: 'number', header: 'Claim Number', render: (r) => <span className="font-mono text-xs">{r.claim_number}</span>, sortable: true, sortValue: (r) => r.claim_number },
-    { key: 'policy', header: 'Policy', render: (r) => <span className="font-mono text-xs">{r.policy_number}</span> },
-    { key: 'status', header: 'Status', render: (r) => <StatusBadge label={r.status} variant={statusVariant[r.status]} /> },
-    { key: 'loss_date', header: 'Loss Date', render: (r) => r.loss_date, sortable: true, sortValue: (r) => r.loss_date },
-    { key: 'severity', header: 'Severity', render: (r) => <StatusBadge label={r.severity} variant={severityVariant[r.severity]} /> },
+    { key: 'policy', header: 'Policy', render: (r) => <span className="font-mono text-xs">{r.policy_number || '—'}</span> },
+    { key: 'status', header: 'Status', render: (r) => <StatusBadge label={r.status} variant={statusVariant[r.status] || 'gray'} /> },
+    { key: 'loss_date', header: 'Loss Date', render: (r) => r.loss_date ? new Date(r.loss_date).toLocaleDateString() : '—', sortable: true, sortValue: (r) => r.loss_date },
+    { key: 'severity', header: 'Severity', render: (r) => <StatusBadge label={r.severity} variant={severityVariant[r.severity] || 'gray'} /> },
     { key: 'incurred', header: 'Total Incurred', render: (r) => money(r.total_incurred), sortable: true, sortValue: (r) => r.total_incurred },
-    { key: 'assigned', header: 'Assigned To', render: (r) => r.assigned_to },
+    { key: 'assigned', header: 'Assigned To', render: (r) => r.assigned_to || <span className="text-slate-300">Unassigned</span> },
+    { key: 'actions', header: 'Actions', render: (r) =>
+      r.status === 'open' ? (
+        <button
+          onClick={(e) => handleProcess(r.id, r.claim_number || r.id, e)}
+          className="inline-flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-indigo-600 to-purple-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:from-indigo-700 hover:to-purple-700 transition-all"
+        >
+          <Sparkles size={12} />
+          <Play size={11} />
+          Process
+        </button>
+      ) : null
+    },
   ];
 
   if (isLoading) return <div className="flex h-64 items-center justify-center text-slate-400">Loading…</div>;
@@ -88,6 +107,18 @@ const Claims: React.FC = () => {
         data={filtered}
         keyExtractor={(r) => r.id}
       />
+
+      {/* Process Workflow Modal */}
+      {processingItem && (
+        <ProcessWorkflowModal
+          mode="claim"
+          itemId={processingItem.id}
+          itemLabel={processingItem.label}
+          processFunc={processClaim}
+          onClose={() => setProcessingItem(null)}
+          onComplete={() => { refetch(); }}
+        />
+      )}
     </div>
   );
 };

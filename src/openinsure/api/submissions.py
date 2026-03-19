@@ -730,13 +730,25 @@ async def process_submission(submission_id: str, user: CurrentUser = Depends(get
             f"/submissions/{submission_id}",
             {"submission_id": submission_id, "reason": "outside_appetite"},
         )
-        return {
-            "submission_id": submission_id,
-            "workflow": "new_business",
-            "outcome": "declined",
-            "reason": "outside_appetite",
-            "steps": results,
-        }
+        return json.loads(
+            json.dumps(
+                {
+                    "submission_id": submission_id,
+                    "workflow": "new_business",
+                    "outcome": "declined",
+                    "reason": "outside_appetite",
+                    "policy_id": None,
+                    "policy_number": None,
+                    "premium": None,
+                    "steps": results,
+                    "authority": {
+                        "decision": "auto_execute",
+                        "reason": "Declined at triage; no bind authority required",
+                    },
+                },
+                default=str,
+            )
+        )
 
     uw = await foundry.invoke(
         "openinsure-underwriting",
@@ -843,7 +855,7 @@ async def process_submission(submission_id: str, user: CurrentUser = Depends(get
         )
 
     outcome = "bound" if policy_id else "quoted_pending_approval"
-    return {
+    result: dict[str, Any] = {
         "submission_id": submission_id,
         "workflow": "new_business",
         "outcome": outcome,
@@ -856,3 +868,4 @@ async def process_submission(submission_id: str, user: CurrentUser = Depends(get
             "reason": bind_auth.reason,
         },
     }
+    return json.loads(json.dumps(result, default=str))

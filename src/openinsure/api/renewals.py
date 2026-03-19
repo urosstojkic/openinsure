@@ -217,7 +217,7 @@ async def process_renewal(policy_id: str) -> dict[str, object]:
         )
         results["compliance"] = comp
 
-    return {
+    result: dict[str, Any] = {
         "policy_id": policy_id,
         "workflow": "renewal",
         "outcome": recommendation,
@@ -225,3 +225,4 @@ async def process_renewal(policy_id: str) -> dict[str, object]:
         "renewal_premium": renewal_premium,
         "steps": results,
     }
+    return json.loads(json.dumps(result, default=str))

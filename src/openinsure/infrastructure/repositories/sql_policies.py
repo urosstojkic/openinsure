@@ -23,8 +23,13 @@ _POLICY_API_TO_SQL_KEY: dict[str, str] = {
 }
 
 _POLICY_SKIP_IN_SQL: set[str] = {
-    "coverages", "endorsements", "metadata", "documents",
-    "insured_name", "lob", "party_name",
+    "coverages",
+    "endorsements",
+    "metadata",
+    "documents",
+    "insured_name",
+    "lob",
+    "party_name",
 }
 
 
@@ -71,7 +76,7 @@ def _policy_from_sql_row(row: dict[str, Any]) -> dict[str, Any]:
         if val is None:
             return ""
         # Convert SQL datetime objects to ISO 8601 string
-        if hasattr(val, 'isoformat'):
+        if hasattr(val, "isoformat"):
             return val.isoformat()
         return str(val)
 
@@ -150,7 +155,8 @@ class SqlPolicyRepository(BaseRepository):
         if product_id and not _safe_uuid(product_id):
             try:
                 product_row = await self.db.fetch_one(
-                    "SELECT id FROM products WHERE product_code = ?", [product_id],
+                    "SELECT id FROM products WHERE product_code = ?",
+                    [product_id],
                 )
                 if product_row:
                     entity["product_id"] = str(product_row["id"])
@@ -232,10 +238,7 @@ class SqlPolicyRepository(BaseRepository):
         skip: int = 0,
         limit: int = 50,
     ) -> list[dict[str, Any]]:
-        query = (
-            "SELECT p.*, pa.name AS party_name"
-            " FROM policies p LEFT JOIN parties pa ON p.insured_id = pa.id"
-        )
+        query = "SELECT p.*, pa.name AS party_name FROM policies p LEFT JOIN parties pa ON p.insured_id = pa.id"
         params: list[Any] = []
         where_clauses: list[str] = []
         if filters:
@@ -308,4 +311,3 @@ class SqlPolicyRepository(BaseRepository):
             query += " WHERE " + " AND ".join(where_clauses)
         result = await self.db.fetch_one(query, params)
         return result.get("cnt", 0) if result else 0
-

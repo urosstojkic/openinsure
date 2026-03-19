@@ -1,10 +1,11 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Plus } from 'lucide-react';
+import { Plus, Play, Sparkles } from 'lucide-react';
 import DataTable, { type Column } from '../components/DataTable';
 import StatusBadge from '../components/StatusBadge';
-import { getSubmissions } from '../api/submissions';
+import ProcessWorkflowModal from '../components/ProcessWorkflowModal';
+import { getSubmissions, processSubmission } from '../api/submissions';
 import type { Submission, SubmissionStatus, LOB } from '../types';
 
 const statusVariant: Record<SubmissionStatus, 'blue' | 'yellow' | 'orange' | 'green' | 'purple' | 'red' | 'cyan'> = {
@@ -30,10 +31,16 @@ const lobLabels: Record<LOB, string> = {
 
 const Submissions: React.FC = () => {
   const navigate = useNavigate();
-  const { data: submissions = [], isLoading } = useQuery({ queryKey: ['submissions'], queryFn: getSubmissions });
+  const { data: submissions = [], isLoading, refetch } = useQuery({ queryKey: ['submissions'], queryFn: getSubmissions });
 
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [lobFilter, setLobFilter] = useState<string>('all');
+  const [processingItem, setProcessingItem] = useState<{ id: string; label: string } | null>(null);
+
+  const handleProcess = useCallback((id: string, label: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setProcessingItem({ id, label });
+  }, []);
 
   const filtered = useMemo(() => {
     let list = submissions;
@@ -43,15 +50,15 @@ const Submissions: React.FC = () => {
   }, [submissions, statusFilter, lobFilter]);
 
   const columns: Column<Submission>[] = [
-    { key: 'id', header: 'ID', render: (r) => <span className="font-mono text-xs">{r.id}</span>, sortable: true, sortValue: (r) => r.id },
+    { key: 'id', header: 'ID', render: (r) => <span className="font-mono text-xs">{r.submission_number || r.id}</span>, sortable: true, sortValue: (r) => r.submission_number || r.id },
     { key: 'applicant', header: 'Applicant', render: (r) => (
         <div>
           <p className="font-medium text-slate-900">{r.applicant_name}</p>
           <p className="text-xs text-slate-400">{r.company_name}</p>
         </div>
       ), sortable: true, sortValue: (r) => r.applicant_name },
-    { key: 'lob', header: 'LOB', render: (r) => lobLabels[r.lob], sortable: true, sortValue: (r) => r.lob },
-    { key: 'status', header: 'Status', render: (r) => <StatusBadge label={r.status} variant={statusVariant[r.status]} /> },
+    { key: 'lob', header: 'LOB', render: (r) => lobLabels[r.lob] ?? r.lob, sortable: true, sortValue: (r) => r.lob },
+    { key: 'status', header: 'Status', render: (r) => <StatusBadge label={r.status} variant={statusVariant[r.status] || 'gray'} /> },
     { key: 'risk', header: 'Risk Score', render: (r) => (
         <span className={`font-mono text-sm ${r.risk_score >= 70 ? 'text-red-600 font-semibold' : r.risk_score >= 40 ? 'text-amber-600' : 'text-slate-600'}`}>
           {r.risk_score || '—'}
@@ -59,7 +66,19 @@ const Submissions: React.FC = () => {
       ), sortable: true, sortValue: (r) => r.risk_score },
     { key: 'priority', header: 'Priority', render: (r) => <StatusBadge label={r.priority} variant={priorityVariant(r.priority)} /> },
     { key: 'assigned', header: 'Assigned To', render: (r) => r.assigned_to ?? <span className="text-slate-300">Unassigned</span> },
-    { key: 'date', header: 'Received', render: (r) => new Date(r.received_date).toLocaleDateString(), sortable: true, sortValue: (r) => r.received_date },
+    { key: 'date', header: 'Received', render: (r) => r.received_date ? new Date(r.received_date).toLocaleDateString() : '—', sortable: true, sortValue: (r) => r.received_date },
+    { key: 'actions', header: 'Actions', render: (r) =>
+      r.status === 'received' ? (
+        <button
+          onClick={(e) => handleProcess(r.id, r.submission_number || r.applicant_name || r.id, e)}
+          className="inline-flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-indigo-600 to-purple-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:from-indigo-700 hover:to-purple-700 transition-all"
+        >
+          <Sparkles size={12} />
+          <Play size={11} />
+          Process
+        </button>
+      ) : null
+    },
   ];
 
   if (isLoading) return <div className="flex h-64 items-center justify-center text-slate-400">Loading…</div>;
@@ -104,6 +123,18 @@ const Submissions: React.FC = () => {
         keyExtractor={(r) => r.id}
         onRowClick={(r) => navigate(`/submissions/${r.id}`)}
       />
+
+      {/* Process Workflow Modal */}
+      {processingItem && (
+        <ProcessWorkflowModal
+          mode="submission"
+          itemId={processingItem.id}
+          itemLabel={processingItem.label}
+          processFunc={processSubmission}
+          onClose={() => setProcessingItem(null)}
+          onComplete={() => { refetch(); }}
+        />
+      )}
     </div>
   );
 };

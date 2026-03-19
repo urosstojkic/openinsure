@@ -30,9 +30,7 @@ import httpx
 # ---------------------------------------------------------------------------
 random.seed(42)
 
-DEFAULT_URL = (
-    "https://openinsure-backend.braveriver-f92a9f28.swedencentral.azurecontainerapps.io"
-)
+DEFAULT_URL = "https://openinsure-backend.braveriver-f92a9f28.swedencentral.azurecontainerapps.io"
 
 # ---------------------------------------------------------------------------
 # Company names by industry (120+ unique names)
@@ -296,19 +294,12 @@ SUBS_PER_MONTH = [7, 8, 8, 9, 9, 10, 10, 11, 11, 12, 12, 13]
 # 30% bound (36), 25% quoted (30), 15% underwriting (18),
 # 10% triaging (12), 5% received (6), 15% declined (18)
 STATUS_POOL: list[str] = (
-    ["bound"] * 36
-    + ["quoted"] * 30
-    + ["underwriting"] * 18
-    + ["triaging"] * 12
-    + ["received"] * 6
-    + ["declined"] * 18
+    ["bound"] * 36 + ["quoted"] * 30 + ["underwriting"] * 18 + ["triaging"] * 12 + ["received"] * 6 + ["declined"] * 18
 )
 random.shuffle(STATUS_POOL)
 
 # Channel distribution: 40% broker, 30% email, 20% portal, 10% API
-CHANNEL_POOL: list[str] = (
-    ["broker"] * 48 + ["email"] * 36 + ["portal"] * 24 + ["api"] * 12
-)
+CHANNEL_POOL: list[str] = ["broker"] * 48 + ["email"] * 36 + ["portal"] * 24 + ["api"] * 12
 random.shuffle(CHANNEL_POOL)
 
 # Claim cause distribution
@@ -323,9 +314,7 @@ CLAIM_CAUSES = (
 random.shuffle(CLAIM_CAUSES)
 
 # Claim severity distribution
-CLAIM_SEVERITIES = (
-    ["catastrophe"] * 2 + ["complex"] * 4 + ["moderate"] * 5 + ["simple"] * 4
-)
+CLAIM_SEVERITIES = ["catastrophe"] * 2 + ["complex"] * 4 + ["moderate"] * 5 + ["simple"] * 4
 random.shuffle(CLAIM_SEVERITIES)
 
 
@@ -367,13 +356,7 @@ def _rand_employees(revenue: int) -> int:
 
 def _email_domain(company: str) -> str:
     """Generate a plausible email domain from company name."""
-    slug = (
-        company.lower()
-        .replace(" ", "")
-        .replace(",", "")
-        .replace(".", "")
-        .replace("&", "")
-    )
+    slug = company.lower().replace(" ", "").replace(",", "").replace(".", "").replace("&", "")
     slug = slug[:15]
     return f"{slug}.com"
 
@@ -780,10 +763,7 @@ def main() -> None:
             pt["policy_number"] = pol_num
             policy_records.append(pt)
             status = pt["_status_hint"]
-            print(
-                f"    + {pol_num:<20} {pt['_company']:<30} "
-                f"${pt['premium']:>10,.0f}  [{status}]"
-            )
+            print(f"    + {pol_num:<20} {pt['_company']:<30} ${pt['premium']:>10,.0f}  [{status}]")
         time.sleep(0.05)
 
     print(f"\n  Created {api.stats['policies']} policies")
@@ -804,10 +784,7 @@ def main() -> None:
             api.stats["claims"] += 1
             claim_id = result.get("id", "")
             claim_num = result.get("claim_number", "?")
-            print(
-                f"    + {claim_num:<18} {cause:<22} [{severity}]"
-                f"  {payload['description'][:50]}..."
-            )
+            print(f"    + {claim_num:<18} {cause:<22} [{severity}]  {payload['description'][:50]}...")
 
             claim_records.append(
                 {
@@ -827,10 +804,7 @@ def main() -> None:
                     r = api.post(f"claims/{claim_id}/reserve", res)
                     if r:
                         api.stats["reserves"] += 1
-                        print(
-                            f"      ↳ Reserve: ${res['amount']:>10,.0f} "
-                            f"({res['category']})"
-                        )
+                        print(f"      ↳ Reserve: ${res['amount']:>10,.0f} ({res['category']})")
                     time.sleep(0.02)
 
             # Add payments for closed claims (first 3)
@@ -847,10 +821,7 @@ def main() -> None:
                         r = api.post(f"claims/{claim_id}/payment", pmt)
                         if r:
                             api.stats["payments"] += 1
-                            print(
-                                f"      ↳ Payment: ${pmt['amount']:>10,.0f} "
-                                f"to {pmt['payee'][:30]}"
-                            )
+                            print(f"      ↳ Payment: ${pmt['amount']:>10,.0f} to {pmt['payee'][:30]}")
                         time.sleep(0.02)
 
         time.sleep(0.05)
@@ -872,7 +843,7 @@ def main() -> None:
     print(f"  Payments recorded:    {api.stats['payments']}")
     print(f"  Errors encountered:   {api.stats['errors']}")
 
-    print(f"\n  Verifying totals via API...")
+    print("\n  Verifying totals via API...")
     for entity in ("submissions", "policies", "claims"):
         data = api.get(entity)
         if data:

@@ -38,6 +38,7 @@ export type OversightLevel = 'none' | 'recommended' | 'required';
 
 export interface Submission {
   id: string;
+  submission_number?: string;
   applicant_name: string;
   lob: LOB;
   status: SubmissionStatus;

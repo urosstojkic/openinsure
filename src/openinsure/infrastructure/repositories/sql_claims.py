@@ -101,7 +101,7 @@ def _claim_from_sql_row(row: dict[str, Any]) -> dict[str, Any]:
         if val is None:
             return ""
         # Convert SQL datetime objects to ISO 8601 string
-        if hasattr(val, 'isoformat'):
+        if hasattr(val, "isoformat"):
             return val.isoformat()
         return str(val)
 
@@ -266,7 +266,7 @@ class SqlClaimRepository(BaseRepository):
             col = _CLAIM_API_TO_SQL_KEY.get(key, key)
             # Map API status values to SQL CHECK-compatible values
             if key == "status":
-                val = _api_status_to_sql(val)
+                val = _api_status_to_sql(val)  # noqa: PLW2901
             sets.append(f"{col} = ?")
             params.append(val if not isinstance(val, (dict, list)) else json.dumps(val))
         sets.append("updated_at = ?")

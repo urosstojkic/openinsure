@@ -21,8 +21,14 @@ _API_TO_SQL_KEY: dict[str, str] = {
 }
 
 _SKIP_IN_SQL: set[str] = {
-    "applicant_email", "documents", "lob", "received_date",
-    "company_name", "risk_score", "priority", "assigned_to",
+    "applicant_email",
+    "documents",
+    "lob",
+    "received_date",
+    "company_name",
+    "risk_score",
+    "priority",
+    "assigned_to",
     "decision_history",
 }
 
@@ -72,11 +78,12 @@ def _from_sql_row(row: dict[str, Any]) -> dict[str, Any]:
 
     Ensures every value is properly typed — no None where str is expected.
     """
+
     def _str(val: Any) -> str:
         if val is None:
             return ""
         # Convert SQL datetime objects to ISO 8601 string
-        if hasattr(val, 'isoformat'):
+        if hasattr(val, "isoformat"):
             return val.isoformat()
         return str(val)
 

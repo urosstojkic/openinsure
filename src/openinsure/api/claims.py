@@ -491,12 +491,13 @@ async def reopen_claim(claim_id: str, body: ReopenRequest) -> ReopenResponse:
 
 
 @router.post("/{claim_id}/process")
-async def process_claim(claim_id: str) -> dict[str, object]:
+async def process_claim(claim_id: str, user: CurrentUser = Depends(get_current_user)) -> dict[str, object]:
     """Run the claims workflow via Foundry agents.
 
-    1. Coverage verification (AI)
+    1. Coverage verification / triage (AI)
     2. Reserve estimation (AI)
     3. Compliance audit (AI)
+    4. Authority check
     Updates the claim record with results.
     """
     from openinsure.agents.foundry_client import get_foundry_client
@@ -509,7 +510,7 @@ async def process_claim(claim_id: str) -> dict[str, object]:
 
     results: dict[str, Any] = {}
 
-    # Step 1: Coverage verification & assessment
+    # Step 1: Coverage verification & assessment (triage)
     assessment = await foundry.invoke(
         "openinsure-claims",
         "Assess this cyber insurance claim. Respond ONLY with JSON:\n"
@@ -517,21 +518,40 @@ async def process_claim(claim_id: str) -> dict[str, object]:
         '"fraud_score": 0.1, "confidence": 0.85, "reasoning": "..."}\n\n'
         f"Claim: {json.dumps(claim, default=str)[:800]}",
     )
+    results["triage"] = assessment
     results["assessment"] = assessment
 
     # Extract and update claim
     resp = assessment.get("response", {})
+    reserve_amount = 0.0
     if isinstance(resp, dict):
         updates: dict[str, Any] = {"status": "reserved", "updated_at": _now()}
         if "severity_tier" in resp:
             updates["severity"] = resp["severity_tier"]
         if "initial_reserve" in resp:
             updates["reserves"] = [{"type": "indemnity", "amount": resp["initial_reserve"]}]
+            reserve_amount = float(resp.get("initial_reserve", 0))
         if "fraud_score" in resp:
             updates["fraud_score"] = resp["fraud_score"]
         await _repo.update(claim_id, updates)
 
-    # Step 2: Compliance
+    # Step 2: Authority check for reserve
+    engine = AuthorityEngine()
+    user_role = user.roles[0] if user.roles else "openinsure-claims-adjuster"
+    reserve_auth = engine.check_reserve_authority(Decimal(str(reserve_amount or 25000)), user_role)
+    await publish_domain_event(
+        "authority.checked",
+        f"/claims/{claim_id}",
+        {
+            "action": "claim_assessment",
+            "amount": str(reserve_amount),
+            "user_role": user_role,
+            "decision": reserve_auth.decision,
+            "reason": reserve_auth.reason,
+        },
+    )
+
+    # Step 3: Compliance
     comp = await foundry.invoke(
         "openinsure-compliance",
         f"Audit this claims assessment for EU AI Act compliance.\nAssessment: {json.dumps(resp, default=str)[:300]}",
@@ -559,9 +579,21 @@ async def process_claim(claim_id: str) -> dict[str, object]:
             }
         )
 
-    return {
+    # Determine outcome from AI assessment
+    coverage = True
+    if isinstance(resp, dict):
+        cov_val = str(resp.get("coverage_confirmed", "true")).lower()
+        coverage = cov_val not in ("false", "no", "denied")
+    outcome = "approved" if coverage else "denied"
+
+    result: dict[str, Any] = {
         "claim_id": claim_id,
         "workflow": "claims_assessment",
-        "outcome": "assessed",
+        "outcome": outcome,
         "steps": results,
+        "authority": {
+            "decision": reserve_auth.decision,
+            "reason": reserve_auth.reason,
+        },
     }
+    return json.loads(json.dumps(result, default=str))

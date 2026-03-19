@@ -54,11 +54,11 @@ ignore = ["RUF002", "RUF003", "TRY003", "B008", "ERA001", "S104", "DTZ011", "N80
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["S101", "B017", "PT011", "ARG002"]
 "src/openinsure/agents/*" = ["ARG002", "ARG004"]
-"src/openinsure/infrastructure/*" = ["ARG002", "ARG004"]
+"src/openinsure/infrastructure/repositories/*" = ["E501", "ARG002", "ARG004"]
 "src/openinsure/api/*" = ["E501"]
 "src/openinsure/services/*" = ["ARG002", "ARG004"]
 "src/openinsure/mcp/*" = ["ARG002", "ARG004"]
-"src/scripts/*" = ["E501", "S110", "T201"]
+"src/scripts/*" = ["E501", "S110", "T201", "S311", "S602", "PLW1510", "PLW2901"]
 
 [tool.mypy]
 python_version = "3.12"
