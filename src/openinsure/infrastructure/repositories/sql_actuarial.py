@@ -145,7 +145,7 @@ class SqlActuarialReserveRepository(BaseRepository):
         sets: list[str] = []
         params: list[Any] = []
         for key, val in updates.items():
-            if key in ("id", "created_at"):
+            if key in ("id", "created_at", "updated_at"):
                 continue
             sets.append(f"{key} = ?")
             params.append(val)
@@ -245,7 +245,7 @@ class SqlTriangleRepository(BaseRepository):
         sets: list[str] = []
         params: list[Any] = []
         for key, val in updates.items():
-            if key in ("id", "created_at"):
+            if key in ("id", "created_at", "updated_at"):
                 continue
             sets.append(f"{key} = ?")
             params.append(val)
@@ -336,7 +336,7 @@ class SqlRateAdequacyRepository(BaseRepository):
         sets: list[str] = []
         params: list[Any] = []
         for key, val in updates.items():
-            if key in ("id", "created_at"):
+            if key in ("id", "created_at", "updated_at"):
                 continue
             sets.append(f"{key} = ?")
             params.append(val)

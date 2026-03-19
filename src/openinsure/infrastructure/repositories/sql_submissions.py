@@ -234,7 +234,7 @@ class SqlSubmissionRepository(BaseRepository):
         sets: list[str] = []
         params: list[Any] = []
         for key, val in updates.items():
-            if key in ("id", "created_at") or key in _SKIP_IN_SQL:
+            if key in ("id", "created_at", "updated_at") or key in _SKIP_IN_SQL:
                 continue
             col = _API_TO_SQL_KEY.get(key, key)
             sets.append(f"{col} = ?")

@@ -261,7 +261,7 @@ class SqlClaimRepository(BaseRepository):
         sets: list[str] = []
         params: list[Any] = []
         for key, val in updates.items():
-            if key in ("id", "created_at") or key in _CLAIM_SKIP_IN_SQL:
+            if key in ("id", "created_at", "updated_at") or key in _CLAIM_SKIP_IN_SQL:
                 continue
             col = _CLAIM_API_TO_SQL_KEY.get(key, key)
             # Map API status values to SQL CHECK-compatible values
