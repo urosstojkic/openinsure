@@ -30,6 +30,9 @@ OpenInsure targets **Managing General Agents (MGAs)**, **InsurTech startups**, a
 | **MGA Oversight** | ✅ Live | Delegated authority monitoring, bordereaux, performance scoring |
 | **Renewal Workflow** | ✅ Live | Automated renewal identification and term generation |
 | **Finance Dashboard** | ✅ Live | Premium/claims analytics, cash flow, commissions |
+| **Microsoft Foundry AI Pipeline** | ✅ Live | 6 deployed agents with ProcessWorkflowModal visualization, confidence scores, Foundry-first AI judgment |
+| **Squad Development Agents** | ✅ Live | 7 specialized development agents with persistent knowledge |
+| **3-Year Operations Data** | ✅ Live | 1,384 submissions, 483 policies, 109 claims in Azure SQL |
 | **Additional LOBs** | 🔄 Planned | Property, General Liability, Tech E&O |
 
 ---
@@ -581,6 +584,43 @@ A self-service interface for brokers with strict data isolation:
 
 ---
 
+## Microsoft Foundry AI Pipeline
+
+### Foundry-First Architecture
+
+OpenInsure follows a **Foundry-first principle**: all AI judgment flows through Microsoft Foundry agents. Local fallback logic exists only for resilience — Foundry is the authoritative decision engine.
+
+### Deployed Agents
+
+| Agent | Role | Key Outputs |
+|-------|------|-------------|
+| **Submission Agent** | Intake, classification, extraction, triage | Risk score, priority assignment, appetite match |
+| **Underwriting Agent** | Risk assessment, pricing, authority check | Quote, bind/decline recommendation, confidence score |
+| **Policy Agent** | Bind, issue, endorse, renew, cancel | Policy lifecycle actions, decision records |
+| **Claims Agent** | FNOL, coverage verification, reserving, fraud detection | Severity triage, reserve setting, fraud flags |
+| **Compliance Agent** | Decision audit, bias analysis, regulatory checking | Pass/fail, bias alerts, audit entries |
+| **Orchestrator** | Multi-step workflow coordination | Workflow routing, escalation, decision record collection |
+
+### ProcessWorkflowModal
+
+The dashboard includes a **ProcessWorkflowModal** component that visualizes the Foundry AI pipeline in real time:
+
+- **Step-by-step AI reasoning:** Each agent's contribution is shown as a discrete step with inputs, outputs, and rationale
+- **Confidence scores:** Every decision displays its confidence level, with automatic escalation below 0.7
+- **Pipeline progression:** Visual progress through the multi-agent workflow (e.g., Submission → Underwriting → Policy)
+- **Decision records:** Each step produces an immutable EU AI Act–compliant decision record
+
+Process buttons on the Submissions and Claims pages trigger Foundry pipelines and open the modal to show real-time agent reasoning.
+
+### Squad Development Agents
+
+OpenInsure is developed with the assistance of **7 specialized Squad agents** that maintain persistent knowledge of the codebase, architecture, and domain:
+
+- Agents cover backend, frontend, infrastructure, testing, documentation, compliance, and orchestration
+- Each agent retains context across sessions for consistent, high-quality contributions
+
+---
+
 ## Deployment
 
 ### Production Environment
@@ -603,7 +643,7 @@ The platform runs on **13+ Azure resources**, all defined as Infrastructure-as-C
 | Resource | Service | Purpose |
 |----------|---------|---------|
 | Container Apps | Azure Container Apps | Hosts backend API and dashboard containers |
-| SQL Database | Azure SQL | Transactional data (submissions, policies, claims, billing) |
+| SQL Database | Azure SQL | Transactional data — 1,384 submissions, 483 policies, 109 claims (3+ years of operations) |
 | Cosmos DB | Azure Cosmos DB (NoSQL) | Knowledge graph, decision records |
 | AI Search | Azure AI Search | Hybrid vector + keyword search for knowledge retrieval |
 | Blob Storage | Azure Storage | Document storage (policies, claims evidence, applications) |
@@ -703,7 +743,7 @@ The following classes are outside appetite and will be auto-declined:
 - ✅ Multi-agent orchestration workflows
 - ✅ Cyber Liability SMB product (CYBER-SMB-001)
 - ✅ MCP Server interface for AI tool integration
-- ✅ CI/CD pipeline: lint, type check, security scan, tests, build
+- ✅ CI/CD pipeline: lint, type check, security scan, 375 tests, build
 - ✅ Reinsurance management (treaty lifecycle, cession, recovery, bordereau)
 - ✅ Actuarial analytics (loss triangles, IBNR, reserve adequacy, rate adequacy)
 - ✅ MGA oversight (delegated authority, bordereaux, performance scoring)
@@ -764,4 +804,4 @@ The following classes are outside appetite and will be auto-declined:
 
 ---
 
-*This document describes OpenInsure v0.1.0. For technical architecture details, see [Architecture Overview](architecture/overview.md). For API specifications, see [API Documentation](api/). For deployment instructions, see [Azure Setup](deployment/azure-setup.md).*
+*This document describes OpenInsure v0.4.0. For technical architecture details, see [Architecture Overview](architecture/overview.md). For API specifications, see [API Documentation](api/). For deployment instructions, see [Azure Setup](deployment/azure-setup.md).*

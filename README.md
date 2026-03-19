@@ -19,14 +19,17 @@ OpenInsure is an open-source, AI-native core insurance platform built on the Mic
 
 **What's live today:**
 - ✅ 8 AI agents (Submission, Underwriting, Policy, Claims, Compliance, Document, Knowledge, Orchestrator) deployed on Azure AI Foundry
+- ✅ Microsoft Foundry AI pipeline with ProcessWorkflowModal visualization (step-by-step AI reasoning with confidence scores)
 - ✅ 35+ REST API endpoints covering submissions, policies, claims, billing, products, compliance, reinsurance, actuarial, MGA, renewals, and finance
 - ✅ React dashboard with 11 role-specific views (Executive, Underwriting Workbench, Claims Workbench, Compliance Workbench, Broker Portal)
+- ✅ Azure SQL with 3+ years of operations data: 1,384 submissions, 483 policies, 109 claims
 - ✅ Reinsurance management, actuarial analytics, MGA oversight, renewal workflow, finance dashboard
 - ✅ Cyber Liability SMB product with 5 coverages and configurable rating engine
 - ✅ EU AI Act compliance: immutable decision records, bias monitoring (4/5ths rule), audit trail
 - ✅ Role-based access control with 19 platform roles and authority delegation
 - ✅ Azure infrastructure: 13+ resources defined as Bicep IaC
-- ✅ 309 tests with ≥80% coverage
+- ✅ Squad: 7 specialized development agents with persistent knowledge
+- ✅ 375 tests with ≥80% coverage
 
 ### Why OpenInsure?
 
@@ -165,6 +168,9 @@ cd dashboard
 npm install
 npm run dev
 
+# First-time setup: seed 3 years of operations data (1,200 submissions, 420 policies, 85 claims)
+python scripts/seed_data.py
+
 # Run tests
 pytest tests/ -v --cov=src/openinsure
 
@@ -293,7 +299,7 @@ Every agent decision produces a **Decision Record** for EU AI Act compliance:
 - ✅ Role-based access control (19 platform roles, authority delegation)
 - ✅ React dashboard with 11 role-specific views
 - ✅ Cyber Liability SMB product (5 coverages, configurable rating engine)
-- ✅ CI/CD pipeline (lint, type check, security scan, 309 tests ≥80% coverage, build)
+- ✅ CI/CD pipeline (lint, type check, security scan, 375 tests ≥80% coverage, build)
 
 ### Phase 2 — Dashboard & Workbenches ✅
 

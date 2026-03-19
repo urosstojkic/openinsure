@@ -5,6 +5,21 @@ All notable changes to OpenInsure will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-03-19
+
+### Added
+- ProcessWorkflowModal: Microsoft Foundry AI pipeline visualization in dashboard
+- Squad agent team: 7 specialized development agents with persistent knowledge
+- 3-year comprehensive seed script (1,200 submissions, 420 policies, 85 claims)
+- Real SQL data rendering on all dashboard pages (field mapping fixes)
+- Process buttons on Submissions and Claims pages
+
+### Fixed
+- SQL→dashboard field mapping (dates, names, severities, totals)
+- Dashboard mock fallback restored for resilience
+- SQL network access persistence
+- CI pipeline green (lint + mypy fixes)
+
 ## [0.3.0] - 2026-07-22
 
 ### Added
@@ -15,7 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Renewal Management**: 90/60/30-day renewal identification, automated renewal term generation, renewal processing (auto or manual review)
 - **Financial Reporting**: Premium analytics (written, earned, unearned), claims analytics (paid, reserved, incurred), cash flow management and forecasting, commission tracking and reconciliation, Finance Dashboard
 - **REST API endpoints**: `/api/v1/reinsurance/*`, `/api/v1/actuarial/*`, `/api/v1/mga/*`, `/api/v1/renewals/*`, `/api/v1/finance/*`
-- **Test suite**: Expanded to 309 tests covering all new modules
+- **Test suite**: Expanded to 375 tests covering all new modules and Foundry AI pipeline
 
 ## [0.1.0] - 2026-03-09
 
