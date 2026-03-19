@@ -156,6 +156,98 @@ COVERAGE_RULES: dict[str, dict[str, Any]] = {
     },
 }
 
+CLAIMS_PRECEDENTS: dict[str, dict[str, Any]] = {
+    "ransomware": {
+        "claim_type": "ransomware",
+        "typical_reserve_range": {"low": 50_000, "mid": 250_000, "high": 2_000_000},
+        "avg_resolution_days": 45,
+        "common_expenses": [
+            "forensics_investigation",
+            "ransom_negotiation",
+            "system_restoration",
+            "regulatory_notification",
+            "credit_monitoring",
+        ],
+        "coverage_triggers": ["CYB-FP"],
+        "subrogation_potential": "low",
+        "red_flags": ["repeat_incident", "delayed_reporting", "no_backup_verification"],
+    },
+    "data_breach": {
+        "claim_type": "data_breach",
+        "typical_reserve_range": {"low": 25_000, "mid": 150_000, "high": 5_000_000},
+        "avg_resolution_days": 90,
+        "common_expenses": [
+            "forensics_investigation",
+            "breach_counsel",
+            "notification_costs",
+            "credit_monitoring",
+            "regulatory_defense",
+        ],
+        "coverage_triggers": ["CYB-FP", "CYB-TP"],
+        "subrogation_potential": "medium",
+        "red_flags": ["prior_known_vulnerability", "unpatched_systems", "no_encryption"],
+    },
+    "social_engineering": {
+        "claim_type": "social_engineering",
+        "typical_reserve_range": {"low": 10_000, "mid": 75_000, "high": 500_000},
+        "avg_resolution_days": 30,
+        "common_expenses": ["investigation", "funds_recovery_attempt", "process_remediation"],
+        "coverage_triggers": ["CYB-TP"],
+        "subrogation_potential": "high",
+        "red_flags": ["executive_impersonation", "wire_transfer_to_new_account"],
+    },
+    "business_interruption": {
+        "claim_type": "business_interruption",
+        "typical_reserve_range": {"low": 20_000, "mid": 200_000, "high": 3_000_000},
+        "avg_resolution_days": 60,
+        "common_expenses": ["forensics", "revenue_loss_calculation", "extra_expense"],
+        "coverage_triggers": ["CYB-FP"],
+        "subrogation_potential": "low",
+        "red_flags": ["pre_existing_outage", "inadequate_bcp"],
+    },
+}
+
+COMPLIANCE_RULES: dict[str, dict[str, Any]] = {
+    "eu_ai_act": {
+        "framework": "eu_ai_act",
+        "name": "EU AI Act — High-Risk System Requirements",
+        "classification": "high_risk",
+        "applicable_articles": [
+            {"article": "Art. 9", "requirement": "Risk management system", "status": "implemented"},
+            {"article": "Art. 10", "requirement": "Unbiased, representative data", "status": "implemented"},
+            {"article": "Art. 11", "requirement": "Technical documentation", "status": "implemented"},
+            {"article": "Art. 12", "requirement": "Decision record-keeping & logging", "status": "implemented"},
+            {"article": "Art. 13", "requirement": "Transparency to deployers", "status": "implemented"},
+            {"article": "Art. 14", "requirement": "Human oversight mechanisms", "status": "implemented"},
+        ],
+        "deadline": "2026-08-02",
+        "penalties": {"max_fine_pct": 0.03, "max_fine_eur": 15_000_000},
+    },
+    "gdpr": {
+        "framework": "gdpr",
+        "name": "GDPR — Data Protection for Insurance Operations",
+        "requirements": [
+            "Data processing agreement for all AI providers",
+            "DPIA required for automated underwriting decisions",
+            "Right to explanation for AI-driven decisions",
+            "72-hour breach notification to supervisory authority",
+            "Data minimization in claims processing",
+        ],
+        "penalties": {"max_fine_pct": 0.04, "max_fine_eur": 20_000_000},
+    },
+    "naic_model_bulletin": {
+        "framework": "naic_model_bulletin",
+        "name": "NAIC Model Bulletin on AI in Insurance",
+        "requirements": [
+            "Governance framework for AI/ML systems",
+            "Bias testing and monitoring",
+            "Transparency in AI-driven decisions",
+            "Human oversight for consequential decisions",
+            "Documentation of AI system development and validation",
+        ],
+    },
+}
+
 
 class KnowledgeAgent(InsuranceAgent):
     """Knowledge graph query and update agent.
@@ -209,6 +301,18 @@ class KnowledgeAgent(InsuranceAgent):
                 required_inputs=["jurisdiction"],
                 produces=["requirements"],
             ),
+            AgentCapability(
+                name="get_claims_precedents",
+                description="Retrieve claims precedents by claim type for adjuster guidance",
+                required_inputs=["claim_type"],
+                produces=["precedents"],
+            ),
+            AgentCapability(
+                name="get_compliance_rules",
+                description="Retrieve compliance framework rules (EU AI Act, GDPR, NAIC)",
+                required_inputs=["framework"],
+                produces=["rules"],
+            ),
         ]
 
     # ------------------------------------------------------------------
@@ -232,6 +336,8 @@ class KnowledgeAgent(InsuranceAgent):
             "get_guidelines": self._get_guidelines,
             "get_regulatory": self._get_regulatory,
             "get_coverage_rules": self._get_coverage_rules,
+            "get_claims_precedents": self._get_claims_precedents,
+            "get_compliance_rules": self._get_compliance_rules,
             "update": self._update,
         }.get(task_type)
 
@@ -313,7 +419,59 @@ class KnowledgeAgent(InsuranceAgent):
                 "knowledge_queries": [f"update/{entity_type}"],
             }
 
-        # For get_coverage_rules or unknown types, fall through to static logic
+        # For get_coverage_rules, use Cosmos with static fallback
+        if task_type == "get_coverage_rules":
+            coverage_code = task.get("coverage_code", "")
+            docs = store.query_by_type("coverage_rule")
+            if coverage_code:
+                docs = [d for d in docs if d.get("coverage_code") == coverage_code]
+            if docs:
+                return {
+                    "found": True,
+                    "coverage_code": coverage_code,
+                    "rules": docs[0] if coverage_code else docs,
+                    "confidence": 0.95,
+                    "reasoning": {"step": "get_coverage_rules", "code": coverage_code, "found": True},
+                    "data_sources": ["cosmos_knowledge_graph"],
+                    "knowledge_queries": [f"coverage_rules/{coverage_code}"],
+                }
+            # Fall through to static
+
+        # For get_claims_precedents, search Cosmos
+        if task_type == "get_claims_precedents":
+            claim_type = task.get("claim_type", "")
+            docs = store.query_by_type("claims_precedent")
+            if claim_type:
+                docs = [d for d in docs if d.get("claim_type") == claim_type]
+            return {
+                "found": bool(docs),
+                "claim_type": claim_type,
+                "precedents": docs,
+                "result_count": len(docs),
+                "confidence": 0.9 if docs else 0.3,
+                "reasoning": {"step": "get_claims_precedents", "claim_type": claim_type},
+                "data_sources": ["cosmos_knowledge_graph"],
+                "knowledge_queries": [f"claims_precedents/{claim_type}"],
+            }
+
+        # For get_compliance_rules, search Cosmos
+        if task_type == "get_compliance_rules":
+            framework = task.get("framework", "")
+            docs = store.query_by_type("compliance_rule")
+            if framework:
+                docs = [d for d in docs if d.get("framework") == framework]
+            return {
+                "found": bool(docs),
+                "framework": framework,
+                "rules": docs,
+                "result_count": len(docs),
+                "confidence": 0.9 if docs else 0.3,
+                "reasoning": {"step": "get_compliance_rules", "framework": framework},
+                "data_sources": ["cosmos_knowledge_graph"],
+                "knowledge_queries": [f"compliance_rules/{framework}"],
+            }
+
+        # Unknown types — fall through to static handlers
         handler = {
             "get_coverage_rules": self._get_coverage_rules,
         }.get(task_type)
@@ -473,6 +631,75 @@ class KnowledgeAgent(InsuranceAgent):
             },
             "data_sources": ["knowledge_graph"],
             "knowledge_queries": [f"coverage_rules/{coverage_code}"],
+        }
+
+    # ------------------------------------------------------------------
+    # Claims precedents
+    # ------------------------------------------------------------------
+
+    async def _get_claims_precedents(self, task: dict[str, Any]) -> dict[str, Any]:
+        """Retrieve claims precedents by claim type."""
+        claim_type = task.get("claim_type", "")
+        precedent = CLAIMS_PRECEDENTS.get(claim_type)
+
+        if precedent is None:
+            # Return all if no specific type
+            all_precedents = list(CLAIMS_PRECEDENTS.values()) if not claim_type else []
+            return {
+                "found": bool(all_precedents),
+                "claim_type": claim_type,
+                "precedents": all_precedents,
+                "result_count": len(all_precedents),
+                "confidence": 0.8 if all_precedents else 0.3,
+                "reasoning": {"step": "get_claims_precedents", "claim_type": claim_type},
+                "data_sources": ["knowledge_graph"],
+                "knowledge_queries": [f"claims_precedents/{claim_type}"],
+            }
+
+        self.logger.info("knowledge.claims_precedent.retrieved", claim_type=claim_type)
+        return {
+            "found": True,
+            "claim_type": claim_type,
+            "precedents": [precedent],
+            "result_count": 1,
+            "confidence": 0.95,
+            "reasoning": {"step": "get_claims_precedents", "claim_type": claim_type, "found": True},
+            "data_sources": ["knowledge_graph"],
+            "knowledge_queries": [f"claims_precedents/{claim_type}"],
+        }
+
+    # ------------------------------------------------------------------
+    # Compliance rules
+    # ------------------------------------------------------------------
+
+    async def _get_compliance_rules(self, task: dict[str, Any]) -> dict[str, Any]:
+        """Retrieve compliance framework rules."""
+        framework = task.get("framework", "")
+        rules = COMPLIANCE_RULES.get(framework)
+
+        if rules is None:
+            all_rules = list(COMPLIANCE_RULES.values()) if not framework else []
+            return {
+                "found": bool(all_rules),
+                "framework": framework,
+                "rules": all_rules,
+                "result_count": len(all_rules),
+                "confidence": 0.8 if all_rules else 0.3,
+                "reasoning": {"step": "get_compliance_rules", "framework": framework},
+                "data_sources": ["knowledge_graph"],
+                "knowledge_queries": [f"compliance_rules/{framework}"],
+            }
+
+        self.logger.info("knowledge.compliance_rule.retrieved", framework=framework)
+        return {
+            "found": True,
+            "framework": framework,
+            "rules": [rules],
+            "result_count": 1,
+            "confidence": 0.95,
+            "reasoning": {"step": "get_compliance_rules", "framework": framework, "found": True},
+            "data_sources": ["knowledge_graph"],
+            "knowledge_queries": [f"compliance_rules/{framework}"],
         }
 
     # ------------------------------------------------------------------

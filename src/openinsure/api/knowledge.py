@@ -188,3 +188,92 @@ async def list_knowledge_products(
     if lob:
         products = [p for p in products if p.get("line_of_business") == lob]
     return KnowledgeProductResponse(products=products, total=len(products))
+
+
+# ---------------------------------------------------------------------------
+# Claims precedents & compliance rules endpoints
+# ---------------------------------------------------------------------------
+
+
+class ClaimsPrecedentResponse(BaseModel):
+    """Claims precedents for adjuster guidance."""
+
+    claim_type: str
+    precedents: list[dict[str, Any]]
+    total: int
+
+
+class ComplianceRulesResponse(BaseModel):
+    """Compliance framework rules."""
+
+    framework: str
+    rules: list[dict[str, Any]]
+    total: int
+
+
+@router.get("/claims-precedents/{claim_type}", response_model=ClaimsPrecedentResponse)
+async def get_claims_precedents(claim_type: str) -> ClaimsPrecedentResponse:
+    """Retrieve claims precedents by claim type for adjuster guidance."""
+    from openinsure.agents.knowledge_agent import CLAIMS_PRECEDENTS
+
+    store = get_knowledge_store()
+    if store:
+        docs = store.query_by_type("claims_precedent")
+        docs = [d for d in docs if d.get("claim_type") == claim_type]
+        if docs:
+            return ClaimsPrecedentResponse(claim_type=claim_type, precedents=docs, total=len(docs))
+
+    precedent = CLAIMS_PRECEDENTS.get(claim_type)
+    if precedent is None:
+        raise HTTPException(status_code=404, detail=f"No precedents for claim type: {claim_type}")
+    return ClaimsPrecedentResponse(claim_type=claim_type, precedents=[precedent], total=1)
+
+
+@router.get("/claims-precedents", response_model=ClaimsPrecedentResponse)
+async def list_claims_precedents() -> ClaimsPrecedentResponse:
+    """List all claims precedents."""
+    from openinsure.agents.knowledge_agent import CLAIMS_PRECEDENTS
+
+    store = get_knowledge_store()
+    if store:
+        docs = store.query_by_type("claims_precedent")
+        if docs:
+            return ClaimsPrecedentResponse(claim_type="all", precedents=docs, total=len(docs))
+
+    return ClaimsPrecedentResponse(
+        claim_type="all", precedents=list(CLAIMS_PRECEDENTS.values()), total=len(CLAIMS_PRECEDENTS)
+    )
+
+
+@router.get("/compliance-rules/{framework}", response_model=ComplianceRulesResponse)
+async def get_compliance_rules(framework: str) -> ComplianceRulesResponse:
+    """Retrieve compliance framework rules."""
+    from openinsure.agents.knowledge_agent import COMPLIANCE_RULES
+
+    store = get_knowledge_store()
+    if store:
+        docs = store.query_by_type("compliance_rule")
+        docs = [d for d in docs if d.get("framework") == framework]
+        if docs:
+            return ComplianceRulesResponse(framework=framework, rules=docs, total=len(docs))
+
+    rules = COMPLIANCE_RULES.get(framework)
+    if rules is None:
+        raise HTTPException(status_code=404, detail=f"No rules for framework: {framework}")
+    return ComplianceRulesResponse(framework=framework, rules=[rules], total=1)
+
+
+@router.get("/compliance-rules", response_model=ComplianceRulesResponse)
+async def list_compliance_rules() -> ComplianceRulesResponse:
+    """List all compliance framework rules."""
+    from openinsure.agents.knowledge_agent import COMPLIANCE_RULES
+
+    store = get_knowledge_store()
+    if store:
+        docs = store.query_by_type("compliance_rule")
+        if docs:
+            return ComplianceRulesResponse(framework="all", rules=docs, total=len(docs))
+
+    return ComplianceRulesResponse(
+        framework="all", rules=list(COMPLIANCE_RULES.values()), total=len(COMPLIANCE_RULES)
+    )

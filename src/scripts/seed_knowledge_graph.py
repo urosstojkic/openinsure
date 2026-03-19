@@ -1,4 +1,11 @@
-"""Seed the Cosmos DB knowledge graph with insurance knowledge from YAML files."""
+"""Seed the Cosmos DB knowledge graph with insurance knowledge from YAML files.
+
+Also seeds claims precedents, coverage rules, and compliance rules from the
+KnowledgeAgent's static dictionaries to make them queryable via Cosmos.
+
+Usage:
+    python src/scripts/seed_knowledge_graph.py
+"""
 
 from pathlib import Path
 
@@ -36,7 +43,6 @@ def main():
     for yaml_file in (knowledge_dir / "guidelines").glob("*.yaml"):
         with open(yaml_file) as f:
             data = yaml.safe_load(f)
-        # Guidelines YAML has a top-level key like 'underwriting_guidelines'
         for key, content in data.items():
             doc = {
                 "id": f"guideline-{yaml_file.stem}-{key}",
@@ -61,6 +67,50 @@ def main():
             }
             container.upsert_item(doc)
             print(f"  Loaded regulatory: {key}")
+
+    # Seed coverage rules from static data
+    from openinsure.agents.knowledge_agent import COVERAGE_RULES
+
+    for code, rule in COVERAGE_RULES.items():
+        doc = {
+            "id": f"coverage-rule-{code}",
+            "entityType": "coverage_rule",
+            "coverage_code": rule.get("coverage_code", code),
+            "content": yaml.dump(rule),
+            **{k: v for k, v in rule.items() if isinstance(v, (str, int, float, bool))},
+        }
+        container.upsert_item(doc)
+        print(f"  Loaded coverage rule: {code}")
+
+    # Seed claims precedents
+    from openinsure.agents.knowledge_agent import CLAIMS_PRECEDENTS
+
+    for claim_type, precedent in CLAIMS_PRECEDENTS.items():
+        doc = {
+            "id": f"claims-precedent-{claim_type}",
+            "entityType": "claims_precedent",
+            "claim_type": claim_type,
+            "content": yaml.dump(precedent),
+            **{k: v for k, v in precedent.items() if isinstance(v, (str, int, float, bool))},
+        }
+        container.upsert_item(doc)
+        print(f"  Loaded claims precedent: {claim_type}")
+
+    # Seed compliance rules
+    from openinsure.agents.knowledge_agent import COMPLIANCE_RULES
+
+    for framework, rules in COMPLIANCE_RULES.items():
+        doc = {
+            "id": f"compliance-rule-{framework}",
+            "entityType": "compliance_rule",
+            "framework": framework,
+            "content": yaml.dump(rules),
+            **{k: v for k, v in rules.items() if isinstance(v, (str, int, float, bool))},
+        }
+        container.upsert_item(doc)
+        print(f"  Loaded compliance rule: {framework}")
+
+    print("\n  Knowledge graph seeding complete.")
 
 
 if __name__ == "__main__":
