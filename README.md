@@ -20,16 +20,20 @@ OpenInsure is an open-source, AI-native core insurance platform built on the Mic
 **What's live today:**
 - ✅ 8 AI agents (Submission, Underwriting, Policy, Claims, Compliance, Document, Knowledge, Orchestrator) deployed on Azure AI Foundry
 - ✅ Microsoft Foundry AI pipeline with ProcessWorkflowModal visualization (step-by-step AI reasoning with confidence scores)
-- ✅ 35+ REST API endpoints covering submissions, policies, claims, billing, products, compliance, reinsurance, actuarial, MGA, renewals, and finance
-- ✅ React dashboard with 11 role-specific views (Executive, Underwriting Workbench, Claims Workbench, Compliance Workbench, Broker Portal)
+- ✅ 90+ REST API endpoints across 21 modules — submissions, policies, claims, billing, compliance, knowledge, reinsurance, actuarial, MGA oversight, renewals, finance, and demo
+- ✅ React dashboard with 22 pages including role-specific workbenches (Executive, Underwriting, Claims, Compliance, Broker Portal, Reinsurance, Actuarial, MGA Oversight, Renewals, Finance)
 - ✅ Azure SQL with 3+ years of operations data: 1,384 submissions, 483 policies, 109 claims
-- ✅ Reinsurance management, actuarial analytics, MGA oversight, renewal workflow, finance dashboard
+- ✅ Carrier-grade modules: reinsurance management, actuarial analytics, MGA oversight, renewal workflow, finance dashboard
+- ✅ ACORD 125/126 XML ingestion — parse commercial insurance applications and feed into submission pipeline
+- ✅ Azure Document Intelligence integration — OCR + structured extraction from uploaded PDF/image insurance documents
+- ✅ Knowledge graph with claims precedents, compliance rules (EU AI Act, GDPR, NAIC), and coverage definitions
+- ✅ One-call demo: `POST /api/v1/demo/full-workflow` runs the entire lifecycle (submission → triage → quote → bind → claim → reserve) in ~3ms
 - ✅ Cyber Liability SMB product with 5 coverages and configurable rating engine
 - ✅ EU AI Act compliance: immutable decision records, bias monitoring (4/5ths rule), audit trail
+- ✅ Security hardened: parameterized SQL queries, constant-time auth, production error sanitization, upload size limits
 - ✅ Role-based access control with 19 platform roles and authority delegation
 - ✅ Azure infrastructure: 13+ resources defined as Bicep IaC
-- ✅ Squad: 7 specialized development agents with persistent knowledge
-- ✅ 375 tests with ≥80% coverage
+- ✅ 445+ tests with comprehensive E2E lifecycle coverage
 
 ### Why OpenInsure?
 
@@ -90,8 +94,14 @@ OpenInsure is an open-source, AI-native core insurance platform built on the Mic
 | **Underwriting** | Risk assessment, pricing, terms, authority management | Underwriting Agent |
 | **Policy Admin** | Quote → bind → endorse → renew → cancel lifecycle | Policy Agent |
 | **Claims** | FNOL → investigate → reserve → settle → close | Claims Agent |
-| **Billing** | Premiums, payments, commissions, installment plans | Billing Agent |
+| **Billing** | Premiums, payments, commissions, installment plans | — |
 | **Compliance** | EU AI Act, audit trail, bias monitoring, regulatory | Compliance Agent |
+| **Reinsurance** | Treaties, cessions, recoveries, bordereaux (carrier) | — |
+| **Actuarial** | Reserves, loss triangles, IBNR, rate adequacy (carrier) | — |
+| **MGA Oversight** | Authority limits, performance, bordereaux (carrier) | — |
+| **Renewals** | 90/60/30-day flagging, AI-powered renewal pricing | — |
+| **Knowledge Graph** | UW guidelines, claims precedents, compliance rules | Knowledge Agent |
+| **Document Intelligence** | OCR, classification, structured extraction | Document Agent |
 
 ### Design Principles
 
@@ -256,11 +266,56 @@ Once running locally, visit:
 | **Reinsurance** | `/api/v1/reinsurance/*` | Treaty management, cessions, recoveries |
 | **Actuarial** | `/api/v1/actuarial/*` | Reserves, triangles, IBNR, rate adequacy |
 | **MGA** | `/api/v1/mga/*` | MGA authorities, bordereaux, performance |
-| **Renewals** | `/api/v1/renewals/*` | Upcoming renewals, term generation |
+| **Renewals** | `/api/v1/renewals/*` | Upcoming renewals, term generation, processing |
 | **Finance** | `/api/v1/finance/*` | Financial summary, cashflow, commissions |
+| **Knowledge** | `/api/v1/knowledge/*` | Guidelines, claims precedents, compliance rules |
+| **Documents** | `POST /api/v1/documents/upload` | Upload with OCR + AI extraction |
+| | `POST /api/v1/submissions/acord-ingest` | ACORD 125/126 XML ingestion |
+| **Demo** | `POST /api/v1/demo/full-workflow` | Complete lifecycle in one call |
 | **Health** | `GET /health`, `GET /ready` | Health and readiness probes |
 
 See [API Documentation](docs/api/) for the full specification.
+
+## Demo Workflow
+
+Try the complete insurance lifecycle in a single API call:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/demo/full-workflow | python -m json.tool
+```
+
+This creates a sample submission (Quantum Dynamics Corp — tech, $12M revenue), triages it, calculates a premium via the rating engine, binds a policy with 5 cyber coverages, files a ransomware claim, and sets $150K in reserves. Returns a step-by-step trace with timing (~3ms total):
+
+```json
+{
+  "workflow_id": "demo-abc123",
+  "status": "completed",
+  "total_duration_ms": 3,
+  "policy_number": "POL-DEMO-A1B2C3",
+  "claim_number": "CLM-DEMO-X1Y2Z3",
+  "premium": 18617.04,
+  "summary": "✅ Demo complete in 3ms — Submission → Triage → Quote ($18,617) → Policy → Claim (ransomware, $150K reserve)",
+  "steps": [
+    {"step": 1, "name": "create_submission", "status": "completed"},
+    {"step": 2, "name": "triage", "status": "completed"},
+    {"step": 3, "name": "quote", "status": "completed"},
+    {"step": 4, "name": "bind_policy", "status": "completed"},
+    {"step": 5, "name": "file_claim", "status": "completed"},
+    {"step": 6, "name": "set_reserves", "status": "completed"}
+  ]
+}
+```
+
+## ACORD Ingestion
+
+Upload an ACORD 125/126 XML commercial insurance application:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/submissions/acord-ingest \
+  -F "file=@application.xml"
+```
+
+The parser extracts applicant info, business profile, policy details, loss history, and prior insurance — then creates a submission automatically.
 
 ## Agent Architecture
 

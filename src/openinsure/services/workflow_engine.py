@@ -67,6 +67,18 @@ NEW_BUSINESS_WORKFLOW = WorkflowDefinition(
     name="new_business",
     steps=[
         WorkflowStep(
+            name="orchestration",
+            agent="openinsure-orchestrator",
+            prompt_template=(
+                "You are coordinating a new business submission workflow. "
+                "Review the submission, determine the processing path, and "
+                "set priorities for downstream agents.\n"
+                'Respond with JSON: {{"processing_path": "standard/expedited/referral", '
+                '"priority": "high/medium/low", "notes": "...", "confidence": 0.0-1.0}}\n\n'
+                "Submission: {submission_data}"
+            ),
+        ),
+        WorkflowStep(
             name="intake",
             agent="openinsure-submission",
             prompt_template=(
@@ -75,7 +87,7 @@ NEW_BUSINESS_WORKFLOW = WorkflowDefinition(
                 "Security maturity 4+/10. Max 3 prior incidents.\n"
                 'Respond with JSON: {{"appetite_match": "yes/no", "risk_score": N, '
                 '"priority": "high/medium/low", "confidence": 0.0-1.0}}\n\n'
-                "Submission: {submission_data}"
+                "Submission: {submission_data}\nOrchestration: {orchestration_result}"
             ),
         ),
         WorkflowStep(
@@ -91,12 +103,26 @@ NEW_BUSINESS_WORKFLOW = WorkflowDefinition(
             condition="intake.appetite_match == 'yes'",
         ),
         WorkflowStep(
+            name="policy_review",
+            agent="openinsure-policy",
+            prompt_template=(
+                "Review underwriting terms and prepare policy issuance recommendation. "
+                "Verify coverages are appropriate, terms are complete, and "
+                "pricing is within guidelines.\n"
+                'Respond with JSON: {{"recommendation": "issue/refer/decline", '
+                '"coverage_adequate": true/false, "terms_complete": true/false, '
+                '"notes": "...", "confidence": 0.0-1.0}}\n\n'
+                "Submission: {submission_data}\nUnderwriting: {underwriting_result}"
+            ),
+        ),
+        WorkflowStep(
             name="compliance",
             agent="openinsure-compliance",
             prompt_template=(
                 "Audit this workflow for EU AI Act compliance. Check Art.12-14.\n"
                 'Respond with JSON: {{"compliant": true/false, "issues": [...]}}\n\n'
-                "Triage: {intake_result}\nUnderwriting: {underwriting_result}"
+                "Triage: {intake_result}\nUnderwriting: {underwriting_result}\n"
+                "Policy Review: {policy_review_result}"
             ),
         ),
     ],
@@ -106,6 +132,17 @@ CLAIMS_WORKFLOW = WorkflowDefinition(
     name="claims_assessment",
     steps=[
         WorkflowStep(
+            name="orchestration",
+            agent="openinsure-orchestrator",
+            prompt_template=(
+                "You are coordinating a claims assessment workflow. "
+                "Review the claim details and determine investigation priority.\n"
+                'Respond with JSON: {{"investigation_priority": "urgent/standard/routine", '
+                '"fraud_flag": false, "notes": "...", "confidence": 0.0-1.0}}\n\n'
+                "Claim: {claim_data}"
+            ),
+        ),
+        WorkflowStep(
             name="assessment",
             agent="openinsure-claims",
             prompt_template=(
@@ -113,13 +150,14 @@ CLAIMS_WORKFLOW = WorkflowDefinition(
                 'Respond with JSON: {{"coverage_confirmed": true/false, '
                 '"severity_tier": "simple/moderate/complex/catastrophe", '
                 '"initial_reserve": N, "fraud_score": 0.0-1.0, "confidence": 0.0-1.0}}\n\n'
-                "Claim: {claim_data}"
+                "Claim: {claim_data}\nOrchestration: {orchestration_result}"
             ),
         ),
         WorkflowStep(
             name="compliance",
             agent="openinsure-compliance",
-            prompt_template=("Audit this claims assessment for EU AI Act compliance.\nAssessment: {assessment_result}"),
+            prompt_template=("Audit this claims assessment for EU AI Act compliance.\n"
+                            "Orchestration: {orchestration_result}\nAssessment: {assessment_result}"),
         ),
     ],
 )

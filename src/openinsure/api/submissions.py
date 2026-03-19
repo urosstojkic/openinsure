@@ -715,6 +715,35 @@ async def bind_submission(submission_id: str, user: CurrentUser = Depends(get_cu
     # Create the actual policy record
     policy_repo = get_policy_repository()
     policy_data = _build_policy_data(record, premium, policy_id=policy_id, policy_number=policy_number)
+
+    # Invoke Foundry policy agent for issuance review
+    from openinsure.agents.foundry_client import get_foundry_client
+
+    foundry = get_foundry_client()
+    if foundry.is_available:
+        policy_review = await foundry.invoke(
+            "openinsure-policy",
+            "Review and approve this policy for issuance. Verify coverages, "
+            "terms, and pricing are appropriate.\n"
+            'Respond with JSON: {"recommendation": "issue", "terms_complete": true, '
+            '"notes": "...", "confidence": 0.9}\n\n'
+            f"Submission: {json.dumps(record, default=str)[:600]}\n"
+            f"Premium: {premium}\nPolicy: {policy_number}",
+        )
+        from openinsure.services.event_publisher import publish_domain_event as _pub
+
+        await _pub(
+            "policy.ai_review",
+            f"/policies/{policy_id}",
+            {
+                "policy_id": policy_id,
+                "source": policy_review.get("source", "unknown"),
+                "recommendation": policy_review.get("response", {}).get("recommendation")
+                if isinstance(policy_review.get("response"), dict)
+                else None,
+            },
+        )
+
     await policy_repo.create(policy_data)
 
     # Create billing account
