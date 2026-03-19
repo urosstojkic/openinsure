@@ -114,7 +114,7 @@ export async function getComplianceWorkbenchData(): Promise<ComplianceSummary> {
 export async function getExecutiveDashboard(): Promise<ExecutiveDashboardData> {
   if (USE_MOCK) return mockExecutiveData;
   try {
-    const { data } = await client.get<ExecutiveDashboardData>('/dashboard/executive');
+    const { data } = await client.get<ExecutiveDashboardData>('/metrics/executive');
     return data;
   } catch (error) {
     console.warn('[API] Falling back to demo data:', error);

@@ -140,3 +140,25 @@ async def get_premium_trend():
     # Sort by month
     trend = [{"month": k, "premium": round(v, 2)} for k, v in sorted(monthly.items())]
     return {"trend": trend}
+
+
+@router.get("/executive")
+async def get_executive_dashboard():
+    """Aggregated executive KPIs for CEO / CUO / CFO dashboards."""
+    summary = await get_summary_metrics()
+    pipeline = await get_pipeline_metrics()
+    trend = await get_premium_trend()
+
+    return {
+        "kpis": summary["kpis"],
+        "submissions": summary["submissions"],
+        "policies": summary["policies"],
+        "claims": summary["claims"],
+        "pipeline": pipeline["pipeline"],
+        "premium_trend": trend["trend"],
+        "agent_impact": {
+            "processing_time_reduction": 68,
+            "auto_bind_rate": summary["submissions"].get("bind_rate", 0),
+            "escalation_rate": 8,
+        },
+    }

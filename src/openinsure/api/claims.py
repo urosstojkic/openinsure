@@ -226,6 +226,37 @@ def _generate_claim_number() -> str:
 # ---------------------------------------------------------------------------
 
 
+@router.get("/queue")
+async def get_claims_queue(limit: int = Query(20, ge=1, le=100)):
+    """Get the claims adjuster's work queue.
+
+    Returns open claims sorted by severity-based priority.
+    """
+    all_claims = await _repo.list_all(limit=500)
+    open_statuses = {
+        "fnol",
+        "reported",
+        "under_investigation",
+        "investigating",
+        "reserved",
+        "settling",
+        "reopened",
+    }
+    queue = [c for c in all_claims if c.get("status") in open_statuses]
+
+    for item in queue:
+        sev = item.get("severity", "medium")
+        item["priority"] = {
+            "catastrophe": "urgent",
+            "complex": "high",
+            "moderate": "medium",
+            "simple": "low",
+        }.get(sev, "medium")
+
+    queue.sort(key=lambda x: ({"urgent": 0, "high": 1, "medium": 2, "low": 3}.get(x.get("priority", "medium"), 2),))
+    return {"items": queue[:limit], "total": len(queue)}
+
+
 @router.post("", response_model=ClaimResponse, status_code=201)
 async def create_claim(body: ClaimCreate) -> ClaimResponse:
     """Report a new claim (First Notice of Loss)."""
