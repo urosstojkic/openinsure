@@ -79,7 +79,12 @@ def get_product_repository() -> BaseRepository:
 
 @lru_cache
 def get_billing_repository() -> BaseRepository:
-    # Billing uses in-memory for now; SQL variant can be added later
+    settings = get_settings()
+    if settings.storage_mode == "azure" and settings.sql_connection_string:
+        from openinsure.infrastructure.repositories.sql_billing import SqlBillingRepository
+
+        db = get_database_adapter()
+        return SqlBillingRepository(db)  # type: ignore[arg-type]
     from openinsure.infrastructure.repositories.billing import InMemoryBillingRepository
 
     return InMemoryBillingRepository()

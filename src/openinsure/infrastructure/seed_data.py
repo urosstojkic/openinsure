@@ -702,7 +702,7 @@ async def seed_sample_data() -> None:
     for prod in _sample_products():
         await products_repo.create(prod)
 
-    # Billing — create an account for the active policy
+    # Billing — create accounts for all active policies
     await billing_repo.create(
         {
             "id": str(uuid.uuid4()),
@@ -729,6 +729,64 @@ async def seed_sample_data() -> None:
             "metadata": {},
             "created_at": _days_ago(28),
             "updated_at": _days_ago(25),
+        }
+    )
+    await billing_repo.create(
+        {
+            "id": str(uuid.uuid4()),
+            "policy_id": POLICY_IDS[1],
+            "policyholder_name": "Acme Cyber Corp",
+            "status": "active",
+            "total_premium": 7_800.0,
+            "total_paid": 0.0,
+            "balance_due": 7_800.0,
+            "installments": 4,
+            "currency": "USD",
+            "billing_email": "accounting@acmecyber.com",
+            "payments": [],
+            "invoices": [
+                {
+                    "invoice_id": str(uuid.uuid4()),
+                    "account_id": "",
+                    "amount": 1_950.0,
+                    "status": "issued",
+                    "due_date": _days_from_now(14),
+                    "description": "Q1 premium installment",
+                    "line_items": [],
+                    "created_at": _days_ago(5),
+                }
+            ],
+            "metadata": {},
+            "created_at": _days_ago(5),
+            "updated_at": _days_ago(5),
+        }
+    )
+    await billing_repo.create(
+        {
+            "id": str(uuid.uuid4()),
+            "policy_id": POLICY_IDS[2],
+            "policyholder_name": "LegacyTech Inc",
+            "status": "paid_in_full",
+            "total_premium": 9_200.0,
+            "total_paid": 9_200.0,
+            "balance_due": 0.0,
+            "installments": 1,
+            "currency": "USD",
+            "billing_email": "finance@legacytech.com",
+            "payments": [
+                {
+                    "payment_id": str(uuid.uuid4()),
+                    "amount": 9_200.0,
+                    "method": "wire",
+                    "reference": "WIRE-20240915",
+                    "notes": "Full premium payment",
+                    "created_at": _days_ago(400),
+                }
+            ],
+            "invoices": [],
+            "metadata": {},
+            "created_at": _days_ago(400),
+            "updated_at": _days_ago(400),
         }
     )
 
