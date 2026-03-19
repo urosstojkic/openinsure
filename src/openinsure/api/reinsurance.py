@@ -14,7 +14,11 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from openinsure.infrastructure.factory import get_reinsurance_repository
+from openinsure.infrastructure.factory import (
+    get_cession_repository,
+    get_recovery_repository,
+    get_reinsurance_repository,
+)
 
 router = APIRouter()
 
@@ -22,10 +26,8 @@ router = APIRouter()
 # Repositories — resolved by factory (in-memory or SQL depending on config)
 # ---------------------------------------------------------------------------
 _treaty_repo = get_reinsurance_repository()
-
-# Separate in-memory stores for cessions and recoveries
-_cession_store: dict[str, dict[str, Any]] = {}
-_recovery_store: dict[str, dict[str, Any]] = {}
+_cession_repo = get_cession_repository()
+_recovery_repo = get_recovery_repository()
 
 
 # ---------------------------------------------------------------------------
@@ -267,7 +269,7 @@ async def get_treaty_utilization(treaty_id: str) -> UtilizationResponse:
     treaty = await _get_treaty(treaty_id)
 
     # Count cessions for this treaty
-    treaty_cessions = [c for c in _cession_store.values() if c.get("treaty_id") == treaty_id]
+    treaty_cessions = await _cession_repo.list_all(filters={"treaty_id": treaty_id})
 
     capacity_total = treaty.get("capacity_total", 0)
     capacity_used = treaty.get("capacity_used", 0)
@@ -308,7 +310,7 @@ async def create_cession(body: CessionCreate) -> CessionResponse:
         "cession_date": body.cession_date or date.today().isoformat(),
         "created_at": now,
     }
-    _cession_store[cid] = record
+    await _cession_repo.create(record)
 
     # Update treaty capacity used
     treaty["capacity_used"] = treaty.get("capacity_used", 0) + body.ceded_limit
@@ -325,16 +327,16 @@ async def list_cessions(
     limit: int = Query(20, ge=1, le=100),
 ) -> CessionList:
     """List cessions with optional filtering by treaty or policy."""
-    results = list(_cession_store.values())
+    filters: dict[str, Any] = {}
     if treaty_id is not None:
-        results = [c for c in results if c.get("treaty_id") == treaty_id]
+        filters["treaty_id"] = treaty_id
     if policy_id is not None:
-        results = [c for c in results if c.get("policy_id") == policy_id]
+        filters["policy_id"] = policy_id
 
-    total = len(results)
-    page = results[skip : skip + limit]
+    total = await _cession_repo.count(filters or None)
+    results = await _cession_repo.list_all(filters=filters or None, skip=skip, limit=limit)
     return CessionList(
-        items=[CessionResponse(**c) for c in page],
+        items=[CessionResponse(**c) for c in results],
         total=total,
         skip=skip,
         limit=limit,
@@ -364,7 +366,7 @@ async def create_recovery(body: RecoveryCreate) -> RecoveryResponse:
         "status": body.status,
         "created_at": now,
     }
-    _recovery_store[rid] = record
+    await _recovery_repo.create(record)
     return RecoveryResponse(**record)
 
 
@@ -377,18 +379,18 @@ async def list_recoveries(
     limit: int = Query(20, ge=1, le=100),
 ) -> RecoveryList:
     """List recoveries with optional filtering."""
-    results = list(_recovery_store.values())
+    filters: dict[str, Any] = {}
     if treaty_id is not None:
-        results = [r for r in results if r.get("treaty_id") == treaty_id]
+        filters["treaty_id"] = treaty_id
     if claim_id is not None:
-        results = [r for r in results if r.get("claim_id") == claim_id]
+        filters["claim_id"] = claim_id
     if status is not None:
-        results = [r for r in results if r.get("status") == status]
+        filters["status"] = status
 
-    total = len(results)
-    page = results[skip : skip + limit]
+    total = await _recovery_repo.count(filters or None)
+    results = await _recovery_repo.list_all(filters=filters or None, skip=skip, limit=limit)
     return RecoveryList(
-        items=[RecoveryResponse(**r) for r in page],
+        items=[RecoveryResponse(**r) for r in results],
         total=total,
         skip=skip,
         limit=limit,
@@ -409,9 +411,13 @@ async def get_bordereau(
     """Generate bordereau report for a treaty."""
     treaty = await _get_treaty(treaty_id)
 
-    # Collect cessions and recoveries for this treaty
-    treaty_cessions = [c for c in _cession_store.values() if c.get("treaty_id") == treaty_id]
-    treaty_recoveries = [r for r in _recovery_store.values() if r.get("treaty_id") == treaty_id]
+    # Collect cessions and recoveries for this treaty via repositories
+    treaty_cessions = await _cession_repo.list_all(
+        filters={"treaty_id": treaty_id}, skip=0, limit=10000
+    )
+    treaty_recoveries = await _recovery_repo.list_all(
+        filters={"treaty_id": treaty_id}, skip=0, limit=10000
+    )
 
     # Apply period filter if provided
     if period_start:

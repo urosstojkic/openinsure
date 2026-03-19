@@ -141,10 +141,41 @@ def get_compliance_repository():
 
 @lru_cache
 def get_reinsurance_repository() -> BaseRepository:
-    # Reinsurance uses in-memory for now; carrier-only module
+    settings = get_settings()
+    if settings.storage_mode == "azure" and settings.sql_connection_string:
+        from openinsure.infrastructure.repositories.sql_reinsurance import SqlReinsuranceRepository
+
+        db = get_database_adapter()
+        return SqlReinsuranceRepository(db)  # type: ignore[arg-type]
     from openinsure.infrastructure.repositories.reinsurance import InMemoryReinsuranceRepository
 
     return InMemoryReinsuranceRepository()
+
+
+@lru_cache
+def get_cession_repository() -> BaseRepository:
+    settings = get_settings()
+    if settings.storage_mode == "azure" and settings.sql_connection_string:
+        from openinsure.infrastructure.repositories.sql_reinsurance import SqlCessionRepository
+
+        db = get_database_adapter()
+        return SqlCessionRepository(db)  # type: ignore[arg-type]
+    from openinsure.infrastructure.repositories.reinsurance_sub import InMemoryCessionRepository
+
+    return InMemoryCessionRepository()
+
+
+@lru_cache
+def get_recovery_repository() -> BaseRepository:
+    settings = get_settings()
+    if settings.storage_mode == "azure" and settings.sql_connection_string:
+        from openinsure.infrastructure.repositories.sql_reinsurance import SqlRecoveryRepository
+
+        db = get_database_adapter()
+        return SqlRecoveryRepository(db)  # type: ignore[arg-type]
+    from openinsure.infrastructure.repositories.reinsurance_sub import InMemoryRecoveryRepository
+
+    return InMemoryRecoveryRepository()
 
 
 @lru_cache

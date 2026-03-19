@@ -32,6 +32,9 @@ CLAIM_IDS = [str(uuid.uuid4()) for _ in range(2)]
 PRODUCT_ID = str(uuid.uuid4())
 DECISION_IDS = [str(uuid.uuid4()) for _ in range(5)]
 AUDIT_IDS = [str(uuid.uuid4()) for _ in range(4)]
+TREATY_IDS = [str(uuid.uuid4()) for _ in range(3)]
+CESSION_IDS = [str(uuid.uuid4()) for _ in range(4)]
+RECOVERY_IDS = [str(uuid.uuid4()) for _ in range(2)]
 
 
 def _sample_submissions() -> list[dict[str, Any]]:
@@ -390,6 +393,138 @@ def _sample_audit_events() -> list[dict[str, Any]]:
     ]
 
 
+def _sample_treaties() -> list[dict[str, Any]]:
+    return [
+        {
+            "id": TREATY_IDS[0],
+            "treaty_number": "TRE-QS2025001",
+            "treaty_type": "quota_share",
+            "reinsurer_name": "Swiss Re",
+            "status": "active",
+            "effective_date": _days_ago(180),
+            "expiration_date": _days_from_now(185),
+            "lines_of_business": ["cyber", "tech_eo"],
+            "retention": 0.70,
+            "limit": 5_000_000,
+            "rate": 0.30,
+            "capacity_total": 15_000_000,
+            "capacity_used": 3_750_000,
+            "reinstatements": 1,
+            "description": "30% quota share on cyber and tech E&O portfolio.",
+            "created_at": _days_ago(180),
+            "updated_at": _days_ago(5),
+        },
+        {
+            "id": TREATY_IDS[1],
+            "treaty_number": "TRE-XL2025001",
+            "treaty_type": "excess_of_loss",
+            "reinsurer_name": "Munich Re",
+            "status": "active",
+            "effective_date": _days_ago(180),
+            "expiration_date": _days_from_now(185),
+            "lines_of_business": ["cyber"],
+            "retention": 500_000,
+            "limit": 4_500_000,
+            "rate": 0.12,
+            "capacity_total": 10_000_000,
+            "capacity_used": 1_200_000,
+            "reinstatements": 2,
+            "description": "$4.5M xs $500K per-occurrence cyber excess-of-loss.",
+            "created_at": _days_ago(180),
+            "updated_at": _days_ago(10),
+        },
+        {
+            "id": TREATY_IDS[2],
+            "treaty_number": "TRE-FAC2025001",
+            "treaty_type": "facultative",
+            "reinsurer_name": "Lloyd's Syndicate 2525",
+            "status": "active",
+            "effective_date": _days_ago(28),
+            "expiration_date": _days_from_now(337),
+            "lines_of_business": ["cyber"],
+            "retention": 0,
+            "limit": 3_000_000,
+            "rate": 0.18,
+            "capacity_total": 3_000_000,
+            "capacity_used": 600_000,
+            "reinstatements": 0,
+            "description": "Facultative placement for large SecureHealth account.",
+            "created_at": _days_ago(28),
+            "updated_at": _days_ago(28),
+        },
+    ]
+
+
+def _sample_cessions() -> list[dict[str, Any]]:
+    return [
+        {
+            "id": CESSION_IDS[0],
+            "treaty_id": TREATY_IDS[0],
+            "policy_id": POLICY_IDS[0],
+            "policy_number": "POL-ACME0001",
+            "ceded_premium": 3_750.00,
+            "ceded_limit": 600_000,
+            "cession_date": _days_ago(28),
+            "created_at": _days_ago(28),
+        },
+        {
+            "id": CESSION_IDS[1],
+            "treaty_id": TREATY_IDS[0],
+            "policy_id": POLICY_IDS[1],
+            "policy_number": "POL-GLOB0002",
+            "ceded_premium": 2_340.00,
+            "ceded_limit": 300_000,
+            "cession_date": _days_ago(5),
+            "created_at": _days_ago(5),
+        },
+        {
+            "id": CESSION_IDS[2],
+            "treaty_id": TREATY_IDS[1],
+            "policy_id": POLICY_IDS[0],
+            "policy_number": "POL-ACME0001",
+            "ceded_premium": 1_500.00,
+            "ceded_limit": 1_500_000,
+            "cession_date": _days_ago(28),
+            "created_at": _days_ago(28),
+        },
+        {
+            "id": CESSION_IDS[3],
+            "treaty_id": TREATY_IDS[2],
+            "policy_id": POLICY_IDS[0],
+            "policy_number": "POL-ACME0001",
+            "ceded_premium": 2_250.00,
+            "ceded_limit": 600_000,
+            "cession_date": _days_ago(28),
+            "created_at": _days_ago(28),
+        },
+    ]
+
+
+def _sample_recoveries() -> list[dict[str, Any]]:
+    return [
+        {
+            "id": RECOVERY_IDS[0],
+            "treaty_id": TREATY_IDS[1],
+            "claim_id": CLAIM_IDS[1],
+            "claim_number": "CLM-CLS00002",
+            "recovery_amount": 12_600.00,
+            "recovery_date": _days_ago(55),
+            "status": "collected",
+            "created_at": _days_ago(55),
+        },
+        {
+            "id": RECOVERY_IDS[1],
+            "treaty_id": TREATY_IDS[0],
+            "claim_id": CLAIM_IDS[0],
+            "claim_number": "CLM-INV00001",
+            "recovery_amount": 45_000.00,
+            "recovery_date": _days_ago(3),
+            "status": "pending",
+            "created_at": _days_ago(3),
+        },
+    ]
+
+
 async def seed_sample_data() -> None:
     """Populate the factory-provided repositories with sample data.
 
@@ -401,6 +536,9 @@ async def seed_sample_data() -> None:
     from openinsure.api.compliance import _compliance_repo as compliance_repo
     from openinsure.api.policies import _repo as policies_repo
     from openinsure.api.products import _repo as products_repo
+    from openinsure.api.reinsurance import _cession_repo as cession_repo
+    from openinsure.api.reinsurance import _recovery_repo as recovery_repo
+    from openinsure.api.reinsurance import _treaty_repo as treaty_repo
     from openinsure.api.submissions import _repo as submissions_repo
 
     # Submissions
@@ -456,3 +594,13 @@ async def seed_sample_data() -> None:
     await compliance_repo.clear_audit_events()
     for evt in _sample_audit_events():
         await compliance_repo.add_audit_event(evt)
+
+    # Reinsurance — treaties, cessions, recoveries
+    for treaty in _sample_treaties():
+        await treaty_repo.create(treaty)
+
+    for cession in _sample_cessions():
+        await cession_repo.create(cession)
+
+    for recovery in _sample_recoveries():
+        await recovery_repo.create(recovery)
