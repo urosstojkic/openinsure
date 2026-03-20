@@ -34,6 +34,18 @@ const claimStatusVariant: Record<ClaimStatus, 'blue' | 'yellow' | 'orange' | 'gr
 const money = (n: number) =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n);
 
+const formatSubId = (id: string) => {
+  if (id.startsWith('SUB-')) return id;
+  return `SUB-${id.substring(0, 8)}`;
+};
+
+const formatDate = (dateStr: string) => {
+  if (!dateStr) return '—';
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return dateStr;
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+};
+
 type PortalTab = 'submissions' | 'policies' | 'claims' | 'documents';
 
 const BrokerPortal: React.FC = () => {
@@ -98,12 +110,12 @@ const BrokerPortal: React.FC = () => {
                 <tbody className="divide-y divide-slate-100">
                   {submissions.map((sub) => (
                     <tr key={sub.id} className="cursor-pointer hover:bg-slate-50 transition-colors" onClick={() => setSelectedSubmission(sub)}>
-                      <td className="px-4 py-3 font-mono text-xs text-slate-700">{sub.id}</td>
+                      <td className="px-4 py-3 font-mono text-xs text-slate-700">{formatSubId(sub.id)}</td>
                       <td className="px-4 py-3 text-sm text-slate-900">{sub.applicant_name}</td>
                       <td className="px-4 py-3 text-sm text-slate-600">{lobLabels[sub.lob]}</td>
                       <td className="px-4 py-3"><StatusBadge label={sub.status} variant={statusVariant[sub.status]} /></td>
-                      <td className="px-4 py-3 text-sm text-slate-600">{sub.submitted_date}</td>
-                      <td className="px-4 py-3 text-sm text-slate-500">{new Date(sub.last_update).toLocaleString()}</td>
+                      <td className="px-4 py-3 text-sm text-slate-600">{formatDate(sub.submitted_date)}</td>
+                      <td className="px-4 py-3 text-sm text-slate-500">{formatDate(sub.last_update)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -118,7 +130,7 @@ const BrokerPortal: React.FC = () => {
             <button onClick={() => setSelectedSubmission(null)} className="text-sm text-blue-600 hover:text-blue-800">← Back to submissions</button>
             <div className="rounded-lg border border-slate-200 bg-white p-5">
               <h2 className="text-xl font-bold text-slate-900">{selectedSubmission.applicant_name}</h2>
-              <p className="text-sm text-slate-500">{selectedSubmission.id} · {lobLabels[selectedSubmission.lob]}</p>
+              <p className="text-sm text-slate-500">{formatSubId(selectedSubmission.id)} · {lobLabels[selectedSubmission.lob]}</p>
               <div className="mt-2">
                 <StatusBadge label={selectedSubmission.status} variant={statusVariant[selectedSubmission.status]} />
               </div>
@@ -136,7 +148,7 @@ const BrokerPortal: React.FC = () => {
                     <div>
                       <p className="text-sm font-medium text-slate-900">{ev.status}</p>
                       <p className="text-xs text-slate-500">{ev.description}</p>
-                      <p className="text-xs text-slate-400">{new Date(ev.timestamp).toLocaleString()}</p>
+                      <p className="text-xs text-slate-400">{formatDate(ev.timestamp)}</p>
                     </div>
                   </div>
                 ))}
@@ -168,8 +180,8 @@ const BrokerPortal: React.FC = () => {
                       <td className="px-4 py-3 font-mono text-xs text-slate-700">{pol.policy_number}</td>
                       <td className="px-4 py-3 text-sm text-slate-900">{pol.insured_name}</td>
                       <td className="px-4 py-3 text-sm text-slate-600">{lobLabels[pol.lob]}</td>
-                      <td className="px-4 py-3 text-sm text-slate-600">{pol.effective_date}</td>
-                      <td className="px-4 py-3 text-sm text-slate-600">{pol.expiry_date}</td>
+                      <td className="px-4 py-3 text-sm text-slate-600">{formatDate(pol.effective_date)}</td>
+                      <td className="px-4 py-3 text-sm text-slate-600">{formatDate(pol.expiry_date)}</td>
                       <td className="px-4 py-3 text-right font-mono text-sm text-slate-700">{money(pol.premium)}</td>
                       <td className="px-4 py-3">
                         <div className="flex gap-2">
@@ -211,7 +223,7 @@ const BrokerPortal: React.FC = () => {
                       <td className="px-4 py-3 font-mono text-xs text-slate-700">{clm.claim_number}</td>
                       <td className="px-4 py-3 font-mono text-xs text-slate-500">{clm.policy_number}</td>
                       <td className="px-4 py-3"><StatusBadge label={clm.status} variant={claimStatusVariant[clm.status]} /></td>
-                      <td className="px-4 py-3 text-sm text-slate-600">{clm.loss_date}</td>
+                      <td className="px-4 py-3 text-sm text-slate-600">{formatDate(clm.loss_date)}</td>
                     </tr>
                   ))}
                 </tbody>
