@@ -220,17 +220,21 @@ const SubmissionDetail: React.FC = () => {
           {/* Decision history */}
           <div className="rounded-lg border border-slate-200 bg-white p-5">
             <h2 className="mb-4 text-sm font-semibold text-slate-700">Decision History</h2>
-            {sub.decision_history.map((ev, i) => (
-              <TimelineEvent
-                key={ev.id}
-                timestamp={ev.timestamp}
-                actor={ev.actor}
-                action={ev.action}
-                details={ev.details}
-                isAgent={ev.is_agent}
-                isLast={i === sub.decision_history.length - 1}
-              />
-            ))}
+            {sub.decision_history && sub.decision_history.length > 0 ? (
+              sub.decision_history.map((ev, i) => (
+                <TimelineEvent
+                  key={ev.id}
+                  timestamp={ev.timestamp}
+                  actor={ev.actor}
+                  action={ev.action}
+                  details={ev.details}
+                  isAgent={ev.is_agent}
+                  isLast={i === sub.decision_history.length - 1}
+                />
+              ))
+            ) : (
+              <p className="text-sm text-slate-400">No decisions recorded yet</p>
+            )}
           </div>
         </div>
       </div>
