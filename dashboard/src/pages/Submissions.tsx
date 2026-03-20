@@ -1,11 +1,11 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Plus, Play, Sparkles } from 'lucide-react';
+import { Plus, Play, Sparkles, Eye, Loader2 } from 'lucide-react';
 import DataTable, { type Column } from '../components/DataTable';
 import StatusBadge from '../components/StatusBadge';
-import ProcessWorkflowModal from '../components/ProcessWorkflowModal';
-import { getSubmissions, processSubmission } from '../api/submissions';
+import { getSubmissions } from '../api/submissions';
+import client from '../api/client';
 import type { Submission, SubmissionStatus, LOB } from '../types';
 
 const statusVariant: Record<SubmissionStatus, 'blue' | 'yellow' | 'orange' | 'green' | 'purple' | 'red' | 'cyan'> = {
@@ -35,12 +35,21 @@ const Submissions: React.FC = () => {
 
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [lobFilter, setLobFilter] = useState<string>('all');
-  const [processingItem, setProcessingItem] = useState<{ id: string; label: string } | null>(null);
 
-  const handleProcess = useCallback((id: string, label: string, e: React.MouseEvent) => {
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+
+  const handleAction = useCallback(async (id: string, action: 'triage' | 'quote' | 'bind', e: React.MouseEvent) => {
     e.stopPropagation();
-    setProcessingItem({ id, label });
-  }, []);
+    setActionLoading(`${id}-${action}`);
+    try {
+      await client.post(`/submissions/${id}/${action}`);
+      await refetch();
+    } catch (err) {
+      console.error(`Failed to ${action} submission:`, err);
+    } finally {
+      setActionLoading(null);
+    }
+  }, [refetch]);
 
   const filtered = useMemo(() => {
     let list = submissions;
@@ -67,18 +76,50 @@ const Submissions: React.FC = () => {
     { key: 'priority', header: 'Priority', render: (r) => <StatusBadge label={r.priority} variant={priorityVariant(r.priority)} /> },
     { key: 'assigned', header: 'Assigned To', render: (r) => r.assigned_to ?? <span className="text-slate-300">Unassigned</span> },
     { key: 'date', header: 'Received', render: (r) => r.received_date ? new Date(r.received_date).toLocaleDateString() : '—', sortable: true, sortValue: (r) => r.received_date },
-    { key: 'actions', header: 'Actions', render: (r) =>
-      r.status === 'received' ? (
-        <button
-          onClick={(e) => handleProcess(r.id, r.submission_number || r.applicant_name || r.id, e)}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-indigo-600 to-purple-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:from-indigo-700 hover:to-purple-700 transition-all"
-        >
-          <Sparkles size={12} />
-          <Play size={11} />
-          Process
-        </button>
-      ) : null
-    },
+    { key: 'actions', header: 'Actions', render: (r) => {
+      const loading = actionLoading?.startsWith(r.id);
+      return (
+        <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+          {r.status === 'received' && (
+            <button
+              onClick={(e) => handleAction(r.id, 'triage', e)}
+              disabled={!!loading}
+              className="inline-flex items-center gap-1 rounded-md bg-blue-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50 transition-all"
+            >
+              {actionLoading === `${r.id}-triage` ? <Loader2 size={11} className="animate-spin" /> : <Sparkles size={11} />}
+              Triage
+            </button>
+          )}
+          {r.status === 'underwriting' && (
+            <button
+              onClick={(e) => handleAction(r.id, 'quote', e)}
+              disabled={!!loading}
+              className="inline-flex items-center gap-1 rounded-md bg-green-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-green-700 disabled:opacity-50 transition-all"
+            >
+              {actionLoading === `${r.id}-quote` ? <Loader2 size={11} className="animate-spin" /> : <Play size={11} />}
+              Quote
+            </button>
+          )}
+          {r.status === 'quoted' && (
+            <button
+              onClick={(e) => handleAction(r.id, 'bind', e)}
+              disabled={!!loading}
+              className="inline-flex items-center gap-1 rounded-md bg-purple-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-purple-700 disabled:opacity-50 transition-all"
+            >
+              {actionLoading === `${r.id}-bind` ? <Loader2 size={11} className="animate-spin" /> : null}
+              Bind
+            </button>
+          )}
+          <button
+            onClick={(e) => { e.stopPropagation(); navigate(`/submissions/${r.id}`); }}
+            className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50 transition-all"
+          >
+            <Eye size={11} />
+            View
+          </button>
+        </div>
+      );
+    }},
   ];
 
   if (isLoading) return <div className="flex h-64 items-center justify-center text-slate-400">Loading…</div>;
@@ -123,18 +164,6 @@ const Submissions: React.FC = () => {
         keyExtractor={(r) => r.id}
         onRowClick={(r) => navigate(`/submissions/${r.id}`)}
       />
-
-      {/* Process Workflow Modal */}
-      {processingItem && (
-        <ProcessWorkflowModal
-          mode="submission"
-          itemId={processingItem.id}
-          itemLabel={processingItem.label}
-          processFunc={processSubmission}
-          onClose={() => setProcessingItem(null)}
-          onComplete={() => { refetch(); }}
-        />
-      )}
     </div>
   );
 };
