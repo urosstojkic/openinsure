@@ -107,6 +107,9 @@ def _from_sql_row(row: dict[str, Any]) -> dict[str, Any]:
     lob = _str(row.get("line_of_business")) or "cyber"
     created = _str(row.get("created_at"))
 
+    triage = _json(row.get("triage_result")) if row.get("triage_result") else None
+    risk_score = triage.get("risk_score", 0) if triage else 0
+
     return {
         "id": _str(row.get("id")),
         "submission_number": sub_num,
@@ -119,7 +122,7 @@ def _from_sql_row(row: dict[str, Any]) -> dict[str, Any]:
         "risk_data": _json(row.get("cyber_risk_data")),
         "metadata": metadata,
         "documents": [],
-        "triage_result": _json(row.get("triage_result")) if row.get("triage_result") else None,
+        "triage_result": triage,
         "quoted_premium": float(row["quoted_premium"]) if row.get("quoted_premium") else None,
         "requested_effective_date": _str(row.get("requested_effective_date")),
         "requested_expiration_date": _str(row.get("requested_expiration_date")),
@@ -128,9 +131,9 @@ def _from_sql_row(row: dict[str, Any]) -> dict[str, Any]:
         # Dashboard-expected aliases
         "received_date": created,
         "company_name": metadata.get("company_name", "") if isinstance(metadata, dict) else "",
-        "risk_score": 0,
-        "priority": "medium",
-        "assigned_to": None,
+        "risk_score": risk_score,
+        "priority": triage.get("priority", "medium") if triage else "medium",
+        "assigned_to": triage.get("assigned_to") if triage else None,
         "decision_history": [],
     }
 
