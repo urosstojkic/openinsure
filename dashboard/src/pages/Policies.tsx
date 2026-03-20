@@ -36,8 +36,8 @@ const Policies: React.FC = () => {
     try {
       const data = await generateRenewalTerms(policyId);
       await refetch();
-      const premium = data?.renewal_premium ?? data?.premium;
-      addToast('success', premium != null ? `Renewal generated! New premium: ${money(premium)}` : 'Renewal generated successfully!');
+      const premium = Number(data?.renewal_premium ?? data?.premium ?? 0);
+      addToast('success', premium > 0 ? `Renewal generated! New premium: ${money(premium)}` : 'Renewal generated successfully!');
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { detail?: string } }; message?: string })?.response?.data?.detail
         ?? (err as { message?: string })?.message ?? 'Unknown error';
