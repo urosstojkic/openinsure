@@ -89,12 +89,12 @@ const ClaimsWorkbench: React.FC = () => {
                   onClick={() => handleSelect(item)}
                 >
                   <td className="px-3 py-2 font-mono text-xs text-slate-700">{item.claim_number}</td>
-                  <td className="px-3 py-2 font-mono text-xs text-slate-500">{item.policy_number}</td>
+                  <td className="px-3 py-2 font-mono text-xs text-slate-500">{item.policy_number || (item.policy_id ? item.policy_id.substring(0, 8) + '…' : '—')}</td>
                   <td className="px-3 py-2"><StatusBadge label={item.status} variant={statusVariant[item.status]} /></td>
                   <td className="px-3 py-2"><StatusBadge label={item.severity} variant={severityVariant[item.severity]} /></td>
                   <td className="px-3 py-2 text-xs text-slate-600">{item.loss_date}</td>
                   <td className="px-3 py-2 text-right font-mono text-xs text-slate-700">{money(item.reserve)}</td>
-                  <td className="px-3 py-2 text-right text-xs text-slate-600">{item.days_open}</td>
+                  <td className="px-3 py-2 text-right text-xs text-slate-600">{item.days_open > 0 ? item.days_open : (item.loss_date ? Math.max(1, Math.floor((Date.now() - new Date(item.loss_date).getTime()) / 86_400_000)) : 0)}</td>
                 </tr>
               ))}
             </tbody>
