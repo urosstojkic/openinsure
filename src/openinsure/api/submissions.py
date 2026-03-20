@@ -224,7 +224,7 @@ class SubmissionResponse(BaseModel):
     updated_at: str = ""
     received_date: str = ""
     company_name: str = ""
-    risk_score: int = 0
+    risk_score: float = 0
     priority: str = "medium"
     assigned_to: str | None = None
     decision_history: list[dict[str, Any]] = Field(default_factory=list)

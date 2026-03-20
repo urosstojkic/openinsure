@@ -108,7 +108,7 @@ def _from_sql_row(row: dict[str, Any]) -> dict[str, Any]:
     created = _str(row.get("created_at"))
 
     triage = _json(row.get("triage_result")) if row.get("triage_result") else None
-    risk_score = triage.get("risk_score", 0) if triage else 0
+    risk_score = float(triage.get("risk_score", 0)) if triage else 0.0
 
     return {
         "id": _str(row.get("id")),
