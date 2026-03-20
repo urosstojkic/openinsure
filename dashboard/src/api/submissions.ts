@@ -2,7 +2,7 @@ import client from './client';
 import type { Submission } from '../types';
 import { mockSubmissions } from '../data/mock';
 
-const USE_MOCK = import.meta.env.VITE_USE_MOCK === 'true';
+const USE_MOCK = typeof window !== 'undefined' && localStorage.getItem('openinsure_mock') === 'true';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function mapSubmission(s: any): Submission {

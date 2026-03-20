@@ -137,7 +137,7 @@ const Claims: React.FC = () => {
             </button>
           )}
           <button
-            onClick={(e) => { e.stopPropagation(); navigate(`/workbench/claims`); }}
+            onClick={(e) => { e.stopPropagation(); navigate(`/claims/${r.id}`); }}
             className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50 transition-all"
           >
             <Eye size={11} />

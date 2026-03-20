@@ -22,6 +22,7 @@ import {
   Banknote,
 } from 'lucide-react';
 import { useAuth, NAV_ACCESS, type UserRole } from '../context/AuthContext';
+import { useMockMode } from '../context/MockContext';
 
 const navItems = [
   { to: '/',            label: 'Dashboard',        icon: LayoutDashboard },
@@ -116,6 +117,7 @@ const NavSection: React.FC<{
 
 const Layout: React.FC = () => {
   const { user, logout } = useAuth();
+  const { useMock, toggleMock } = useMockMode();
   const location = useLocation();
   const isBroker = user.role === 'broker';
 
@@ -226,8 +228,17 @@ const Layout: React.FC = () => {
           </nav>
 
           {/* Footer */}
-          <div className="border-t border-slate-200/60 px-4 py-3 text-[11px] text-slate-400">
-            v1.0.0 · AI Oversight Platform
+          <div className="border-t border-slate-200/60 px-4 py-3">
+            <button
+              onClick={toggleMock}
+              className="flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-[11px] text-slate-400 hover:bg-slate-100 transition-colors"
+            >
+              <span>Demo Mode</span>
+              <span className={`relative inline-flex h-4 w-7 items-center rounded-full transition-colors ${useMock ? 'bg-indigo-500' : 'bg-slate-300'}`}>
+                <span className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${useMock ? 'translate-x-3.5' : 'translate-x-0.5'}`} />
+              </span>
+            </button>
+            <p className="mt-1.5 px-2 text-[10px] text-slate-400">v1.0.0 · AI Oversight Platform</p>
           </div>
         </aside>
 

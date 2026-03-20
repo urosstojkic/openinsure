@@ -2,7 +2,7 @@ import client from './client';
 import type { ReinsuranceDashboardData } from '../types';
 import { mockReinsuranceData } from '../data/mock';
 
-const USE_MOCK = import.meta.env.VITE_USE_MOCK === 'true';
+const USE_MOCK = typeof window !== 'undefined' && localStorage.getItem('openinsure_mock') === 'true';
 
 export async function getReinsuranceDashboard(): Promise<ReinsuranceDashboardData> {
   if (USE_MOCK) return mockReinsuranceData;

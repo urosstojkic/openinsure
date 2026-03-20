@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider, useAuth, NAV_ACCESS, DEFAULT_ROUTES } from './context/AuthContext';
+import { MockProvider } from './context/MockContext';
 import Layout from './components/Layout';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
@@ -11,6 +12,7 @@ import Policies from './pages/Policies';
 import PolicyDetail from './pages/PolicyDetail';
 import NewPolicy from './pages/NewPolicy';
 import Claims from './pages/Claims';
+import ClaimDetail from './pages/ClaimDetail';
 import NewClaim from './pages/NewClaim';
 import AgentDecisions from './pages/AgentDecisions';
 import Compliance from './pages/Compliance';
@@ -77,6 +79,7 @@ function AppRoutes() {
         <Route path="policies/new" element={<SubRouteGuard parentPath="/policies"><NewPolicy /></SubRouteGuard>} />
         <Route path="policies/:id" element={<SubRouteGuard parentPath="/policies"><PolicyDetail /></SubRouteGuard>} />
         <Route path="claims" element={<RouteGuard path="claims"><Claims /></RouteGuard>} />
+        <Route path="claims/:id" element={<SubRouteGuard parentPath="/claims"><ClaimDetail /></SubRouteGuard>} />
         <Route path="claims/new" element={<SubRouteGuard parentPath="/claims"><NewClaim /></SubRouteGuard>} />
         <Route path="decisions" element={<RouteGuard path="decisions"><AgentDecisions /></RouteGuard>} />
         <Route path="escalations" element={<RouteGuard path="escalations"><Escalations /></RouteGuard>} />
@@ -107,11 +110,13 @@ function AuthGate() {
 
 function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <AuthGate />
-      </AuthProvider>
-    </QueryClientProvider>
+    <MockProvider>
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <AuthGate />
+        </AuthProvider>
+      </QueryClientProvider>
+    </MockProvider>
   );
 }
 
