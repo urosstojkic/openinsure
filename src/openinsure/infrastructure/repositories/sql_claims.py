@@ -217,12 +217,14 @@ class SqlClaimRepository(BaseRepository):
         entity.setdefault("policy_id", "")
         return entity
 
-    # Query that joins claims with aggregated reserves and payments
+    # Query that joins claims with aggregated reserves, payments, and policy number
     _BASE_QUERY = (
         "SELECT c.*, "
+        "pol.policy_number AS policy_number, "
         "COALESCE(cr.total_reserved, 0) AS total_reserved, "
         "COALESCE(cp.total_paid, 0) AS total_paid "
         "FROM claims c "
+        "LEFT JOIN policies pol ON pol.id = c.policy_id "
         "LEFT JOIN ("
         "  SELECT claim_id, SUM(amount) AS total_reserved FROM claim_reserves GROUP BY claim_id"
         ") cr ON cr.claim_id = c.id "
