@@ -335,9 +335,7 @@ async def rate_adequacy(
         actual_lr = Decimal(str(round(inc / prem, 4))) if prem > 0 else Decimal("0")
         # Indicated rate adjustment = actual_lr / target_lr
         adequacy = (
-            (actual_lr / target_loss_ratio).quantize(Decimal("0.0001"))
-            if target_loss_ratio > 0
-            else Decimal("0")
+            (actual_lr / target_loss_ratio).quantize(Decimal("0.0001")) if target_loss_ratio > 0 else Decimal("0")
         )
         display = lob_name.replace("_", " ").title()
         items.append(

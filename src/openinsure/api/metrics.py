@@ -181,11 +181,7 @@ async def get_executive_dashboard() -> dict[str, Any]:
             this_year_prem += prem
         elif eff == str(now.year - 1):
             last_year_prem += prem
-    growth_rate = (
-        (this_year_prem - last_year_prem) / last_year_prem
-        if last_year_prem > 0
-        else 0.0
-    )
+    growth_rate = (this_year_prem - last_year_prem) / last_year_prem if last_year_prem > 0 else 0.0
 
     # --- Loss ratio by LOB ---------------------------------------------------
     sub_repo = get_submission_repository()
@@ -255,9 +251,7 @@ async def get_executive_dashboard() -> dict[str, Any]:
             "processing_time_reduction": 68,
             "auto_bind_rate": summary["submissions"].get("bind_rate", 0),
             "escalation_rate": round(
-                summary["kpis"].get("pending_escalations", 0)
-                / max(summary["submissions"]["total"], 1)
-                * 100,
+                summary["kpis"].get("pending_escalations", 0) / max(summary["submissions"]["total"], 1) * 100,
                 1,
             ),
         },
