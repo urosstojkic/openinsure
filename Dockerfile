@@ -13,16 +13,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && apt-get autoremove -y \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Dependencies first (cached unless pyproject.toml changes)
+# Copy everything needed for install
 COPY pyproject.toml .
-RUN pip install --no-cache-dir .
-
-# Application code (changes frequently — small layer)
 COPY src/ src/
 COPY knowledge/ knowledge/
 
-# Reinstall to pick up the package source (fast — deps already cached)
-RUN pip install --no-cache-dir --no-deps .
+RUN pip install --no-cache-dir .
 
 EXPOSE 8000
 
