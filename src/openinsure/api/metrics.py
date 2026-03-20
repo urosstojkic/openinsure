@@ -163,7 +163,27 @@ async def get_executive_dashboard():
 
     # NWP approximation: GWP minus ceded premium (default 15% cession)
     nwp = gwp * 0.85
-    growth_rate = 0.18
+
+    # Compute growth rate from year-over-year premium change
+    from datetime import UTC, datetime
+
+    now = datetime.now(UTC)
+    pol_repo2 = get_policy_repository()
+    all_pols = await pol_repo2.list_all(limit=5000)
+    this_year_prem = 0.0
+    last_year_prem = 0.0
+    for p in all_pols:
+        eff = str(p.get("effective_date", ""))[:4]
+        prem = float(p.get("premium", 0) or p.get("total_premium", 0) or 0)
+        if eff == str(now.year):
+            this_year_prem += prem
+        elif eff == str(now.year - 1):
+            last_year_prem += prem
+    growth_rate = (
+        (this_year_prem - last_year_prem) / last_year_prem
+        if last_year_prem > 0
+        else 0.0
+    )
 
     # --- Loss ratio by LOB ---------------------------------------------------
     sub_repo = get_submission_repository()
@@ -232,6 +252,11 @@ async def get_executive_dashboard():
         "agent_impact": {
             "processing_time_reduction": 68,
             "auto_bind_rate": summary["submissions"].get("bind_rate", 0),
-            "escalation_rate": 8,
+            "escalation_rate": round(
+                summary["kpis"].get("pending_escalations", 0)
+                / max(summary["submissions"]["total"], 1)
+                * 100,
+                1,
+            ),
         },
     }
