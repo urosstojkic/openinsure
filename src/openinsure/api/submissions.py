@@ -171,7 +171,19 @@ class LineOfBusiness(StrEnum):
 class SubmissionCreate(BaseModel):
     """Payload for creating a new submission."""
 
-    model_config = {"json_schema_extra": {"examples": [{"applicant_name": "Acme Cyber Corp", "applicant_email": "risk@acmecyber.com", "channel": "api", "line_of_business": "cyber", "risk_data": {"annual_revenue": 5000000, "employee_count": 50, "industry": "Technology"}}]}}
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {
+                    "applicant_name": "Acme Cyber Corp",
+                    "applicant_email": "risk@acmecyber.com",
+                    "channel": "api",
+                    "line_of_business": "cyber",
+                    "risk_data": {"annual_revenue": 5000000, "employee_count": 50, "industry": "Technology"},
+                }
+            ]
+        }
+    }
 
     applicant_name: str = Field(..., min_length=1, max_length=200)
     applicant_email: str | None = None
@@ -330,11 +342,11 @@ async def ingest_acord_xml(file: UploadFile = File(...)) -> SubmissionResponse:
     """
     from openinsure.services.acord_parser import parse_acord_xml
 
-    MAX_UPLOAD_SIZE = 50 * 1024 * 1024  # 50 MB
+    max_upload_size = 50 * 1024 * 1024  # 50 MB
     content = await file.read()
     if not content:
         raise HTTPException(status_code=400, detail="Empty file")
-    if len(content) > MAX_UPLOAD_SIZE:
+    if len(content) > max_upload_size:
         raise HTTPException(status_code=413, detail="File too large (max 50 MB)")
 
     result = parse_acord_xml(content)
@@ -465,7 +477,10 @@ async def triage_submission(submission_id: str) -> TriageResult:
             record["status"] = SubmissionStatus.UNDERWRITING
             record["triage_result"] = resp
             record["updated_at"] = _now()
-            await _repo.update(submission_id, {"status": "underwriting", "triage_result": json.dumps(resp), "updated_at": record["updated_at"]})
+            await _repo.update(
+                submission_id,
+                {"status": "underwriting", "triage_result": json.dumps(resp), "updated_at": record["updated_at"]},
+            )
             from openinsure.services.event_publisher import publish_domain_event
 
             await publish_domain_event(
@@ -490,7 +505,9 @@ async def triage_submission(submission_id: str) -> TriageResult:
     record["status"] = SubmissionStatus.UNDERWRITING
     record["updated_at"] = _now()
     fallback_triage = json.dumps({"risk_score": 0.42, "recommendation": "proceed_to_quote", "source": "local"})
-    await _repo.update(submission_id, {"status": "underwriting", "triage_result": fallback_triage, "updated_at": record["updated_at"]})
+    await _repo.update(
+        submission_id, {"status": "underwriting", "triage_result": fallback_triage, "updated_at": record["updated_at"]}
+    )
 
     return TriageResult(
         submission_id=submission_id,
@@ -531,7 +548,9 @@ async def generate_quote(submission_id: str, user: CurrentUser = Depends(get_cur
             record["status"] = SubmissionStatus.QUOTED
             record["quoted_premium"] = premium
             record["updated_at"] = _now()
-            await _repo.update(submission_id, {"status": "quoted", "quoted_premium": premium, "updated_at": record["updated_at"]})
+            await _repo.update(
+                submission_id, {"status": "quoted", "quoted_premium": premium, "updated_at": record["updated_at"]}
+            )
             from openinsure.services.event_publisher import publish_domain_event
 
             # Authority check
@@ -597,7 +616,9 @@ async def generate_quote(submission_id: str, user: CurrentUser = Depends(get_cur
     premium = 5000.00
     record["status"] = SubmissionStatus.QUOTED
     record["updated_at"] = _now()
-    await _repo.update(submission_id, {"status": "quoted", "quoted_premium": premium, "updated_at": record["updated_at"]})
+    await _repo.update(
+        submission_id, {"status": "quoted", "quoted_premium": premium, "updated_at": record["updated_at"]}
+    )
     valid_until = datetime(2099, 12, 31, tzinfo=UTC).isoformat()
 
     # Authority check
@@ -810,9 +831,9 @@ async def upload_documents(
         doc_ids.append(doc_id)
         record["documents"].append(doc_id)
 
-        MAX_UPLOAD_SIZE = 50 * 1024 * 1024  # 50 MB
+        max_upload_size = 50 * 1024 * 1024  # 50 MB
         content = await f.read()
-        if len(content) > MAX_UPLOAD_SIZE:
+        if len(content) > max_upload_size:
             raise HTTPException(status_code=413, detail="File too large (max 50 MB)")
         if storage:
             blob_name = f"submission/{submission_id}/{doc_id}/{f.filename}"

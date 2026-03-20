@@ -214,25 +214,31 @@ def seed_reinsurance(
 
             # Quota share cession (30% of premium and limit)
             if qs_treaty:
-                cession = post("reinsurance/cessions", {
-                    "treaty_id": qs_treaty,
-                    "policy_id": pol_id,
-                    "policy_number": pol_num,
-                    "ceded_premium": round(premium * 0.30, 2),
-                    "ceded_limit": round(premium * 40, 2),  # Approximate limit
-                })
+                cession = post(
+                    "reinsurance/cessions",
+                    {
+                        "treaty_id": qs_treaty,
+                        "policy_id": pol_id,
+                        "policy_number": pol_num,
+                        "ceded_premium": round(premium * 0.30, 2),
+                        "ceded_limit": round(premium * 40, 2),  # Approximate limit
+                    },
+                )
                 if cession:
                     stats["cessions"] += 1
 
             # XL cession for larger accounts (premium > $30K)
             if xl_treaty and premium > 30_000:
-                cession = post("reinsurance/cessions", {
-                    "treaty_id": xl_treaty,
-                    "policy_id": pol_id,
-                    "policy_number": pol_num,
-                    "ceded_premium": round(premium * 0.12, 2),
-                    "ceded_limit": min(4_500_000, round(premium * 60, 2)),
-                })
+                cession = post(
+                    "reinsurance/cessions",
+                    {
+                        "treaty_id": xl_treaty,
+                        "policy_id": pol_id,
+                        "policy_number": pol_num,
+                        "ceded_premium": round(premium * 0.12, 2),
+                        "ceded_limit": min(4_500_000, round(premium * 60, 2)),
+                    },
+                )
                 if cession:
                     stats["cessions"] += 1
 
@@ -253,13 +259,16 @@ def seed_reinsurance(
             if target_treaty and reserved > 0:
                 recovery_amt = round(max(reserved * 0.30, 10_000), 2)
                 recovery_status = "collected" if i < 2 else ("submitted" if i < 4 else "pending")
-                recovery = post("reinsurance/recoveries", {
-                    "treaty_id": target_treaty,
-                    "claim_id": claim_id,
-                    "claim_number": claim_num,
-                    "recovery_amount": recovery_amt,
-                    "status": recovery_status,
-                })
+                recovery = post(
+                    "reinsurance/recoveries",
+                    {
+                        "treaty_id": target_treaty,
+                        "claim_id": claim_id,
+                        "claim_number": claim_num,
+                        "recovery_amount": recovery_amt,
+                        "status": recovery_status,
+                    },
+                )
                 if recovery:
                     stats["recoveries"] += 1
 
@@ -288,47 +297,127 @@ def seed_actuarial() -> None:
     # Reserves — 3 years of cyber + professional liability
     reserves = [
         # Cyber reserves
-        {"line_of_business": "cyber", "accident_year": 2023, "reserve_type": "case",
-         "carried_amount": 4_500_000, "indicated_amount": 4_800_000, "selected_amount": 4_650_000,
-         "as_of_date": "2026-03-31", "analyst": "Sarah Chen", "approved_by": "Michael Torres",
-         "notes": "Q1 2026 review — slight deterioration in large-loss corridor."},
-        {"line_of_business": "cyber", "accident_year": 2023, "reserve_type": "ibnr",
-         "carried_amount": 2_100_000, "indicated_amount": 2_350_000, "selected_amount": 2_200_000,
-         "as_of_date": "2026-03-31", "analyst": "Sarah Chen", "approved_by": "Michael Torres",
-         "notes": "Chain-ladder indication; BF cross-check within 5%."},
-        {"line_of_business": "cyber", "accident_year": 2024, "reserve_type": "case",
-         "carried_amount": 3_200_000, "indicated_amount": 3_400_000, "selected_amount": 3_300_000,
-         "as_of_date": "2026-03-31", "analyst": "Sarah Chen", "approved_by": "",
-         "notes": "Pending CFO approval."},
-        {"line_of_business": "cyber", "accident_year": 2024, "reserve_type": "ibnr",
-         "carried_amount": 1_800_000, "indicated_amount": 2_000_000, "selected_amount": 1_900_000,
-         "as_of_date": "2026-03-31", "analyst": "Sarah Chen", "approved_by": "",
-         "notes": "Immature year — BF method preferred over chain-ladder."},
-        {"line_of_business": "cyber", "accident_year": 2025, "reserve_type": "case",
-         "carried_amount": 2_400_000, "indicated_amount": 2_800_000, "selected_amount": 2_600_000,
-         "as_of_date": "2026-03-31", "analyst": "Sarah Chen", "approved_by": "",
-         "notes": "Early development; frequency elevated but severity moderate."},
-        {"line_of_business": "cyber", "accident_year": 2025, "reserve_type": "ibnr",
-         "carried_amount": 3_100_000, "indicated_amount": 3_600_000, "selected_amount": 3_350_000,
-         "as_of_date": "2026-03-31", "analyst": "Sarah Chen", "approved_by": "",
-         "notes": "Significant IBNR expected — only 12-month development."},
+        {
+            "line_of_business": "cyber",
+            "accident_year": 2023,
+            "reserve_type": "case",
+            "carried_amount": 4_500_000,
+            "indicated_amount": 4_800_000,
+            "selected_amount": 4_650_000,
+            "as_of_date": "2026-03-31",
+            "analyst": "Sarah Chen",
+            "approved_by": "Michael Torres",
+            "notes": "Q1 2026 review — slight deterioration in large-loss corridor.",
+        },
+        {
+            "line_of_business": "cyber",
+            "accident_year": 2023,
+            "reserve_type": "ibnr",
+            "carried_amount": 2_100_000,
+            "indicated_amount": 2_350_000,
+            "selected_amount": 2_200_000,
+            "as_of_date": "2026-03-31",
+            "analyst": "Sarah Chen",
+            "approved_by": "Michael Torres",
+            "notes": "Chain-ladder indication; BF cross-check within 5%.",
+        },
+        {
+            "line_of_business": "cyber",
+            "accident_year": 2024,
+            "reserve_type": "case",
+            "carried_amount": 3_200_000,
+            "indicated_amount": 3_400_000,
+            "selected_amount": 3_300_000,
+            "as_of_date": "2026-03-31",
+            "analyst": "Sarah Chen",
+            "approved_by": "",
+            "notes": "Pending CFO approval.",
+        },
+        {
+            "line_of_business": "cyber",
+            "accident_year": 2024,
+            "reserve_type": "ibnr",
+            "carried_amount": 1_800_000,
+            "indicated_amount": 2_000_000,
+            "selected_amount": 1_900_000,
+            "as_of_date": "2026-03-31",
+            "analyst": "Sarah Chen",
+            "approved_by": "",
+            "notes": "Immature year — BF method preferred over chain-ladder.",
+        },
+        {
+            "line_of_business": "cyber",
+            "accident_year": 2025,
+            "reserve_type": "case",
+            "carried_amount": 2_400_000,
+            "indicated_amount": 2_800_000,
+            "selected_amount": 2_600_000,
+            "as_of_date": "2026-03-31",
+            "analyst": "Sarah Chen",
+            "approved_by": "",
+            "notes": "Early development; frequency elevated but severity moderate.",
+        },
+        {
+            "line_of_business": "cyber",
+            "accident_year": 2025,
+            "reserve_type": "ibnr",
+            "carried_amount": 3_100_000,
+            "indicated_amount": 3_600_000,
+            "selected_amount": 3_350_000,
+            "as_of_date": "2026-03-31",
+            "analyst": "Sarah Chen",
+            "approved_by": "",
+            "notes": "Significant IBNR expected — only 12-month development.",
+        },
         # Professional liability reserves
-        {"line_of_business": "professional_liability", "accident_year": 2023, "reserve_type": "case",
-         "carried_amount": 6_000_000, "indicated_amount": 6_200_000, "selected_amount": 6_100_000,
-         "as_of_date": "2026-03-31", "analyst": "James Wright", "approved_by": "Michael Torres",
-         "notes": "Two large claims driving case reserve increase."},
-        {"line_of_business": "professional_liability", "accident_year": 2023, "reserve_type": "ibnr",
-         "carried_amount": 3_500_000, "indicated_amount": 3_800_000, "selected_amount": 3_600_000,
-         "as_of_date": "2026-03-31", "analyst": "James Wright", "approved_by": "Michael Torres",
-         "notes": "Long-tail development — monitoring closely."},
-        {"line_of_business": "professional_liability", "accident_year": 2024, "reserve_type": "case",
-         "carried_amount": 4_200_000, "indicated_amount": 4_500_000, "selected_amount": 4_350_000,
-         "as_of_date": "2026-03-31", "analyst": "James Wright", "approved_by": "",
-         "notes": "Within expectations — no outlier claims."},
-        {"line_of_business": "professional_liability", "accident_year": 2024, "reserve_type": "ibnr",
-         "carried_amount": 4_800_000, "indicated_amount": 5_200_000, "selected_amount": 5_000_000,
-         "as_of_date": "2026-03-31", "analyst": "James Wright", "approved_by": "",
-         "notes": "Elevated IBNR reflecting professional liability tail."},
+        {
+            "line_of_business": "professional_liability",
+            "accident_year": 2023,
+            "reserve_type": "case",
+            "carried_amount": 6_000_000,
+            "indicated_amount": 6_200_000,
+            "selected_amount": 6_100_000,
+            "as_of_date": "2026-03-31",
+            "analyst": "James Wright",
+            "approved_by": "Michael Torres",
+            "notes": "Two large claims driving case reserve increase.",
+        },
+        {
+            "line_of_business": "professional_liability",
+            "accident_year": 2023,
+            "reserve_type": "ibnr",
+            "carried_amount": 3_500_000,
+            "indicated_amount": 3_800_000,
+            "selected_amount": 3_600_000,
+            "as_of_date": "2026-03-31",
+            "analyst": "James Wright",
+            "approved_by": "Michael Torres",
+            "notes": "Long-tail development — monitoring closely.",
+        },
+        {
+            "line_of_business": "professional_liability",
+            "accident_year": 2024,
+            "reserve_type": "case",
+            "carried_amount": 4_200_000,
+            "indicated_amount": 4_500_000,
+            "selected_amount": 4_350_000,
+            "as_of_date": "2026-03-31",
+            "analyst": "James Wright",
+            "approved_by": "",
+            "notes": "Within expectations — no outlier claims.",
+        },
+        {
+            "line_of_business": "professional_liability",
+            "accident_year": 2024,
+            "reserve_type": "ibnr",
+            "carried_amount": 4_800_000,
+            "indicated_amount": 5_200_000,
+            "selected_amount": 5_000_000,
+            "as_of_date": "2026-03-31",
+            "analyst": "James Wright",
+            "approved_by": "",
+            "notes": "Elevated IBNR reflecting professional liability tail.",
+        },
     ]
 
     for r in reserves:
@@ -356,7 +445,7 @@ def seed_billing(policies: list[dict[str, Any]]) -> None:
     print(f"{'─' * 50}")
 
     # Check if billing accounts exist
-    existing_check = get("billing/accounts/00000000-0000-0000-0000-000000000000")
+    get("billing/accounts/00000000-0000-0000-0000-000000000000")
     # We can't easily check all accounts, so just try to create
 
     installment_plans = [1, 2, 4, 4, 12, 1, 4, 2, 1, 4, 4, 12]
@@ -369,14 +458,17 @@ def seed_billing(policies: list[dict[str, Any]]) -> None:
             continue
 
         installments = installment_plans[i % len(installment_plans)]
-        result = post("billing/accounts", {
-            "policy_id": pol_id,
-            "policyholder_name": pol_name,
-            "total_premium": premium,
-            "installments": installments,
-            "currency": "USD",
-            "billing_email": f"billing-{i}@example.com",
-        })
+        result = post(
+            "billing/accounts",
+            {
+                "policy_id": pol_id,
+                "policyholder_name": pol_name,
+                "total_premium": premium,
+                "installments": installments,
+                "currency": "USD",
+                "billing_email": f"billing-{i}@example.com",
+            },
+        )
         if result:
             account_id = result.get("id", "")
             stats["billing"] += 1
@@ -387,12 +479,15 @@ def seed_billing(policies: list[dict[str, Any]]) -> None:
                 per_installment = premium / installments
                 for j in range(paid_installments):
                     methods = ["ach", "wire", "check", "credit_card"]
-                    post(f"billing/accounts/{account_id}/payment", {
-                        "amount": round(per_installment, 2),
-                        "method": methods[j % len(methods)],
-                        "reference": f"PMT-{i:03d}-{j + 1:02d}",
-                        "notes": f"Installment {j + 1} of {installments}",
-                    })
+                    post(
+                        f"billing/accounts/{account_id}/payment",
+                        {
+                            "amount": round(per_installment, 2),
+                            "method": methods[j % len(methods)],
+                            "reference": f"PMT-{i:03d}-{j + 1:02d}",
+                            "notes": f"Installment {j + 1} of {installments}",
+                        },
+                    )
 
             print(f"  + {pol_name[:35]:<35} ${premium:>10,.0f}  ({installments} installments)")
 
@@ -418,7 +513,7 @@ def main() -> None:
         print(f"\n  WARN: Health check failed ({e}), continuing...")
 
     # Fetch existing data to link against
-    policies, claims, submissions = fetch_existing_ids()
+    policies, claims, _submissions = fetch_existing_ids()
 
     if not policies:
         print("\n  WARNING: No policies found. Run seed_sql_data.py first.")

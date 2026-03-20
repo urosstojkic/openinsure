@@ -24,7 +24,12 @@ def _make_foundry_mock(responses: dict[str, dict[str, Any]] | None = None) -> Ma
     """Build a mock FoundryAgentClient that returns canned responses per agent."""
     defaults: dict[str, dict[str, Any]] = {
         "openinsure-orchestrator": {
-            "response": {"processing_path": "standard", "priority": "medium", "notes": "Standard processing", "confidence": 0.9},
+            "response": {
+                "processing_path": "standard",
+                "priority": "medium",
+                "notes": "Standard processing",
+                "confidence": 0.9,
+            },
             "source": "foundry",
             "raw": "{}",
         },
@@ -39,7 +44,13 @@ def _make_foundry_mock(responses: dict[str, dict[str, Any]] | None = None) -> Ma
             "raw": "{}",
         },
         "openinsure-policy": {
-            "response": {"recommendation": "issue", "coverage_adequate": True, "terms_complete": True, "notes": "All terms verified", "confidence": 0.92},
+            "response": {
+                "recommendation": "issue",
+                "coverage_adequate": True,
+                "terms_complete": True,
+                "notes": "All terms verified",
+                "confidence": 0.92,
+            },
             "source": "foundry",
             "raw": "{}",
         },

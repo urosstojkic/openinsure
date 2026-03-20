@@ -80,11 +80,10 @@ class DocumentIntelligenceAdapter:
             from functools import partial
 
             loop = asyncio.get_running_loop()
-            result = await loop.run_in_executor(
+            return await loop.run_in_executor(
                 None,
                 partial(self._sync_analyze, content, content_type),
             )
-            return result
         except Exception as exc:
             logger.warning("document_intelligence.analyze_failed", error=str(exc))
             return _fallback_analyze(content, content_type)
@@ -105,11 +104,13 @@ class DocumentIntelligenceAdapter:
         for kv in getattr(result, "key_value_pairs", []) or []:
             key_text = kv.key.content if kv.key else ""
             val_text = kv.value.content if kv.value else ""
-            kv_pairs.append({
-                "key": key_text,
-                "value": val_text,
-                "confidence": kv.confidence or 0.0,
-            })
+            kv_pairs.append(
+                {
+                    "key": key_text,
+                    "value": val_text,
+                    "confidence": kv.confidence or 0.0,
+                }
+            )
 
         # Extract tables
         tables: list[dict[str, Any]] = []
@@ -121,11 +122,13 @@ class DocumentIntelligenceAdapter:
                 while len(rows[cell.row_index]) <= cell.column_index:
                     rows[cell.row_index].append("")
                 rows[cell.row_index][cell.column_index] = cell.content or ""
-            tables.append({
-                "row_count": table.row_count,
-                "column_count": table.column_count,
-                "rows": rows,
-            })
+            tables.append(
+                {
+                    "row_count": table.row_count,
+                    "column_count": table.column_count,
+                    "rows": rows,
+                }
+            )
 
         # Collect full text
         pages = getattr(result, "pages", []) or []
@@ -136,10 +139,17 @@ class DocumentIntelligenceAdapter:
 
         # Extract document-level fields (prebuilt models)
         fields: dict[str, Any] = {}
-        for name, field in (getattr(result, "documents", [None]) or [None])[0].fields.items() if hasattr(result, "documents") and result.documents else []:
+        doc_fields = (
+            (getattr(result, "documents", [None]) or [None])[0].fields.items()
+            if hasattr(result, "documents") and result.documents
+            else []
+        )
+        for name, field in doc_fields:
             fields[name] = {
-                "value": field.content if hasattr(field, "content") else str(field.value) if hasattr(field, "value") else "",
-                "confidence": field.confidence if hasattr(field, "confidence") else 0.0,
+                "value": (
+                    field.content if hasattr(field, "content") else str(field.value) if hasattr(field, "value") else ""
+                ),
+                "confidence": (field.confidence if hasattr(field, "confidence") else 0.0),
             }
 
         return {
@@ -161,7 +171,7 @@ class DocumentIntelligenceAdapter:
 # ---------------------------------------------------------------------------
 
 
-def _fallback_analyze(content: bytes, content_type: str) -> dict[str, Any]:
+def _fallback_analyze(content: bytes, _content_type: str) -> dict[str, Any]:
     """Best-effort extraction without Azure AI Document Intelligence.
 
     Attempts to extract text from the raw bytes and identify insurance-
@@ -200,11 +210,13 @@ def _fallback_analyze(content: bytes, content_type: str) -> dict[str, Any]:
         for pattern, key in patterns:
             match = re.search(pattern, text)
             if match:
-                kv_pairs.append({
-                    "key": key,
-                    "value": match.group(1).strip().rstrip(",;"),
-                    "confidence": 0.5,
-                })
+                kv_pairs.append(
+                    {
+                        "key": key,
+                        "value": match.group(1).strip().rstrip(",;"),
+                        "confidence": 0.5,
+                    }
+                )
 
     return {
         "pages": max(1, text.count("\f") + 1) if text else 0,

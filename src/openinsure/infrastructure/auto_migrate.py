@@ -96,7 +96,7 @@ def _apply_sync(db: Any) -> list[str]:
                 err_msg = str(e)
                 if "already an object named" in err_msg or "already exists" in err_msg:
                     continue
-                logger.error("Migration %s batch failed: %s", name, err_msg)
+                logger.exception("Migration %s batch failed: %s", name, err_msg)
                 raise
         cursor.close()
 

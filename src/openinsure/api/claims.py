@@ -13,6 +13,7 @@ from decimal import Decimal
 from enum import StrEnum
 from typing import Any
 
+import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
@@ -21,6 +22,7 @@ from openinsure.rbac.auth import CurrentUser, get_current_user
 from openinsure.rbac.authority import AuthorityDecision, AuthorityEngine
 
 router = APIRouter()
+logger = structlog.get_logger()
 
 # ---------------------------------------------------------------------------
 # Repository — resolved by factory (in-memory or SQL depending on config)
@@ -64,7 +66,19 @@ class ClaimType(StrEnum):
 class ClaimCreate(BaseModel):
     """First Notice of Loss (FNOL) payload."""
 
-    model_config = {"json_schema_extra": {"examples": [{"policy_id": "abc-123", "claim_type": "ransomware", "description": "Ransomware attack encrypted production databases", "date_of_loss": "2026-06-15", "reported_by": "CISO"}]}}
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {
+                    "policy_id": "abc-123",
+                    "claim_type": "ransomware",
+                    "description": "Ransomware attack encrypted production databases",
+                    "date_of_loss": "2026-06-15",
+                    "reported_by": "CISO",
+                }
+            ]
+        }
+    }
 
     policy_id: str
     claim_type: ClaimType
@@ -278,7 +292,7 @@ async def create_claim(body: ClaimCreate) -> ClaimResponse:
         if policy:
             policy_number = policy.get("policy_number", "")
     except Exception:
-        pass
+        logger.debug("Failed to fetch policy details")
 
     record: dict[str, Any] = {
         "id": cid,

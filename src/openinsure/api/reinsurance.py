@@ -412,12 +412,8 @@ async def get_bordereau(
     treaty = await _get_treaty(treaty_id)
 
     # Collect cessions and recoveries for this treaty via repositories
-    treaty_cessions = await _cession_repo.list_all(
-        filters={"treaty_id": treaty_id}, skip=0, limit=10000
-    )
-    treaty_recoveries = await _recovery_repo.list_all(
-        filters={"treaty_id": treaty_id}, skip=0, limit=10000
-    )
+    treaty_cessions = await _cession_repo.list_all(filters={"treaty_id": treaty_id}, skip=0, limit=10000)
+    treaty_recoveries = await _recovery_repo.list_all(filters={"treaty_id": treaty_id}, skip=0, limit=10000)
 
     # Apply period filter if provided
     if period_start:

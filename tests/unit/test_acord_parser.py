@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import pytest
-
-from openinsure.services.acord_parser import ACORDParseResult, parse_acord_xml
+from openinsure.services.acord_parser import parse_acord_xml
 
 # ---------------------------------------------------------------------------
 # Sample ACORD XML fragments

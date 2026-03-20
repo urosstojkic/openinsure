@@ -42,18 +42,26 @@ def _advance_to_quoted(sub_id: str, risk_data: dict) -> float:
 
     record = sub_repo._store[sub_id]
     record["status"] = "underwriting"
-    record["triage_result"] = json.dumps({
-        "risk_score": 0.42,
-        "appetite_match": "yes",
-        "recommendation": "proceed_to_quote",
-    })
+    record["triage_result"] = json.dumps(
+        {
+            "risk_score": 0.42,
+            "appetite_match": "yes",
+            "recommendation": "proceed_to_quote",
+        }
+    )
 
-    premium = float(CyberRatingEngine().calculate_premium(RatingInput(
-        annual_revenue=risk_data.get("annual_revenue", 5_000_000),
-        employee_count=risk_data.get("employee_count", 50),
-        industry_sic_code=risk_data.get("industry_sic_code", "7372"),
-        security_maturity_score=risk_data.get("security_maturity_score", 7.0),
-    )).final_premium)
+    premium = float(
+        CyberRatingEngine()
+        .calculate_premium(
+            RatingInput(
+                annual_revenue=risk_data.get("annual_revenue", 5_000_000),
+                employee_count=risk_data.get("employee_count", 50),
+                industry_sic_code=risk_data.get("industry_sic_code", "7372"),
+                security_maturity_score=risk_data.get("security_maturity_score", 7.0),
+            )
+        )
+        .final_premium
+    )
     record["status"] = "quoted"
     record["quoted_premium"] = premium
     return premium
@@ -95,16 +103,41 @@ def _advance_to_bound(sub_id: str, risk_data: dict) -> str:
         "earned_premium": 0,
         "unearned_premium": premium,
         "coverages": [
-            {"coverage_code": "BREACH-RESP", "coverage_name": "Breach Response",
-             "limit": limit, "deductible": 10000, "premium": round(premium * 0.30, 2)},
-            {"coverage_code": "THIRD-PARTY", "coverage_name": "Third-Party Liability",
-             "limit": limit, "deductible": 10000, "premium": round(premium * 0.30, 2)},
-            {"coverage_code": "REG-DEFENSE", "coverage_name": "Regulatory Defense",
-             "limit": limit // 2, "deductible": 5000, "premium": round(premium * 0.15, 2)},
-            {"coverage_code": "BUS-INTERRUPT", "coverage_name": "Business Interruption",
-             "limit": limit // 2, "deductible": 25000, "premium": round(premium * 0.15, 2)},
-            {"coverage_code": "RANSOMWARE", "coverage_name": "Ransomware & Extortion",
-             "limit": limit // 2, "deductible": 10000, "premium": round(premium * 0.10, 2)},
+            {
+                "coverage_code": "BREACH-RESP",
+                "coverage_name": "Breach Response",
+                "limit": limit,
+                "deductible": 10000,
+                "premium": round(premium * 0.30, 2),
+            },
+            {
+                "coverage_code": "THIRD-PARTY",
+                "coverage_name": "Third-Party Liability",
+                "limit": limit,
+                "deductible": 10000,
+                "premium": round(premium * 0.30, 2),
+            },
+            {
+                "coverage_code": "REG-DEFENSE",
+                "coverage_name": "Regulatory Defense",
+                "limit": limit // 2,
+                "deductible": 5000,
+                "premium": round(premium * 0.15, 2),
+            },
+            {
+                "coverage_code": "BUS-INTERRUPT",
+                "coverage_name": "Business Interruption",
+                "limit": limit // 2,
+                "deductible": 25000,
+                "premium": round(premium * 0.15, 2),
+            },
+            {
+                "coverage_code": "RANSOMWARE",
+                "coverage_name": "Ransomware & Extortion",
+                "limit": limit // 2,
+                "deductible": 10000,
+                "premium": round(premium * 0.10, 2),
+            },
         ],
         "endorsements": [],
         "metadata": {"source": "e2e_test"},
@@ -202,8 +235,12 @@ class TestFullInsuranceLifecycle:
                 "applicant_name": "Claim State Test Corp",
                 "channel": "api",
                 "line_of_business": "cyber",
-                "risk_data": {"annual_revenue": 5_000_000, "employee_count": 50,
-                              "industry_sic_code": "7372", "security_maturity_score": 6.0},
+                "risk_data": {
+                    "annual_revenue": 5_000_000,
+                    "employee_count": 50,
+                    "industry_sic_code": "7372",
+                    "security_maturity_score": 6.0,
+                },
             },
         ).json()
         policy_id = _advance_to_bound(sub["id"], sub.get("risk_data", {}))
@@ -225,10 +262,13 @@ class TestFullInsuranceLifecycle:
             json={"category": "expense", "amount": 25_000.0, "notes": "Forensics"},
         ).status_code in (200, 201)
 
-        assert client.post(
-            f"/api/v1/claims/{claim_id}/close",
-            json={"reason": "Investigation complete"},
-        ).status_code == 200
+        assert (
+            client.post(
+                f"/api/v1/claims/{claim_id}/close",
+                json={"reason": "Investigation complete"},
+            ).status_code
+            == 200
+        )
 
         assert client.get(f"/api/v1/claims/{claim_id}").json()["status"] == "closed"
 

@@ -164,22 +164,29 @@ class SqlReinsuranceRepository(BaseRepository):
                 reinstatements, description, created_at, updated_at)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             [
-                row["id"], row["treaty_number"], row["treaty_type"],
-                row["reinsurer_name"], row["status"],
-                row["effective_date"], row["expiration_date"],
+                row["id"],
+                row["treaty_number"],
+                row["treaty_type"],
+                row["reinsurer_name"],
+                row["status"],
+                row["effective_date"],
+                row["expiration_date"],
                 row["lines_of_business"],
-                row["retention"], row["treaty_limit"], row["rate"],
-                row["capacity_total"], row["capacity_used"],
-                row["reinstatements"], row["description"],
-                row["created_at"], row["updated_at"],
+                row["retention"],
+                row["treaty_limit"],
+                row["rate"],
+                row["capacity_total"],
+                row["capacity_used"],
+                row["reinstatements"],
+                row["description"],
+                row["created_at"],
+                row["updated_at"],
             ],
         )
         return entity
 
     async def get_by_id(self, entity_id: UUID | str) -> dict[str, Any] | None:
-        row = await self.db.fetch_one(
-            "SELECT * FROM reinsurance_treaties WHERE id = ?", [str(entity_id)]
-        )
+        row = await self.db.fetch_one("SELECT * FROM reinsurance_treaties WHERE id = ?", [str(entity_id)])
         return _treaty_from_sql_row(row) if row else None
 
     async def list_all(
@@ -229,9 +236,7 @@ class SqlReinsuranceRepository(BaseRepository):
         return await self.get_by_id(entity_id)
 
     async def delete(self, entity_id: UUID | str) -> bool:
-        result = await self.db.execute_query(
-            "DELETE FROM reinsurance_treaties WHERE id = ?", [str(entity_id)]
-        )
+        result = await self.db.execute_query("DELETE FROM reinsurance_treaties WHERE id = ?", [str(entity_id)])
         return result > 0
 
     async def count(self, filters: dict[str, Any] | None = None) -> int:
@@ -270,18 +275,20 @@ class SqlCessionRepository(BaseRepository):
                 ceded_premium, ceded_limit, cession_date, created_at)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
             [
-                entity["id"], entity["treaty_id"], entity["policy_id"],
-                entity["policy_number"], entity["ceded_premium"],
-                entity["ceded_limit"], entity["cession_date"],
+                entity["id"],
+                entity["treaty_id"],
+                entity["policy_id"],
+                entity["policy_number"],
+                entity["ceded_premium"],
+                entity["ceded_limit"],
+                entity["cession_date"],
                 entity["created_at"],
             ],
         )
         return entity
 
     async def get_by_id(self, entity_id: UUID | str) -> dict[str, Any] | None:
-        row = await self.db.fetch_one(
-            "SELECT * FROM reinsurance_cessions WHERE id = ?", [str(entity_id)]
-        )
+        row = await self.db.fetch_one("SELECT * FROM reinsurance_cessions WHERE id = ?", [str(entity_id)])
         return _cession_from_sql_row(row) if row else None
 
     async def list_all(
@@ -311,9 +318,7 @@ class SqlCessionRepository(BaseRepository):
         return await self.get_by_id(entity_id)
 
     async def delete(self, entity_id: UUID | str) -> bool:
-        result = await self.db.execute_query(
-            "DELETE FROM reinsurance_cessions WHERE id = ?", [str(entity_id)]
-        )
+        result = await self.db.execute_query("DELETE FROM reinsurance_cessions WHERE id = ?", [str(entity_id)])
         return result > 0
 
     async def count(self, filters: dict[str, Any] | None = None) -> int:
@@ -352,18 +357,20 @@ class SqlRecoveryRepository(BaseRepository):
                 recovery_amount, recovery_date, status, created_at)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
             [
-                entity["id"], entity["treaty_id"], entity["claim_id"],
-                entity["claim_number"], entity["recovery_amount"],
-                entity["recovery_date"], entity.get("status", "pending"),
+                entity["id"],
+                entity["treaty_id"],
+                entity["claim_id"],
+                entity["claim_number"],
+                entity["recovery_amount"],
+                entity["recovery_date"],
+                entity.get("status", "pending"),
                 entity["created_at"],
             ],
         )
         return entity
 
     async def get_by_id(self, entity_id: UUID | str) -> dict[str, Any] | None:
-        row = await self.db.fetch_one(
-            "SELECT * FROM reinsurance_recoveries WHERE id = ?", [str(entity_id)]
-        )
+        row = await self.db.fetch_one("SELECT * FROM reinsurance_recoveries WHERE id = ?", [str(entity_id)])
         return _recovery_from_sql_row(row) if row else None
 
     async def list_all(
@@ -406,9 +413,7 @@ class SqlRecoveryRepository(BaseRepository):
         return await self.get_by_id(entity_id)
 
     async def delete(self, entity_id: UUID | str) -> bool:
-        result = await self.db.execute_query(
-            "DELETE FROM reinsurance_recoveries WHERE id = ?", [str(entity_id)]
-        )
+        result = await self.db.execute_query("DELETE FROM reinsurance_recoveries WHERE id = ?", [str(entity_id)])
         return result > 0
 
     async def count(self, filters: dict[str, Any] | None = None) -> int:

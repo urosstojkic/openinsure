@@ -233,12 +233,7 @@ def main() -> None:
     ensure_tracking_table(conn)
 
     # Determine which migrations to run
-    if len(sys.argv) > 1:
-        # Run a specific file
-        files = [Path(sys.argv[1])]
-    else:
-        # Run all pending
-        files = discover_migrations()
+    files = [Path(sys.argv[1])] if len(sys.argv) > 1 else discover_migrations()
 
     if not files:
         print("  No migration files found.")

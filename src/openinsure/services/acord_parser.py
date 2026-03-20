@@ -16,9 +16,9 @@ Namespace-aware: supports ``urn:ACORD`` namespace or no namespace.
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import re
-from datetime import datetime
 from typing import Any
 from xml.etree import ElementTree as ET
 
@@ -186,7 +186,9 @@ def parse_acord_xml(xml_content: str | bytes) -> ACORDParseResult:
     result = ACORDParseResult()
 
     try:
-        root = ET.fromstring(xml_content if isinstance(xml_content, str) else xml_content.decode("utf-8"))
+        root = ET.fromstring(  # noqa: S314
+            xml_content if isinstance(xml_content, str) else xml_content.decode("utf-8")
+        )
     except ET.ParseError as e:
         result.parse_warnings.append(f"XML parse error: {e}")
         return result
@@ -288,9 +290,7 @@ def _parse_applicant(pkg: ET.Element, result: ACORDParseResult) -> None:
             comm = _find(parent, comm_tag)
             if comm is not None:
                 result.applicant_email = (
-                    _text(comm, "EmailInfo/EmailAddr")
-                    or _text(comm, "Email")
-                    or _text(comm, "EmailAddr")
+                    _text(comm, "EmailInfo/EmailAddr") or _text(comm, "Email") or _text(comm, "EmailAddr")
                 )
                 result.applicant_phone = _text(comm, "PhoneInfo/PhoneNumber") or _text(comm, "Phone")
                 result.applicant_website = _text(comm, "WebsiteURL") or _text(comm, "Website")
@@ -309,10 +309,8 @@ def _parse_applicant(pkg: ET.Element, result: ACORDParseResult) -> None:
             result.industry = _text(biz, "IndustryDesc") or _text(biz, "Industry")
             yr = _text(biz, "YearEstablished") or _text(biz, "BusinessStartDt")
             if yr:
-                try:
+                with contextlib.suppress(ValueError):
                     result.year_established = int(yr[:4])
-                except ValueError:
-                    pass
             if result.annual_revenue or result.employee_count:
                 break
 
@@ -341,11 +339,7 @@ def _parse_policy(pkg: ET.Element, result: ACORDParseResult) -> None:
     result.expiration_date = exp
 
     # LOB detection
-    lob_code = (
-        _text(pol, "LOBCd")
-        or _text(pol, "LineOfBusinessCd")
-        or _text(pkg, "LOBCd")
-    ).lower()
+    lob_code = (_text(pol, "LOBCd") or _text(pol, "LineOfBusinessCd") or _text(pkg, "LOBCd")).lower()
     if lob_code in ("cyber", "cyb", "cybr"):
         result.line_of_business = "cyber"
     elif lob_code in ("techeo", "tech_eo", "eao"):
@@ -373,7 +367,7 @@ def _parse_policy(pkg: ET.Element, result: ACORDParseResult) -> None:
 
 def _parse_coverages(pkg: ET.Element, result: ACORDParseResult) -> None:
     """Extract requested coverages."""
-    for cov_tag in ("Coverage", "LineBusiness", "CoveragePart"):
+    for _cov_tag in ("Coverage", "LineBusiness", "CoveragePart"):
         for cov in pkg.iter():
             tag = _strip_ns(cov.tag)
             if tag == "Coverage" or tag == "CoveragePart":

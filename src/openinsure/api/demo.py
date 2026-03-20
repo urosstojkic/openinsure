@@ -44,7 +44,27 @@ class DemoStepResult(BaseModel):
 
 
 class DemoWorkflowResult(BaseModel):
-    model_config = {"json_schema_extra": {"examples": [{"workflow_id": "demo-abc123", "status": "completed", "total_duration_ms": 3, "submission_id": "sub-001", "policy_id": "pol-001", "policy_number": "POL-DEMO-A1B2C3", "claim_id": "clm-001", "claim_number": "CLM-DEMO-X1Y2Z3", "premium": 18617.04, "steps": [{"step": 1, "name": "create_submission", "status": "completed", "duration_ms": 1, "detail": {}}], "summary": "Demo complete in 3ms"}]}}
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {
+                    "workflow_id": "demo-abc123",
+                    "status": "completed",
+                    "total_duration_ms": 3,
+                    "submission_id": "sub-001",
+                    "policy_id": "pol-001",
+                    "policy_number": "POL-DEMO-A1B2C3",
+                    "claim_id": "clm-001",
+                    "claim_number": "CLM-DEMO-X1Y2Z3",
+                    "premium": 18617.04,
+                    "steps": [
+                        {"step": 1, "name": "create_submission", "status": "completed", "duration_ms": 1, "detail": {}}
+                    ],
+                    "summary": "Demo complete in 3ms",
+                }
+            ]
+        }
+    }
 
     workflow_id: str
     status: str
@@ -154,19 +174,21 @@ async def run_full_demo_workflow() -> DemoWorkflowResult:
         "updated_at": now,
     }
     await sub_repo.create(submission)
-    steps.append(DemoStepResult(
-        step=1,
-        name="create_submission",
-        status="completed",
-        duration_ms=_elapsed_ms(step_start),
-        detail={
-            "submission_id": sub_id,
-            "applicant": _DEMO_APPLICANT["applicant_name"],
-            "lob": "cyber",
-            "revenue": _DEMO_APPLICANT["risk_data"]["annual_revenue"],
-            "employees": _DEMO_APPLICANT["risk_data"]["employee_count"],
-        },
-    ))
+    steps.append(
+        DemoStepResult(
+            step=1,
+            name="create_submission",
+            status="completed",
+            duration_ms=_elapsed_ms(step_start),
+            detail={
+                "submission_id": sub_id,
+                "applicant": _DEMO_APPLICANT["applicant_name"],
+                "lob": "cyber",
+                "revenue": _DEMO_APPLICANT["risk_data"]["annual_revenue"],
+                "employees": _DEMO_APPLICANT["risk_data"]["employee_count"],
+            },
+        )
+    )
 
     # ── Step 2: Triage ──────────────────────────────────────────────────
     step_start = datetime.now(UTC)
@@ -177,61 +199,73 @@ async def run_full_demo_workflow() -> DemoWorkflowResult:
         "recommendation": "proceed_to_quote",
         "reasoning": "Technology sector, strong security posture (score 7/10), no prior incidents. Within appetite for cyber SMB.",
     }
-    await sub_repo.update(sub_id, {
-        "status": "underwriting",
-        "triage_result": json.dumps(triage_result),
-        "updated_at": _now(),
-    })
-    steps.append(DemoStepResult(
-        step=2,
-        name="triage",
-        status="completed",
-        duration_ms=_elapsed_ms(step_start),
-        detail={
-            "appetite_match": triage_result["appetite_match"],
-            "risk_score": triage_result["risk_score"],
-            "recommendation": triage_result["recommendation"],
-            "reasoning": triage_result["reasoning"],
+    await sub_repo.update(
+        sub_id,
+        {
+            "status": "underwriting",
+            "triage_result": json.dumps(triage_result),
+            "updated_at": _now(),
         },
-    ))
+    )
+    steps.append(
+        DemoStepResult(
+            step=2,
+            name="triage",
+            status="completed",
+            duration_ms=_elapsed_ms(step_start),
+            detail={
+                "appetite_match": triage_result["appetite_match"],
+                "risk_score": triage_result["risk_score"],
+                "recommendation": triage_result["recommendation"],
+                "reasoning": triage_result["reasoning"],
+            },
+        )
+    )
 
     # ── Step 3: Quote ───────────────────────────────────────────────────
     step_start = datetime.now(UTC)
     from openinsure.services.rating import CyberRatingEngine, RatingInput
 
     risk = _DEMO_APPLICANT["risk_data"]
-    rating = CyberRatingEngine().calculate_premium(RatingInput(
-        annual_revenue=risk["annual_revenue"],
-        employee_count=risk["employee_count"],
-        industry_sic_code=risk.get("industry_sic_code", "7372"),
-        security_maturity_score=risk.get("security_maturity_score", 7.0),
-        has_mfa=risk.get("has_mfa", False),
-        has_endpoint_protection=risk.get("has_endpoint_protection", False),
-        has_backup_strategy=risk.get("has_backup_strategy", False),
-        has_incident_response_plan=risk.get("has_incident_response_plan", False),
-        prior_incidents=risk.get("prior_incidents", 0),
-        requested_limit=risk.get("requested_limit", 2_000_000),
-        requested_deductible=risk.get("requested_deductible", 25_000),
-    ))
+    rating = CyberRatingEngine().calculate_premium(
+        RatingInput(
+            annual_revenue=risk["annual_revenue"],
+            employee_count=risk["employee_count"],
+            industry_sic_code=risk.get("industry_sic_code", "7372"),
+            security_maturity_score=risk.get("security_maturity_score", 7.0),
+            has_mfa=risk.get("has_mfa", False),
+            has_endpoint_protection=risk.get("has_endpoint_protection", False),
+            has_backup_strategy=risk.get("has_backup_strategy", False),
+            has_incident_response_plan=risk.get("has_incident_response_plan", False),
+            prior_incidents=risk.get("prior_incidents", 0),
+            requested_limit=risk.get("requested_limit", 2_000_000),
+            requested_deductible=risk.get("requested_deductible", 25_000),
+        )
+    )
     premium = float(rating.final_premium)
 
-    await sub_repo.update(sub_id, {
-        "status": "quoted",
-        "quoted_premium": premium,
-        "updated_at": _now(),
-    })
-    steps.append(DemoStepResult(
-        step=3,
-        name="quote",
-        status="completed",
-        duration_ms=_elapsed_ms(step_start),
-        detail={
-            "premium": premium,
-            "confidence": float(rating.confidence),
-            "base_premium": float(rating.base_premium),
-            "factors_applied": {k: str(v) for k, v in rating.factors_applied.items()},
+    await sub_repo.update(
+        sub_id,
+        {
+            "status": "quoted",
+            "quoted_premium": premium,
+            "updated_at": _now(),
         },
-    ))
+    )
+    steps.append(
+        DemoStepResult(
+            step=3,
+            name="quote",
+            status="completed",
+            duration_ms=_elapsed_ms(step_start),
+            detail={
+                "premium": premium,
+                "confidence": float(rating.confidence),
+                "base_premium": float(rating.base_premium),
+                "factors_applied": {k: str(v) for k, v in rating.factors_applied.items()},
+            },
+        )
+    )
 
     # ── Step 4: Bind → Policy + Billing ─────────────────────────────────
     step_start = datetime.now(UTC)
@@ -257,16 +291,41 @@ async def run_full_demo_workflow() -> DemoWorkflowResult:
         "earned_premium": 0,
         "unearned_premium": premium,
         "coverages": [
-            {"coverage_code": "BREACH-RESP", "coverage_name": "First-Party Breach Response",
-             "limit": limit, "deductible": deductible, "premium": round(premium * 0.30, 2)},
-            {"coverage_code": "THIRD-PARTY", "coverage_name": "Third-Party Liability",
-             "limit": limit, "deductible": deductible, "premium": round(premium * 0.30, 2)},
-            {"coverage_code": "REG-DEFENSE", "coverage_name": "Regulatory Defense & Penalties",
-             "limit": limit / 2, "deductible": deductible / 2, "premium": round(premium * 0.15, 2)},
-            {"coverage_code": "BUS-INTERRUPT", "coverage_name": "Business Interruption",
-             "limit": limit / 2, "deductible": deductible, "premium": round(premium * 0.15, 2)},
-            {"coverage_code": "RANSOMWARE", "coverage_name": "Ransomware & Extortion",
-             "limit": limit / 2, "deductible": deductible / 2, "premium": round(premium * 0.10, 2)},
+            {
+                "coverage_code": "BREACH-RESP",
+                "coverage_name": "First-Party Breach Response",
+                "limit": limit,
+                "deductible": deductible,
+                "premium": round(premium * 0.30, 2),
+            },
+            {
+                "coverage_code": "THIRD-PARTY",
+                "coverage_name": "Third-Party Liability",
+                "limit": limit,
+                "deductible": deductible,
+                "premium": round(premium * 0.30, 2),
+            },
+            {
+                "coverage_code": "REG-DEFENSE",
+                "coverage_name": "Regulatory Defense & Penalties",
+                "limit": limit / 2,
+                "deductible": deductible / 2,
+                "premium": round(premium * 0.15, 2),
+            },
+            {
+                "coverage_code": "BUS-INTERRUPT",
+                "coverage_name": "Business Interruption",
+                "limit": limit / 2,
+                "deductible": deductible,
+                "premium": round(premium * 0.15, 2),
+            },
+            {
+                "coverage_code": "RANSOMWARE",
+                "coverage_name": "Ransomware & Extortion",
+                "limit": limit / 2,
+                "deductible": deductible / 2,
+                "premium": round(premium * 0.10, 2),
+            },
         ],
         "endorsements": [],
         "metadata": {"source": "demo_workflow", "workflow_id": workflow_id},
@@ -280,39 +339,43 @@ async def run_full_demo_workflow() -> DemoWorkflowResult:
 
     # Create billing account
     billing_id = str(uuid.uuid4())
-    await billing_repo.create({
-        "id": billing_id,
-        "policy_id": policy_id,
-        "policyholder_name": _DEMO_APPLICANT["applicant_name"],
-        "status": "active",
-        "total_premium": premium,
-        "total_paid": 0,
-        "balance_due": premium,
-        "installments": 4,
-        "currency": "USD",
-        "billing_email": _DEMO_APPLICANT["applicant_email"],
-        "payments": [],
-        "invoices": [],
-        "metadata": {},
-        "created_at": _now(),
-        "updated_at": _now(),
-    })
-
-    steps.append(DemoStepResult(
-        step=4,
-        name="bind_policy",
-        status="completed",
-        duration_ms=_elapsed_ms(step_start),
-        detail={
+    await billing_repo.create(
+        {
+            "id": billing_id,
             "policy_id": policy_id,
-            "policy_number": policy_number,
-            "premium": premium,
-            "effective_date": effective,
-            "expiration_date": expiration,
-            "coverages": len(policy["coverages"]),
-            "billing_account_id": billing_id,
-        },
-    ))
+            "policyholder_name": _DEMO_APPLICANT["applicant_name"],
+            "status": "active",
+            "total_premium": premium,
+            "total_paid": 0,
+            "balance_due": premium,
+            "installments": 4,
+            "currency": "USD",
+            "billing_email": _DEMO_APPLICANT["applicant_email"],
+            "payments": [],
+            "invoices": [],
+            "metadata": {},
+            "created_at": _now(),
+            "updated_at": _now(),
+        }
+    )
+
+    steps.append(
+        DemoStepResult(
+            step=4,
+            name="bind_policy",
+            status="completed",
+            duration_ms=_elapsed_ms(step_start),
+            detail={
+                "policy_id": policy_id,
+                "policy_number": policy_number,
+                "premium": premium,
+                "effective_date": effective,
+                "expiration_date": expiration,
+                "coverages": len(policy["coverages"]),
+                "billing_account_id": billing_id,
+            },
+        )
+    )
 
     # ── Step 5: File Claim ──────────────────────────────────────────────
     step_start = datetime.now(UTC)
@@ -341,19 +404,21 @@ async def run_full_demo_workflow() -> DemoWorkflowResult:
     }
     await claim_repo.create(claim)
 
-    steps.append(DemoStepResult(
-        step=5,
-        name="file_claim",
-        status="completed",
-        duration_ms=_elapsed_ms(step_start),
-        detail={
-            "claim_id": claim_id,
-            "claim_number": claim_number,
-            "claim_type": "ransomware",
-            "loss_date": loss_date,
-            "description": _DEMO_CLAIM["description"][:120] + "…",
-        },
-    ))
+    steps.append(
+        DemoStepResult(
+            step=5,
+            name="file_claim",
+            status="completed",
+            duration_ms=_elapsed_ms(step_start),
+            detail={
+                "claim_id": claim_id,
+                "claim_number": claim_number,
+                "claim_type": "ransomware",
+                "loss_date": loss_date,
+                "description": _DEMO_CLAIM["description"][:120] + "…",
+            },
+        )
+    )
 
     # ── Step 6: Set Reserves ────────────────────────────────────────────
     step_start = datetime.now(UTC)
@@ -375,17 +440,19 @@ async def run_full_demo_workflow() -> DemoWorkflowResult:
         stored_claim["status"] = "under_investigation"
         stored_claim["updated_at"] = _now()
 
-    steps.append(DemoStepResult(
-        step=6,
-        name="set_reserves",
-        status="completed",
-        duration_ms=_elapsed_ms(step_start),
-        detail={
-            "reserve_amount": 150_000.0,
-            "category": "indemnity",
-            "breakdown": "Forensics $45K, Ransom negotiation $25K, Restoration $50K, Notification $30K",
-        },
-    ))
+    steps.append(
+        DemoStepResult(
+            step=6,
+            name="set_reserves",
+            status="completed",
+            duration_ms=_elapsed_ms(step_start),
+            detail={
+                "reserve_amount": 150_000.0,
+                "category": "indemnity",
+                "breakdown": "Forensics $45K, Ransom negotiation $25K, Restoration $50K, Notification $30K",
+            },
+        )
+    )
 
     # ── Summary ─────────────────────────────────────────────────────────
     total_ms = _elapsed_ms(workflow_start)

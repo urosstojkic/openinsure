@@ -124,7 +124,7 @@ def _seed() -> None:
 
     try:
         loop = asyncio.get_running_loop()
-        loop.create_task(_do_seed())
+        _task = loop.create_task(_do_seed())  # noqa: RUF006
     except RuntimeError:
         asyncio.run(_do_seed())
 

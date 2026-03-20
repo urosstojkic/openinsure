@@ -7,11 +7,8 @@ This touches all 6 Foundry agents to produce rich traces.
 """
 
 import asyncio
-import json
 import random
 import sys
-import uuid
-from datetime import datetime, timezone
 
 import httpx
 
@@ -21,26 +18,186 @@ HEADERS = {"X-API-Key": "dev-key-change-me", "Content-Type": "application/json"}
 
 # 20 diverse cyber insurance scenarios
 SCENARIOS = [
-    {"name": "TechStart AI Inc", "revenue": 2_500_000, "employees": 45, "industry": "SaaS/AI", "sic": "7372", "security_score": 8, "incidents": 0},
-    {"name": "MidWest Manufacturing", "revenue": 15_000_000, "employees": 320, "industry": "Manufacturing", "sic": "3599", "security_score": 4, "incidents": 2},
-    {"name": "Pacific Financial Group", "revenue": 50_000_000, "employees": 180, "industry": "Financial Services", "sic": "6022", "security_score": 7, "incidents": 1},
-    {"name": "HealthFirst Clinics", "revenue": 8_000_000, "employees": 95, "industry": "Healthcare", "sic": "8011", "security_score": 5, "incidents": 3},
-    {"name": "GreenEnergy Solutions", "revenue": 12_000_000, "employees": 75, "industry": "Energy", "sic": "4911", "security_score": 6, "incidents": 0},
-    {"name": "Urban Retail Chain", "revenue": 35_000_000, "employees": 500, "industry": "Retail", "sic": "5411", "security_score": 3, "incidents": 4},
-    {"name": "CloudSecure Labs", "revenue": 5_000_000, "employees": 30, "industry": "Cybersecurity", "sic": "7371", "security_score": 9, "incidents": 0},
-    {"name": "Alpha Legal Partners", "revenue": 20_000_000, "employees": 60, "industry": "Legal", "sic": "8111", "security_score": 6, "incidents": 1},
-    {"name": "EduTech Academy", "revenue": 3_000_000, "employees": 40, "industry": "Education", "sic": "8211", "security_score": 5, "incidents": 0},
-    {"name": "FastLogistics Corp", "revenue": 28_000_000, "employees": 250, "industry": "Logistics", "sic": "4215", "security_score": 4, "incidents": 2},
-    {"name": "BioPharm Research", "revenue": 45_000_000, "employees": 200, "industry": "Pharma", "sic": "2836", "security_score": 7, "incidents": 1},
-    {"name": "Metro Construction Inc", "revenue": 18_000_000, "employees": 150, "industry": "Construction", "sic": "1522", "security_score": 3, "incidents": 3},
-    {"name": "Digital Media House", "revenue": 7_000_000, "employees": 55, "industry": "Media", "sic": "7812", "security_score": 6, "incidents": 0},
-    {"name": "Precision Aerospace", "revenue": 60_000_000, "employees": 400, "industry": "Aerospace", "sic": "3721", "security_score": 8, "incidents": 1},
-    {"name": "FoodChain Distributors", "revenue": 22_000_000, "employees": 180, "industry": "Food Distribution", "sic": "5141", "security_score": 4, "incidents": 2},
-    {"name": "NanoTech Innovations", "revenue": 4_000_000, "employees": 25, "industry": "Nanotechnology", "sic": "3674", "security_score": 7, "incidents": 0},
-    {"name": "Coastal Hospitality Group", "revenue": 30_000_000, "employees": 350, "industry": "Hospitality", "sic": "7011", "security_score": 5, "incidents": 3},
-    {"name": "AutoDrive Systems", "revenue": 40_000_000, "employees": 280, "industry": "Automotive Tech", "sic": "3714", "security_score": 8, "incidents": 0},
-    {"name": "QuickPay Fintech", "revenue": 10_000_000, "employees": 65, "industry": "Fintech", "sic": "6159", "security_score": 9, "incidents": 1},
-    {"name": "Heritage Insurance Brokers", "revenue": 6_000_000, "employees": 35, "industry": "Insurance Brokerage", "sic": "6411", "security_score": 6, "incidents": 0},
+    {
+        "name": "TechStart AI Inc",
+        "revenue": 2_500_000,
+        "employees": 45,
+        "industry": "SaaS/AI",
+        "sic": "7372",
+        "security_score": 8,
+        "incidents": 0,
+    },
+    {
+        "name": "MidWest Manufacturing",
+        "revenue": 15_000_000,
+        "employees": 320,
+        "industry": "Manufacturing",
+        "sic": "3599",
+        "security_score": 4,
+        "incidents": 2,
+    },
+    {
+        "name": "Pacific Financial Group",
+        "revenue": 50_000_000,
+        "employees": 180,
+        "industry": "Financial Services",
+        "sic": "6022",
+        "security_score": 7,
+        "incidents": 1,
+    },
+    {
+        "name": "HealthFirst Clinics",
+        "revenue": 8_000_000,
+        "employees": 95,
+        "industry": "Healthcare",
+        "sic": "8011",
+        "security_score": 5,
+        "incidents": 3,
+    },
+    {
+        "name": "GreenEnergy Solutions",
+        "revenue": 12_000_000,
+        "employees": 75,
+        "industry": "Energy",
+        "sic": "4911",
+        "security_score": 6,
+        "incidents": 0,
+    },
+    {
+        "name": "Urban Retail Chain",
+        "revenue": 35_000_000,
+        "employees": 500,
+        "industry": "Retail",
+        "sic": "5411",
+        "security_score": 3,
+        "incidents": 4,
+    },
+    {
+        "name": "CloudSecure Labs",
+        "revenue": 5_000_000,
+        "employees": 30,
+        "industry": "Cybersecurity",
+        "sic": "7371",
+        "security_score": 9,
+        "incidents": 0,
+    },
+    {
+        "name": "Alpha Legal Partners",
+        "revenue": 20_000_000,
+        "employees": 60,
+        "industry": "Legal",
+        "sic": "8111",
+        "security_score": 6,
+        "incidents": 1,
+    },
+    {
+        "name": "EduTech Academy",
+        "revenue": 3_000_000,
+        "employees": 40,
+        "industry": "Education",
+        "sic": "8211",
+        "security_score": 5,
+        "incidents": 0,
+    },
+    {
+        "name": "FastLogistics Corp",
+        "revenue": 28_000_000,
+        "employees": 250,
+        "industry": "Logistics",
+        "sic": "4215",
+        "security_score": 4,
+        "incidents": 2,
+    },
+    {
+        "name": "BioPharm Research",
+        "revenue": 45_000_000,
+        "employees": 200,
+        "industry": "Pharma",
+        "sic": "2836",
+        "security_score": 7,
+        "incidents": 1,
+    },
+    {
+        "name": "Metro Construction Inc",
+        "revenue": 18_000_000,
+        "employees": 150,
+        "industry": "Construction",
+        "sic": "1522",
+        "security_score": 3,
+        "incidents": 3,
+    },
+    {
+        "name": "Digital Media House",
+        "revenue": 7_000_000,
+        "employees": 55,
+        "industry": "Media",
+        "sic": "7812",
+        "security_score": 6,
+        "incidents": 0,
+    },
+    {
+        "name": "Precision Aerospace",
+        "revenue": 60_000_000,
+        "employees": 400,
+        "industry": "Aerospace",
+        "sic": "3721",
+        "security_score": 8,
+        "incidents": 1,
+    },
+    {
+        "name": "FoodChain Distributors",
+        "revenue": 22_000_000,
+        "employees": 180,
+        "industry": "Food Distribution",
+        "sic": "5141",
+        "security_score": 4,
+        "incidents": 2,
+    },
+    {
+        "name": "NanoTech Innovations",
+        "revenue": 4_000_000,
+        "employees": 25,
+        "industry": "Nanotechnology",
+        "sic": "3674",
+        "security_score": 7,
+        "incidents": 0,
+    },
+    {
+        "name": "Coastal Hospitality Group",
+        "revenue": 30_000_000,
+        "employees": 350,
+        "industry": "Hospitality",
+        "sic": "7011",
+        "security_score": 5,
+        "incidents": 3,
+    },
+    {
+        "name": "AutoDrive Systems",
+        "revenue": 40_000_000,
+        "employees": 280,
+        "industry": "Automotive Tech",
+        "sic": "3714",
+        "security_score": 8,
+        "incidents": 0,
+    },
+    {
+        "name": "QuickPay Fintech",
+        "revenue": 10_000_000,
+        "employees": 65,
+        "industry": "Fintech",
+        "sic": "6159",
+        "security_score": 9,
+        "incidents": 1,
+    },
+    {
+        "name": "Heritage Insurance Brokers",
+        "revenue": 6_000_000,
+        "employees": 35,
+        "industry": "Insurance Brokerage",
+        "sic": "6411",
+        "security_score": 6,
+        "incidents": 0,
+    },
 ]
 
 
@@ -70,13 +227,12 @@ async def create_submission(client: httpx.AsyncClient, scenario: dict, idx: int)
         if resp.status_code in (200, 201):
             data = resp.json()
             sid = data.get("id") or data.get("submission_id")
-            print(f"  [{idx+1:2d}/20] ✅ Created submission for {scenario['name']}: {sid}")
+            print(f"  [{idx + 1:2d}/20] ✅ Created submission for {scenario['name']}: {sid}")
             return sid
-        else:
-            print(f"  [{idx+1:2d}/20] ❌ Create failed ({resp.status_code}): {resp.text[:200]}")
-            return None
+        print(f"  [{idx + 1:2d}/20] ❌ Create failed ({resp.status_code}): {resp.text[:200]}")
+        return None
     except Exception as e:
-        print(f"  [{idx+1:2d}/20] ❌ Create error: {e}")
+        print(f"  [{idx + 1:2d}/20] ❌ Create error: {e}")
         return None
 
 
@@ -106,7 +262,7 @@ async def run_quote(client: httpx.AsyncClient, sid: str, name: str) -> bool:
             premium = data.get("premium", "?")
             print(f"       💰 Quote {name}: premium=${premium}")
             return True
-        elif resp.status_code == 202:
+        if resp.status_code == 202:
             print(f"       ⬆️  Quote {name}: escalated (authority limit)")
             return True  # Escalation is a valid Foundry-touched path
         print(f"       ⚠️  Quote {name}: {resp.status_code} - {resp.text[:150]}")
@@ -125,7 +281,7 @@ async def run_bind(client: httpx.AsyncClient, sid: str, name: str) -> str | None
             pid = data.get("policy_id", "?")
             print(f"       📋 Bind {name}: policy={pid}")
             return pid
-        elif resp.status_code == 202:
+        if resp.status_code == 202:
             print(f"       ⬆️  Bind {name}: escalated")
             return None
         print(f"       ⚠️  Bind {name}: {resp.status_code} - {resp.text[:150]}")
@@ -221,7 +377,7 @@ async def main():
             await asyncio.sleep(0.3)
 
         # --- Phase 2: Triage first 10 (submission agent) + full workflow last 10 ---
-        print(f"\n🔍 Phase 2: Triage + Quote + Bind (first 10 — sequential agent calls)...")
+        print("\n🔍 Phase 2: Triage + Quote + Bind (first 10 — sequential agent calls)...")
         for sid, name in submission_ids[:10]:
             ok = await run_triage(client, sid, name)
             if ok:
@@ -239,7 +395,7 @@ async def main():
                 policy_ids.append((pid, name))
             await asyncio.sleep(0.5)
 
-        print(f"\n🔄 Phase 3: Full multi-agent workflows (last 10 — orchestrator + all agents)...")
+        print("\n🔄 Phase 3: Full multi-agent workflows (last 10 — orchestrator + all agents)...")
         for sid, name in submission_ids[10:]:
             ok = await run_process_workflow(client, sid, name)
             if ok:

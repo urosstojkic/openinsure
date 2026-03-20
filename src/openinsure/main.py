@@ -1,7 +1,7 @@
 """OpenInsure — AI-Native Insurance Platform API."""
 
-from contextlib import asynccontextmanager
 from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 
 import structlog
 from fastapi import FastAPI, Request
@@ -35,7 +35,7 @@ def create_app() -> FastAPI:
     settings = get_settings()
 
     @asynccontextmanager
-    async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         logger.info("openinsure.startup", version=settings.app_version)
         logger.info("openinsure.storage_mode", mode=settings.storage_mode)
 

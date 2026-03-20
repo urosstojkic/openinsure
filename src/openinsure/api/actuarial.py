@@ -154,9 +154,7 @@ async def set_reserve(body: ReserveCreate) -> ReserveResponse:
 @router.get("/triangles/{lob}", response_model=TriangleResponse)
 async def get_loss_triangle(lob: str) -> TriangleResponse:
     """Get the loss-development triangle for a line of business."""
-    entries = await _triangle_repo.list_all(
-        filters={"line_of_business": lob}, skip=0, limit=500
-    )
+    entries = await _triangle_repo.list_all(filters={"line_of_business": lob}, skip=0, limit=500)
     if not entries:
         raise HTTPException(
             status_code=404,
@@ -179,9 +177,7 @@ async def generate_triangle(lob: str) -> TriangleResponse:
     In the seed implementation this re-processes the existing triangle entries.
     In production it would pull from the claims data store.
     """
-    entries = await _triangle_repo.list_all(
-        filters={"line_of_business": lob}, skip=0, limit=500
-    )
+    entries = await _triangle_repo.list_all(filters={"line_of_business": lob}, skip=0, limit=500)
     if not entries:
         raise HTTPException(
             status_code=404,
@@ -242,9 +238,7 @@ async def get_ibnr(
     method: str = Query("chain_ladder", description="IBNR estimation method"),
 ) -> IBNRResponse:
     """Estimate IBNR reserves for a line of business using the specified method."""
-    entries = await _triangle_repo.list_all(
-        filters={"line_of_business": lob}, skip=0, limit=500
-    )
+    entries = await _triangle_repo.list_all(filters={"line_of_business": lob}, skip=0, limit=500)
     if not entries:
         raise HTTPException(
             status_code=404,

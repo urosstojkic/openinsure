@@ -156,8 +156,10 @@ CLAIMS_WORKFLOW = WorkflowDefinition(
         WorkflowStep(
             name="compliance",
             agent="openinsure-compliance",
-            prompt_template=("Audit this claims assessment for EU AI Act compliance.\n"
-                            "Orchestration: {orchestration_result}\nAssessment: {assessment_result}"),
+            prompt_template=(
+                "Audit this claims assessment for EU AI Act compliance.\n"
+                "Orchestration: {orchestration_result}\nAssessment: {assessment_result}"
+            ),
         ),
     ],
 )

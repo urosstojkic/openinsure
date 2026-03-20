@@ -143,9 +143,7 @@ class SqlBillingRepository(BaseRepository):
         return entity
 
     async def get_by_id(self, entity_id: UUID | str) -> dict[str, Any] | None:
-        row = await self.db.fetch_one(
-            "SELECT * FROM billing_accounts WHERE id = ?", [str(entity_id)]
-        )
+        row = await self.db.fetch_one("SELECT * FROM billing_accounts WHERE id = ?", [str(entity_id)])
         if not row:
             return None
         invoices = await self._fetch_invoices(str(entity_id))
@@ -197,9 +195,7 @@ class SqlBillingRepository(BaseRepository):
         return await self.get_by_id(entity_id)
 
     async def delete(self, entity_id: UUID | str) -> bool:
-        result = await self.db.execute_query(
-            "DELETE FROM billing_accounts WHERE id = ?", [str(entity_id)]
-        )
+        result = await self.db.execute_query("DELETE FROM billing_accounts WHERE id = ?", [str(entity_id)])
         return result > 0
 
     async def count(self, filters: dict[str, Any] | None = None) -> int:

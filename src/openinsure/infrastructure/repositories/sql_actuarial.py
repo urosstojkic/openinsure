@@ -100,20 +100,25 @@ class SqlActuarialReserveRepository(BaseRepository):
                 as_of_date, analyst, approved_by, notes, created_at, updated_at)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             [
-                entity["id"], entity.get("line_of_business"),
-                entity.get("accident_year"), entity.get("reserve_type"),
-                entity.get("carried_amount", 0), entity.get("indicated_amount", 0),
-                entity.get("selected_amount", 0), entity.get("as_of_date"),
-                entity.get("analyst", ""), entity.get("approved_by", ""),
-                entity.get("notes", ""), entity["created_at"], entity["updated_at"],
+                entity["id"],
+                entity.get("line_of_business"),
+                entity.get("accident_year"),
+                entity.get("reserve_type"),
+                entity.get("carried_amount", 0),
+                entity.get("indicated_amount", 0),
+                entity.get("selected_amount", 0),
+                entity.get("as_of_date"),
+                entity.get("analyst", ""),
+                entity.get("approved_by", ""),
+                entity.get("notes", ""),
+                entity["created_at"],
+                entity["updated_at"],
             ],
         )
         return entity
 
     async def get_by_id(self, entity_id: UUID | str) -> dict[str, Any] | None:
-        row = await self.db.fetch_one(
-            "SELECT * FROM actuarial_reserves WHERE id = ?", [str(entity_id)]
-        )
+        row = await self.db.fetch_one("SELECT * FROM actuarial_reserves WHERE id = ?", [str(entity_id)])
         return _reserve_from_sql(row) if row else None
 
     async def list_all(
@@ -163,9 +168,7 @@ class SqlActuarialReserveRepository(BaseRepository):
         return await self.get_by_id(entity_id)
 
     async def delete(self, entity_id: UUID | str) -> bool:
-        result = await self.db.execute_query(
-            "DELETE FROM actuarial_reserves WHERE id = ?", [str(entity_id)]
-        )
+        result = await self.db.execute_query("DELETE FROM actuarial_reserves WHERE id = ?", [str(entity_id)])
         return result > 0
 
     async def count(self, filters: dict[str, Any] | None = None) -> int:
@@ -206,19 +209,21 @@ class SqlTriangleRepository(BaseRepository):
                 incurred_amount, paid_amount, case_reserve, claim_count, created_at)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             [
-                entity["id"], entity.get("line_of_business"),
-                entity.get("accident_year"), entity.get("development_month"),
-                entity.get("incurred_amount", 0), entity.get("paid_amount", 0),
-                entity.get("case_reserve", 0), entity.get("claim_count", 0),
+                entity["id"],
+                entity.get("line_of_business"),
+                entity.get("accident_year"),
+                entity.get("development_month"),
+                entity.get("incurred_amount", 0),
+                entity.get("paid_amount", 0),
+                entity.get("case_reserve", 0),
+                entity.get("claim_count", 0),
                 entity["created_at"],
             ],
         )
         return entity
 
     async def get_by_id(self, entity_id: UUID | str) -> dict[str, Any] | None:
-        row = await self.db.fetch_one(
-            "SELECT * FROM loss_triangle_entries WHERE id = ?", [str(entity_id)]
-        )
+        row = await self.db.fetch_one("SELECT * FROM loss_triangle_entries WHERE id = ?", [str(entity_id)])
         return _triangle_from_sql(row) if row else None
 
     async def list_all(
@@ -263,9 +268,7 @@ class SqlTriangleRepository(BaseRepository):
         return await self.get_by_id(entity_id)
 
     async def delete(self, entity_id: UUID | str) -> bool:
-        result = await self.db.execute_query(
-            "DELETE FROM loss_triangle_entries WHERE id = ?", [str(entity_id)]
-        )
+        result = await self.db.execute_query("DELETE FROM loss_triangle_entries WHERE id = ?", [str(entity_id)])
         return result > 0
 
     async def count(self, filters: dict[str, Any] | None = None) -> int:
@@ -303,18 +306,20 @@ class SqlRateAdequacyRepository(BaseRepository):
                 adequacy_ratio, as_of_date, created_at)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
             [
-                entity["id"], entity.get("line_of_business"),
-                entity.get("segment"), entity.get("current_rate"),
-                entity.get("indicated_rate"), entity.get("adequacy_ratio"),
-                entity.get("as_of_date"), entity["created_at"],
+                entity["id"],
+                entity.get("line_of_business"),
+                entity.get("segment"),
+                entity.get("current_rate"),
+                entity.get("indicated_rate"),
+                entity.get("adequacy_ratio"),
+                entity.get("as_of_date"),
+                entity["created_at"],
             ],
         )
         return entity
 
     async def get_by_id(self, entity_id: UUID | str) -> dict[str, Any] | None:
-        row = await self.db.fetch_one(
-            "SELECT * FROM rate_adequacy WHERE id = ?", [str(entity_id)]
-        )
+        row = await self.db.fetch_one("SELECT * FROM rate_adequacy WHERE id = ?", [str(entity_id)])
         return _rate_from_sql(row) if row else None
 
     async def list_all(
@@ -356,9 +361,7 @@ class SqlRateAdequacyRepository(BaseRepository):
         return await self.get_by_id(entity_id)
 
     async def delete(self, entity_id: UUID | str) -> bool:
-        result = await self.db.execute_query(
-            "DELETE FROM rate_adequacy WHERE id = ?", [str(entity_id)]
-        )
+        result = await self.db.execute_query("DELETE FROM rate_adequacy WHERE id = ?", [str(entity_id)])
         return result > 0
 
     async def count(self, filters: dict[str, Any] | None = None) -> int:

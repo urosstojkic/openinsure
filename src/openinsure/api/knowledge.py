@@ -274,6 +274,4 @@ async def list_compliance_rules() -> ComplianceRulesResponse:
         if docs:
             return ComplianceRulesResponse(framework="all", rules=docs, total=len(docs))
 
-    return ComplianceRulesResponse(
-        framework="all", rules=list(COMPLIANCE_RULES.values()), total=len(COMPLIANCE_RULES)
-    )
+    return ComplianceRulesResponse(framework="all", rules=list(COMPLIANCE_RULES.values()), total=len(COMPLIANCE_RULES))

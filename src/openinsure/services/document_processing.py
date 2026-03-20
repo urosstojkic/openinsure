@@ -142,7 +142,8 @@ class DocumentProcessingService:
         if self._di and self._di.is_available:
             try:
                 analysis = await self._di.analyze_document(
-                    file_content, content_type=content_type,
+                    file_content,
+                    content_type=content_type,
                 )
                 # Convert DI key-value pairs to extracted fields
                 fields: dict[str, Any] = {}

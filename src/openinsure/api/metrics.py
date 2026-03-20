@@ -214,8 +214,7 @@ async def get_executive_dashboard():
 
     # --- Pipeline as array of {stage, count} ----------------------------------
     pipeline_array = [
-        {"stage": stage.capitalize(), "count": count}
-        for stage, count in pipeline_raw["pipeline"].items()
+        {"stage": stage.capitalize(), "count": count} for stage, count in pipeline_raw["pipeline"].items()
     ]
 
     return {
