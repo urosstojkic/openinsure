@@ -2,17 +2,21 @@
 .SYNOPSIS
     Parallel build and deploy for OpenInsure backend + dashboard.
 .DESCRIPTION
-    Builds both container images in parallel on ACR, then deploys both.
-    Cuts total cycle time from ~8min sequential to ~4min parallel.
+    THE standard way to build and deploy OpenInsure. Uses parallel ACR builds.
+    Auto-increments version from latest ACR tag if not specified.
 .PARAMETER Version
-    Version tag suffix (e.g., 48 -> openinsure-backend:v48)
+    Version tag suffix (e.g., 48 -> openinsure-backend:v48). Auto-detected if omitted.
 .PARAMETER BackendOnly
     Only build/deploy the backend
 .PARAMETER DashboardOnly
     Only build/deploy the dashboard
+.EXAMPLE
+    pwsh scripts/deploy.ps1                    # auto-version, both
+    pwsh scripts/deploy.ps1 -BackendOnly       # auto-version, backend only
+    pwsh scripts/deploy.ps1 -Version 55        # explicit version
 #>
 param(
-    [Parameter(Mandatory)][int]$Version,
+    [int]$Version = 0,
     [switch]$BackendOnly,
     [switch]$DashboardOnly
 )
@@ -23,6 +27,15 @@ $env:PYTHONIOENCODING = "utf-8"
 $registry = "openinsuredevacr"
 $rg = "openinsure-dev-sc"
 $repoRoot = Split-Path -Parent $MyInvocation.MyCommand.Path | Split-Path -Parent
+
+# Auto-detect next version from ACR if not specified
+if ($Version -eq 0) {
+    try {
+        $tags = az acr repository show-tags --name $registry --repository openinsure-backend --orderby time_desc --top 1 -o tsv 2>$null
+        if ($tags -match 'v(\d+)') { $Version = [int]$Matches[1] + 1 }
+        else { $Version = 1 }
+    } catch { $Version = 1 }
+}
 
 Write-Host "`n=== OpenInsure Deploy v$Version ===" -ForegroundColor Cyan
 Write-Host "   Registry: $registry | RG: $rg" -ForegroundColor DarkGray
