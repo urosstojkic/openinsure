@@ -932,7 +932,12 @@ async def process_submission(submission_id: str, user: CurrentUser = Depends(get
     premium: float = 10000  # fallback
     if isinstance(uw_resp, dict):
         premium = float(uw_resp.get("recommended_premium", uw_resp.get("premium", 10000)) or 10000)
-    await _repo.update(submission_id, {"status": "quoted", "quoted_premium": premium, "updated_at": now})
+    await _repo.update(submission_id, {
+        "status": "quoted",
+        "quoted_premium": premium,
+        "triage_result": json.dumps(triage_resp) if isinstance(triage_resp, dict) else str(triage_resp),
+        "updated_at": now,
+    })
     await publish_domain_event(
         "submission.quoted", f"/submissions/{submission_id}", {"submission_id": submission_id, "premium": premium}
     )
