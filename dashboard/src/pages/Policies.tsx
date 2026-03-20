@@ -1,10 +1,11 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Plus } from 'lucide-react';
+import { Plus, Eye, RefreshCw, FileText, Loader2 } from 'lucide-react';
 import DataTable, { type Column } from '../components/DataTable';
 import StatusBadge from '../components/StatusBadge';
 import { getPolicies } from '../api/policies';
+import { generateRenewalTerms } from '../api/renewals';
 import type { Policy, PolicyStatus } from '../types';
 
 const statusVariant: Record<PolicyStatus, 'green' | 'gray' | 'red' | 'yellow'> = {
@@ -23,8 +24,21 @@ const money = (n: number) =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n);
 
 const Policies: React.FC = () => {
-  const { data: policies = [], isLoading } = useQuery({ queryKey: ['policies'], queryFn: getPolicies });
+  const { data: policies = [], isLoading, refetch } = useQuery({ queryKey: ['policies'], queryFn: getPolicies });
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+
+  const handleRenew = useCallback(async (policyId: string) => {
+    setActionLoading(`${policyId}-renew`);
+    try {
+      await generateRenewalTerms(policyId);
+      await refetch();
+    } catch (err) {
+      console.error('Failed to generate renewal:', err);
+    } finally {
+      setActionLoading(null);
+    }
+  }, [refetch]);
 
   const filtered = useMemo(() => {
     if (statusFilter === 'all') return policies;
@@ -39,6 +53,37 @@ const Policies: React.FC = () => {
     { key: 'effective', header: 'Effective', render: (r) => r.effective_date, sortable: true, sortValue: (r) => r.effective_date },
     { key: 'expiration', header: 'Expiration', render: (r) => r.expiration_date, sortable: true, sortValue: (r) => r.expiration_date },
     { key: 'premium', header: 'Premium', render: (r) => money(r.premium), sortable: true, sortValue: (r) => r.premium },
+    { key: 'actions', header: 'Actions', render: (r) => {
+      const loading = actionLoading?.startsWith(r.id);
+      return (
+        <div className="flex items-center gap-1.5">
+          <button
+            className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50 transition-all"
+          >
+            <Eye size={11} />
+            View
+          </button>
+          {r.status === 'active' && (
+            <>
+              <button
+                onClick={() => handleRenew(r.id)}
+                disabled={!!loading}
+                className="inline-flex items-center gap-1 rounded-md bg-blue-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50 transition-all"
+              >
+                {actionLoading === `${r.id}-renew` ? <Loader2 size={11} className="animate-spin" /> : <RefreshCw size={11} />}
+                Renew
+              </button>
+              <button
+                className="inline-flex items-center gap-1 rounded-md bg-purple-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-purple-700 transition-all"
+              >
+                <FileText size={11} />
+                Endorse
+              </button>
+            </>
+          )}
+        </div>
+      );
+    }},
   ];
 
   if (isLoading) return <div className="flex h-64 items-center justify-center text-slate-400">Loading…</div>;
