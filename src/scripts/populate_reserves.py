@@ -38,12 +38,12 @@ for c in all_claims:
     amt = random.randint(lo, hi)
     try:
         resp = httpx.post(
-            f"{BE}/claims/{cid}/reserves",
+            f"{BE}/claims/{cid}/reserve",
             json={"category": "indemnity", "amount": amt, "currency": "USD", "notes": f"Case reserve for {ct}"},
             headers=H,
             timeout=30,
         )
-        if resp.status_code == 200:
+        if resp.status_code in (200, 201):
             ok += 1
         elif ok == 0:
             print(f"  {resp.status_code}: {resp.text[:200]}")
