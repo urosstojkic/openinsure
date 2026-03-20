@@ -4,6 +4,8 @@ import { useQuery } from '@tanstack/react-query';
 import { Plus, Play, Eye, Loader2, DollarSign, XCircle } from 'lucide-react';
 import DataTable, { type Column } from '../components/DataTable';
 import StatusBadge from '../components/StatusBadge';
+import { ToastContainer } from '../components/Toast';
+import { useToast } from '../components/useToast';
 import { getClaims } from '../api/claims';
 import client from '../api/client';
 import type { Claim, ClaimStatus, ClaimSeverity } from '../types';
@@ -33,19 +35,33 @@ const Claims: React.FC = () => {
   const [severityFilter, setSeverityFilter] = useState<string>('all');
 
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const { toasts, addToast, dismissToast } = useToast();
 
   const handleClaimAction = useCallback(async (id: string, action: string, e: React.MouseEvent) => {
     e.stopPropagation();
     setActionLoading(`${id}-${action}`);
     try {
-      await client.post(`/claims/${id}/${action}`);
+      const { data } = await client.post(`/claims/${id}/${action}`);
       await refetch();
-    } catch (err) {
-      console.error(`Failed to ${action} claim:`, err);
+      if (action === 'set-reserve') {
+        const reserve = data?.reserve ?? data?.total_reserved;
+        addToast('success', reserve != null ? `Reserve set: ${money(reserve)}` : 'Reserve updated successfully!');
+      } else if (action === 'close') {
+        addToast('success', 'Claim closed successfully!');
+      } else if (action === 'process') {
+        const status = data?.status ?? data?.new_status ?? '';
+        addToast('success', status ? `Claim processed — status: ${status}` : 'Claim processed successfully!');
+      } else {
+        addToast('success', `${action} completed successfully!`);
+      }
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { detail?: string } }; message?: string })?.response?.data?.detail
+        ?? (err as { message?: string })?.message ?? 'Unknown error';
+      addToast('error', `Failed to ${action} claim: ${msg}`);
     } finally {
       setActionLoading(null);
     }
-  }, [refetch]);
+  }, [refetch, addToast]);
 
   const filtered = useMemo(() => {
     let list = claims;
@@ -132,6 +148,7 @@ const Claims: React.FC = () => {
 
   return (
     <div className="space-y-4">
+      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-slate-900">Claims</h1>
         <Link to="/claims/new" className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">

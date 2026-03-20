@@ -4,6 +4,8 @@ import { useQuery } from '@tanstack/react-query';
 import { Plus, Eye, RefreshCw, FileText, Loader2 } from 'lucide-react';
 import DataTable, { type Column } from '../components/DataTable';
 import StatusBadge from '../components/StatusBadge';
+import { ToastContainer } from '../components/Toast';
+import { useToast } from '../components/useToast';
 import { getPolicies } from '../api/policies';
 import { generateRenewalTerms } from '../api/renewals';
 import type { Policy, PolicyStatus } from '../types';
@@ -27,18 +29,23 @@ const Policies: React.FC = () => {
   const { data: policies = [], isLoading, refetch } = useQuery({ queryKey: ['policies'], queryFn: getPolicies });
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const { toasts, addToast, dismissToast } = useToast();
 
   const handleRenew = useCallback(async (policyId: string) => {
     setActionLoading(`${policyId}-renew`);
     try {
-      await generateRenewalTerms(policyId);
+      const data = await generateRenewalTerms(policyId);
       await refetch();
-    } catch (err) {
-      console.error('Failed to generate renewal:', err);
+      const premium = data?.renewal_premium ?? data?.premium;
+      addToast('success', premium != null ? `Renewal generated! New premium: ${money(premium)}` : 'Renewal generated successfully!');
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { detail?: string } }; message?: string })?.response?.data?.detail
+        ?? (err as { message?: string })?.message ?? 'Unknown error';
+      addToast('error', `Failed to generate renewal: ${msg}`);
     } finally {
       setActionLoading(null);
     }
-  }, [refetch]);
+  }, [refetch, addToast]);
 
   const filtered = useMemo(() => {
     if (statusFilter === 'all') return policies;
@@ -91,6 +98,7 @@ const Policies: React.FC = () => {
 
   return (
     <div className="space-y-4">
+      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-slate-900">Policies</h1>
         <Link to="/policies/new" className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">

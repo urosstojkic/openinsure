@@ -4,6 +4,8 @@ import { useQuery } from '@tanstack/react-query';
 import { Plus, Play, Sparkles, Eye, Loader2 } from 'lucide-react';
 import DataTable, { type Column } from '../components/DataTable';
 import StatusBadge from '../components/StatusBadge';
+import { ToastContainer } from '../components/Toast';
+import { useToast } from '../components/useToast';
 import { getSubmissions } from '../api/submissions';
 import client from '../api/client';
 import type { Submission, SubmissionStatus, LOB } from '../types';
@@ -37,19 +39,36 @@ const Submissions: React.FC = () => {
   const [lobFilter, setLobFilter] = useState<string>('all');
 
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const { toasts, addToast, dismissToast } = useToast();
+
+  const formatMoney = (n: number) =>
+    new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n);
 
   const handleAction = useCallback(async (id: string, action: 'triage' | 'quote' | 'bind', e: React.MouseEvent) => {
     e.stopPropagation();
     setActionLoading(`${id}-${action}`);
     try {
-      await client.post(`/submissions/${id}/${action}`);
+      const { data } = await client.post(`/submissions/${id}/${action}`);
       await refetch();
-    } catch (err) {
-      console.error(`Failed to ${action} submission:`, err);
+      if (action === 'triage') {
+        const score = data?.risk_score ?? data?.risk_data?.risk_score ?? '—';
+        const rec = data?.recommendation ?? data?.risk_data?.recommendation ?? '';
+        addToast('success', `Triaged! Risk score: ${score}${rec ? `, Recommendation: ${rec}` : ''}`);
+      } else if (action === 'quote') {
+        const premium = data?.premium ?? data?.quote?.premium;
+        addToast('success', premium != null ? `Quoted! Premium: ${formatMoney(premium)}` : 'Quote generated successfully!');
+      } else if (action === 'bind') {
+        const policyId = data?.policy_id ?? data?.policy_number ?? '';
+        addToast('success', policyId ? `Bound! Policy ID: ${policyId}` : 'Policy bound successfully!');
+      }
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { detail?: string } }; message?: string })?.response?.data?.detail
+        ?? (err as { message?: string })?.message ?? 'Unknown error';
+      addToast('error', `Failed to ${action}: ${msg}`);
     } finally {
       setActionLoading(null);
     }
-  }, [refetch]);
+  }, [refetch, addToast]);
 
   const filtered = useMemo(() => {
     let list = submissions;
@@ -126,6 +145,7 @@ const Submissions: React.FC = () => {
 
   return (
     <div className="space-y-4">
+      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-slate-900">Submissions</h1>
         <Link to="/submissions/new" className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
