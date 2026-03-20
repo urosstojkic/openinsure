@@ -8,6 +8,7 @@ import Submissions from './pages/Submissions';
 import SubmissionDetail from './pages/SubmissionDetail';
 import NewSubmission from './pages/NewSubmission';
 import Policies from './pages/Policies';
+import PolicyDetail from './pages/PolicyDetail';
 import NewPolicy from './pages/NewPolicy';
 import Claims from './pages/Claims';
 import NewClaim from './pages/NewClaim';
@@ -73,6 +74,7 @@ function AppRoutes() {
         <Route path="submissions/:id" element={<SubRouteGuard parentPath="/submissions"><SubmissionDetail /></SubRouteGuard>} />
         <Route path="policies" element={<RouteGuard path="policies"><Policies /></RouteGuard>} />
         <Route path="policies/new" element={<SubRouteGuard parentPath="/policies"><NewPolicy /></SubRouteGuard>} />
+        <Route path="policies/:id" element={<SubRouteGuard parentPath="/policies"><PolicyDetail /></SubRouteGuard>} />
         <Route path="claims" element={<RouteGuard path="claims"><Claims /></RouteGuard>} />
         <Route path="claims/new" element={<SubRouteGuard parentPath="/claims"><NewClaim /></SubRouteGuard>} />
         <Route path="decisions" element={<RouteGuard path="decisions"><AgentDecisions /></RouteGuard>} />

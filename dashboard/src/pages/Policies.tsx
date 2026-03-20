@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Plus, Eye, RefreshCw, FileText, Loader2 } from 'lucide-react';
 import DataTable, { type Column } from '../components/DataTable';
@@ -26,6 +26,7 @@ const money = (n: number) =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n);
 
 const Policies: React.FC = () => {
+  const navigate = useNavigate();
   const { data: policies = [], isLoading, refetch } = useQuery({ queryKey: ['policies'], queryFn: getPolicies });
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [actionLoading, setActionLoading] = useState<string | null>(null);
@@ -65,6 +66,7 @@ const Policies: React.FC = () => {
       return (
         <div className="flex items-center gap-1.5">
           <button
+            onClick={() => navigate(`/policies/${r.id}`)}
             className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50 transition-all"
           >
             <Eye size={11} />
