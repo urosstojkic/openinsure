@@ -1,11 +1,11 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Plus, Play, Sparkles } from 'lucide-react';
+import { Plus, Play, Eye, Loader2, DollarSign, XCircle } from 'lucide-react';
 import DataTable, { type Column } from '../components/DataTable';
 import StatusBadge from '../components/StatusBadge';
-import ProcessWorkflowModal from '../components/ProcessWorkflowModal';
-import { getClaims, processClaim } from '../api/claims';
+import { getClaims } from '../api/claims';
+import client from '../api/client';
 import type { Claim, ClaimStatus, ClaimSeverity } from '../types';
 
 const statusVariant: Record<ClaimStatus, 'blue' | 'yellow' | 'orange' | 'green' | 'red' | 'purple'> = {
@@ -31,12 +31,21 @@ const Claims: React.FC = () => {
   const { data: claims = [], isLoading, refetch } = useQuery({ queryKey: ['claims'], queryFn: getClaims });
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [severityFilter, setSeverityFilter] = useState<string>('all');
-  const [processingItem, setProcessingItem] = useState<{ id: string; label: string } | null>(null);
 
-  const handleProcess = useCallback((id: string, label: string, e: React.MouseEvent) => {
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+
+  const handleClaimAction = useCallback(async (id: string, action: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    setProcessingItem({ id, label });
-  }, []);
+    setActionLoading(`${id}-${action}`);
+    try {
+      await client.post(`/claims/${id}/${action}`);
+      await refetch();
+    } catch (err) {
+      console.error(`Failed to ${action} claim:`, err);
+    } finally {
+      setActionLoading(null);
+    }
+  }, [refetch]);
 
   const filtered = useMemo(() => {
     let list = claims;
@@ -53,18 +62,70 @@ const Claims: React.FC = () => {
     { key: 'severity', header: 'Severity', render: (r) => <StatusBadge label={r.severity} variant={severityVariant[r.severity] || 'gray'} /> },
     { key: 'incurred', header: 'Total Incurred', render: (r) => money(r.total_incurred), sortable: true, sortValue: (r) => r.total_incurred },
     { key: 'assigned', header: 'Assigned To', render: (r) => r.assigned_to || <span className="text-slate-300">Unassigned</span> },
-    { key: 'actions', header: 'Actions', render: (r) =>
-      r.status === 'open' ? (
-        <button
-          onClick={(e) => handleProcess(r.id, r.claim_number || r.id, e)}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-indigo-600 to-purple-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:from-indigo-700 hover:to-purple-700 transition-all"
-        >
-          <Sparkles size={12} />
-          <Play size={11} />
-          Process
-        </button>
-      ) : null
-    },
+    { key: 'actions', header: 'Actions', render: (r) => {
+      const loading = actionLoading?.startsWith(r.id);
+      return (
+        <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+          {r.status === 'open' && (
+            <>
+              <button
+                onClick={(e) => handleClaimAction(r.id, 'process', e)}
+                disabled={!!loading}
+                className="inline-flex items-center gap-1 rounded-md bg-indigo-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-50 transition-all"
+              >
+                {actionLoading === `${r.id}-process` ? <Loader2 size={11} className="animate-spin" /> : <Play size={11} />}
+                Process
+              </button>
+              <button
+                onClick={(e) => handleClaimAction(r.id, 'set-reserve', e)}
+                disabled={!!loading}
+                className="inline-flex items-center gap-1 rounded-md bg-amber-500 px-2.5 py-1 text-xs font-medium text-white hover:bg-amber-600 disabled:opacity-50 transition-all"
+              >
+                {actionLoading === `${r.id}-set-reserve` ? <Loader2 size={11} className="animate-spin" /> : <DollarSign size={11} />}
+                Set Reserve
+              </button>
+            </>
+          )}
+          {r.status === 'investigating' && (
+            <>
+              <button
+                onClick={(e) => handleClaimAction(r.id, 'process', e)}
+                disabled={!!loading}
+                className="inline-flex items-center gap-1 rounded-md bg-indigo-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-50 transition-all"
+              >
+                {actionLoading === `${r.id}-process` ? <Loader2 size={11} className="animate-spin" /> : <Play size={11} />}
+                Process
+              </button>
+              <button
+                onClick={(e) => handleClaimAction(r.id, 'close', e)}
+                disabled={!!loading}
+                className="inline-flex items-center gap-1 rounded-md bg-slate-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-slate-700 disabled:opacity-50 transition-all"
+              >
+                {actionLoading === `${r.id}-close` ? <Loader2 size={11} className="animate-spin" /> : <XCircle size={11} />}
+                Close
+              </button>
+            </>
+          )}
+          {r.status === 'reserved' && (
+            <button
+              onClick={(e) => handleClaimAction(r.id, 'process', e)}
+              disabled={!!loading}
+              className="inline-flex items-center gap-1 rounded-md bg-indigo-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-50 transition-all"
+            >
+              {actionLoading === `${r.id}-process` ? <Loader2 size={11} className="animate-spin" /> : <Play size={11} />}
+              Process
+            </button>
+          )}
+          <button
+            onClick={(e) => { e.stopPropagation(); }}
+            className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50 transition-all"
+          >
+            <Eye size={11} />
+            View
+          </button>
+        </div>
+      );
+    }},
   ];
 
   if (isLoading) return <div className="flex h-64 items-center justify-center text-slate-400">Loading…</div>;
@@ -107,18 +168,6 @@ const Claims: React.FC = () => {
         data={filtered}
         keyExtractor={(r) => r.id}
       />
-
-      {/* Process Workflow Modal */}
-      {processingItem && (
-        <ProcessWorkflowModal
-          mode="claim"
-          itemId={processingItem.id}
-          itemLabel={processingItem.label}
-          processFunc={processClaim}
-          onClose={() => setProcessingItem(null)}
-          onComplete={() => { refetch(); }}
-        />
-      )}
     </div>
   );
 };
