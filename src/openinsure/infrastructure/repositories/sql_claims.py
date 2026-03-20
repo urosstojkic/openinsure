@@ -217,8 +217,24 @@ class SqlClaimRepository(BaseRepository):
         entity.setdefault("policy_id", "")
         return entity
 
+    # Query that joins claims with aggregated reserves and payments
+    _BASE_QUERY = (
+        "SELECT c.*, "
+        "COALESCE(cr.total_reserved, 0) AS total_reserved, "
+        "COALESCE(cp.total_paid, 0) AS total_paid "
+        "FROM claims c "
+        "LEFT JOIN ("
+        "  SELECT claim_id, SUM(amount) AS total_reserved FROM claim_reserves GROUP BY claim_id"
+        ") cr ON cr.claim_id = c.id "
+        "LEFT JOIN ("
+        "  SELECT claim_id, SUM(amount) AS total_paid FROM claim_payments GROUP BY claim_id"
+        ") cp ON cp.claim_id = c.id"
+    )
+
     async def get_by_id(self, entity_id: UUID | str) -> dict[str, Any] | None:
-        row = await self.db.fetch_one("SELECT * FROM claims WHERE id = ?", [str(entity_id)])
+        row = await self.db.fetch_one(
+            self._BASE_QUERY + " WHERE c.id = ?", [str(entity_id)]
+        )
         return _claim_from_sql_row(row) if row else None
 
     async def list_all(
@@ -227,22 +243,22 @@ class SqlClaimRepository(BaseRepository):
         skip: int = 0,
         limit: int = 50,
     ) -> list[dict[str, Any]]:
-        query = "SELECT * FROM claims"
+        query = self._BASE_QUERY
         params: list[Any] = []
         where_clauses: list[str] = []
         if filters:
             if "status" in filters:
-                where_clauses.append("status = ?")
+                where_clauses.append("c.status = ?")
                 params.append(_api_status_to_sql(filters["status"]))
             if "claim_type" in filters:
-                where_clauses.append("loss_type = ?")
+                where_clauses.append("c.loss_type = ?")
                 params.append(filters["claim_type"])
             if "policy_id" in filters:
-                where_clauses.append("policy_id = ?")
+                where_clauses.append("c.policy_id = ?")
                 params.append(filters["policy_id"])
         if where_clauses:
             query += " WHERE " + " AND ".join(where_clauses)
-        pag_clause, pag_params = safe_pagination_clause("created_at DESC", skip, limit)
+        pag_clause, pag_params = safe_pagination_clause("c.created_at DESC", skip, limit)
         query += pag_clause
         params.extend(pag_params)
         rows = await self.db.fetch_all(query, params)

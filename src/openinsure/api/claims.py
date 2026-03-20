@@ -469,11 +469,31 @@ async def set_reserve(
         "notes": body.notes,
         "created_at": now,
     }
-    record["reserves"].append(reserve_entry)
-    record["total_reserved"] = sum(r["amount"] for r in record["reserves"])
-    if record["status"] == ClaimStatus.REPORTED:
-        record["status"] = ClaimStatus.RESERVED
-    record["updated_at"] = now
+
+    # Persist the reserve to the database (claim_reserves table)
+    from openinsure.infrastructure.factory import get_database_adapter
+
+    db = get_database_adapter()
+    if db is not None:
+        await db.execute_query(
+            "INSERT INTO claim_reserves (id, claim_id, reserve_type, amount, set_date, set_by, confidence) "
+            "VALUES (?, ?, ?, ?, GETUTCDATE(), ?, NULL)",
+            [rid, claim_id, body.category, float(body.amount), user.display_name],
+        )
+        # Update claim status if needed
+        if record["status"] == ClaimStatus.REPORTED:
+            await _repo.update(claim_id, {"status": ClaimStatus.RESERVED})
+        # Re-read totals from DB
+        updated = await _repo.get_by_id(claim_id)
+        total_reserved = updated["total_reserved"] if updated else body.amount
+    else:
+        # In-memory fallback
+        record["reserves"].append(reserve_entry)
+        record["total_reserved"] = sum(r["amount"] for r in record["reserves"])
+        if record["status"] == ClaimStatus.REPORTED:
+            record["status"] = ClaimStatus.RESERVED
+        record["updated_at"] = now
+        total_reserved = record["total_reserved"]
 
     return ReserveResponse(
         claim_id=claim_id,
@@ -481,7 +501,7 @@ async def set_reserve(
         category=body.category,
         amount=body.amount,
         currency=body.currency,
-        total_reserved=record["total_reserved"],
+        total_reserved=total_reserved,
         created_at=now,
         authority={"decision": auth_result.decision, "reason": auth_result.reason},
     )
