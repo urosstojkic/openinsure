@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import StatusBadge from '../components/StatusBadge';
 import ConfidenceBar from '../components/ConfidenceBar';
 import TimelineEvent from '../components/TimelineEvent';
 import { getClaimsQueue } from '../api/workbench';
+import client from '../api/client';
 import type { ClaimsQueueItem, ClaimStatus, ClaimSeverity } from '../types';
 
 const statusVariant: Record<ClaimStatus, 'blue' | 'yellow' | 'orange' | 'green' | 'red' | 'purple'> = {
@@ -28,7 +29,7 @@ const money = (n: number) =>
 type Tab = 'assessment' | 'timeline' | 'documents' | 'financials';
 
 const ClaimsWorkbench: React.FC = () => {
-  const { data: queue = [], isLoading } = useQuery({ queryKey: ['claims-queue'], queryFn: getClaimsQueue });
+  const { data: queue = [], isLoading, refetch } = useQuery({ queryKey: ['claims-queue'], queryFn: getClaimsQueue });
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>('assessment');
 
@@ -50,13 +51,47 @@ const ClaimsWorkbench: React.FC = () => {
   const settlementAuthority = 250_000;
   const needsEscalation = selected ? Number(actionAmount) > settlementAuthority : false;
 
-  const handleSubmitAction = () => {
-    alert(`Action "${activeAction}" submitted. Amount: ${actionAmount}, Reason: ${actionReason}`);
-    setActiveAction(null);
-    setActionAmount('');
-    setActionPayee('');
-    setActionReason('');
-  };
+  const handleSubmitAction = useCallback(async () => {
+    if (!selected || !activeAction) return;
+    try {
+      if (activeAction === 'Update Reserve') {
+        await client.post(`/claims/${selected.id}/reserve`, {
+          category: 'indemnity',
+          amount: parseFloat(actionAmount) || 0,
+          currency: 'USD',
+          notes: actionReason,
+        });
+      } else if (activeAction === 'Approve Settlement') {
+        await client.post(`/claims/${selected.id}/payment`, {
+          amount: parseFloat(actionAmount) || 0,
+          payee: actionPayee,
+          payment_type: 'settlement',
+          notes: actionReason,
+        });
+      } else if (activeAction === 'Close Claim') {
+        await client.post(`/claims/${selected.id}/close`, {
+          reason: closeReason,
+          notes: actionReason,
+        });
+      } else if (activeAction === 'Escalate to CCO') {
+        await client.post(`/claims/${selected.id}/reserve`, {
+          category: 'indemnity',
+          amount: parseFloat(actionAmount) || 0,
+          currency: 'USD',
+          notes: `[ESCALATED TO CCO] ${actionReason}`,
+        });
+      }
+      await refetch();
+    } catch (err) {
+      console.error(`Failed to ${activeAction}:`, err);
+      alert(`Action failed — please try again. ${err instanceof Error ? err.message : ''}`);
+    } finally {
+      setActiveAction(null);
+      setActionAmount('');
+      setActionPayee('');
+      setActionReason('');
+    }
+  }, [selected, activeAction, actionAmount, actionReason, actionPayee, closeReason, refetch]);
 
   if (isLoading) return <div className="flex h-64 items-center justify-center text-slate-400">Loading…</div>;
 
