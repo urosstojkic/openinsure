@@ -19,6 +19,7 @@ import {
   ArrowUpFromLine,
   Calculator,
   Repeat2,
+  Banknote,
 } from 'lucide-react';
 import { useAuth, NAV_ACCESS, type UserRole } from '../context/AuthContext';
 
@@ -29,6 +30,7 @@ const navItems = [
   { to: '/claims',      label: 'Claims',           icon: AlertTriangle },
   { to: '/decisions',    label: 'Agent Decisions',  icon: Brain },
   { to: '/escalations', label: 'Escalations',      icon: ArrowUpFromLine },
+  { to: '/finance',     label: 'Finance',          icon: Banknote },
   { to: '/compliance',  label: 'Compliance',       icon: ShieldCheck },
 ];
 
@@ -61,6 +63,7 @@ function getBreadcrumb(pathname: string): string {
     '/claims': 'Claims',
     '/decisions': 'Agent Decisions',
     '/escalations': 'Escalation Queue',
+    '/finance': 'Finance Dashboard',
     '/compliance': 'Compliance',
     '/workbench/underwriting': 'Underwriter Workbench',
     '/workbench/claims': 'Claims Workbench',

@@ -6,22 +6,23 @@ const USE_MOCK = import.meta.env.VITE_USE_MOCK === 'true';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function mapSubmission(s: any): Submission {
+  const rd = s.risk_data || {};
   return {
     ...s,
     id: s.id,
     submission_number: s.submission_number || undefined,
     applicant_name: s.applicant_name || '',
-    company_name: s.company_name || '',
+    company_name: s.company_name || s.applicant_name || '',
     lob: s.lob || s.line_of_business || 'cyber',
     status: s.status || 'received',
-    risk_score: s.risk_score ?? (s.risk_data?.risk_score) ?? 0,
+    risk_score: s.risk_score ?? rd.risk_score ?? 0,
     priority: s.priority || 'medium',
     assigned_to: s.assigned_to || null,
     received_date: s.received_date || s.created_at || new Date().toISOString(),
-    annual_revenue: s.annual_revenue || 0,
-    employee_count: s.employee_count || 0,
-    industry: s.industry || '',
-    requested_coverage: s.requested_coverage || 0,
+    annual_revenue: s.annual_revenue || rd.annual_revenue || 0,
+    employee_count: s.employee_count || rd.employee_count || 0,
+    industry: s.industry || rd.industry || '',
+    requested_coverage: s.requested_coverage || rd.requested_coverage || 0,
     documents: s.documents || [],
     decision_history: s.decision_history || [],
   };

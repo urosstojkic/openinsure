@@ -6,19 +6,22 @@ const USE_MOCK = import.meta.env.VITE_USE_MOCK === 'true';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function mapClaim(c: any): Claim {
+  const totalReserved = c.total_reserved || 0;
+  const totalPaid = c.total_paid || 0;
+  const totalIncurred = c.total_incurred || (totalReserved + totalPaid) || 0;
   return {
     ...c,
     id: c.id,
     claim_number: c.claim_number || c.id,
     policy_id: c.policy_id || '',
     policy_number: c.policy_number || '',
-    status: c.status || 'open',
+    status: c.status || 'reported',
     loss_date: c.loss_date || c.date_of_loss || '',
     reported_date: c.reported_date || '',
     severity: c.severity || 'medium',
-    total_incurred: c.total_incurred || 0,
-    total_paid: c.total_paid || 0,
-    total_reserved: c.total_reserved || 0,
+    total_incurred: totalIncurred,
+    total_paid: totalPaid,
+    total_reserved: totalReserved,
     assigned_to: c.assigned_to || 'Unassigned',
     description: c.description || '',
     lob: c.lob || 'cyber',

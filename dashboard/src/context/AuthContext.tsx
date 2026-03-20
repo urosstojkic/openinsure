@@ -54,7 +54,7 @@ export const DEFAULT_ROUTES: Record<UserRole, string> = {
   cfo: '/executive',
   compliance: '/workbench/compliance',
   product_mgr: '/',
-  operations: '/',
+  operations: '/finance',
   broker: '/portal/broker',
 };
 
@@ -64,13 +64,14 @@ export const NAV_ACCESS: Record<string, UserRole[]> = {
   '/policies':               ['cuo', 'senior_uw', 'uw_analyst', 'claims_manager', 'cfo', 'compliance'],
   '/claims':                 ['cuo', 'claims_manager', 'adjuster', 'compliance'],
   '/decisions':              ['cuo', 'compliance', 'product_mgr', 'ceo'],
-  '/escalations':            ['cuo', 'senior_uw', 'claims_manager', 'cfo', 'ceo'],
+  '/escalations':            ['cuo', 'senior_uw', 'claims_manager', 'adjuster', 'cfo', 'ceo'],
   '/compliance':             ['compliance', 'cuo', 'ceo'],
+  '/finance':                ['cfo', 'operations', 'ceo'],
   '/workbench/underwriting': ['cuo', 'senior_uw', 'uw_analyst'],
   '/workbench/claims':       ['claims_manager', 'adjuster'],
   '/workbench/compliance':   ['compliance'],
   '/workbench/reinsurance':  ['cuo', 'cfo'],
-  '/workbench/actuarial':    ['cuo', 'cfo', 'ceo'],
+  '/workbench/actuarial':    ['cuo', 'cfo', 'ceo', 'product_mgr'],
   '/executive':              ['ceo', 'cuo', 'cfo'],
   '/portal/broker':          ['broker'],
 };

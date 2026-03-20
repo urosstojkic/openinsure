@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Plus, Play, Eye, Loader2, DollarSign, XCircle } from 'lucide-react';
 import DataTable, { type Column } from '../components/DataTable';
@@ -10,7 +10,8 @@ import { getClaims } from '../api/claims';
 import client from '../api/client';
 import type { Claim, ClaimStatus, ClaimSeverity } from '../types';
 
-const statusVariant: Record<ClaimStatus, 'blue' | 'yellow' | 'orange' | 'green' | 'red' | 'purple'> = {
+const statusVariant: Record<ClaimStatus, 'blue' | 'yellow' | 'orange' | 'green' | 'red' | 'purple' | 'cyan'> = {
+  reported: 'cyan',
   open: 'blue',
   investigating: 'yellow',
   reserved: 'orange',
@@ -30,6 +31,7 @@ const money = (n: number) =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n);
 
 const Claims: React.FC = () => {
+  const navigate = useNavigate();
   const { data: claims = [], isLoading, refetch } = useQuery({ queryKey: ['claims'], queryFn: getClaims });
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [severityFilter, setSeverityFilter] = useState<string>('all');
@@ -73,16 +75,18 @@ const Claims: React.FC = () => {
   const columns: Column<Claim>[] = [
     { key: 'number', header: 'Claim Number', render: (r) => <span className="font-mono text-xs">{r.claim_number}</span>, sortable: true, sortValue: (r) => r.claim_number },
     { key: 'policy', header: 'Policy', render: (r) => <span className="font-mono text-xs">{r.policy_number || '—'}</span> },
+    { key: 'lob', header: 'Type', render: (r) => <span className="text-sm text-slate-600">{r.lob?.replace(/_/g, ' ') || '—'}</span> },
     { key: 'status', header: 'Status', render: (r) => <StatusBadge label={r.status} variant={statusVariant[r.status] || 'gray'} /> },
     { key: 'loss_date', header: 'Loss Date', render: (r) => r.loss_date ? new Date(r.loss_date).toLocaleDateString() : '—', sortable: true, sortValue: (r) => r.loss_date },
     { key: 'severity', header: 'Severity', render: (r) => <StatusBadge label={r.severity} variant={severityVariant[r.severity] || 'gray'} /> },
+    { key: 'reserved', header: 'Reserved', render: (r) => <span className={r.total_reserved > 0 ? 'font-medium text-slate-900' : 'text-slate-400'}>{money(r.total_reserved)}</span>, sortable: true, sortValue: (r) => r.total_reserved },
     { key: 'incurred', header: 'Total Incurred', render: (r) => money(r.total_incurred), sortable: true, sortValue: (r) => r.total_incurred },
     { key: 'assigned', header: 'Assigned To', render: (r) => r.assigned_to || <span className="text-slate-300">Unassigned</span> },
     { key: 'actions', header: 'Actions', render: (r) => {
       const loading = actionLoading?.startsWith(r.id);
       return (
         <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
-          {r.status === 'open' && (
+          {(r.status === 'reported' || r.status === 'open') && (
             <>
               <button
                 onClick={(e) => handleClaimAction(r.id, 'process', e)}
@@ -133,7 +137,7 @@ const Claims: React.FC = () => {
             </button>
           )}
           <button
-            onClick={(e) => { e.stopPropagation(); }}
+            onClick={(e) => { e.stopPropagation(); navigate(`/workbench/claims`); }}
             className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50 transition-all"
           >
             <Eye size={11} />

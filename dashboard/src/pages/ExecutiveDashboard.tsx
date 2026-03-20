@@ -32,11 +32,11 @@ const ExecutiveDashboard: React.FC = () => {
 
       {/* ── Row 1: KPI Cards ── */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
-        <StatCard title="Gross Written Premium" value={money(kpis.gwp)} icon={<DollarSign size={20} />} trend={{ value: kpis.growth_rate * 100, positive: true }} />
+        <StatCard title="Gross Written Premium" value={money(kpis.gwp)} icon={<DollarSign size={20} />} trend={{ value: Math.round(kpis.growth_rate * 100), positive: kpis.growth_rate > 0 }} />
         <StatCard title="Net Written Premium" value={money(kpis.nwp)} icon={<DollarSign size={20} />} />
         <StatCard title="Loss Ratio" value={pct(kpis.loss_ratio)} icon={<Percent size={20} />} subtitle="Target: <60%" />
         <StatCard title="Combined Ratio" value={pct(kpis.combined_ratio)} icon={<Activity size={20} />} subtitle="Target: <95%" />
-        <StatCard title="Growth Rate" value={pct(kpis.growth_rate)} icon={<TrendingUp size={20} />} trend={{ value: kpis.growth_rate * 100, positive: true }} />
+        <StatCard title="Growth Rate" value={pct(kpis.growth_rate)} icon={<TrendingUp size={20} />} trend={{ value: Math.round(kpis.growth_rate * 100), positive: kpis.growth_rate > 0 }} />
       </div>
 
       {/* ── Row 2: Charts ── */}

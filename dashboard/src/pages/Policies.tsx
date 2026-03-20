@@ -25,6 +25,13 @@ const lobLabels: Record<string, string> = {
 const money = (n: number) =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n);
 
+const fmtDate = (d: string) => {
+  if (!d) return '—';
+  const date = new Date(d);
+  if (isNaN(date.getTime())) return d;
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+};
+
 const Policies: React.FC = () => {
   const navigate = useNavigate();
   const { data: policies = [], isLoading, refetch } = useQuery({ queryKey: ['policies'], queryFn: getPolicies });
@@ -58,8 +65,8 @@ const Policies: React.FC = () => {
     { key: 'insured', header: 'Insured', render: (r) => <span className="font-medium text-slate-900">{r.insured_name}</span>, sortable: true, sortValue: (r) => r.insured_name },
     { key: 'lob', header: 'LOB', render: (r) => lobLabels[r.lob] ?? r.lob },
     { key: 'status', header: 'Status', render: (r) => <StatusBadge label={r.status} variant={statusVariant[r.status]} /> },
-    { key: 'effective', header: 'Effective', render: (r) => r.effective_date, sortable: true, sortValue: (r) => r.effective_date },
-    { key: 'expiration', header: 'Expiration', render: (r) => r.expiration_date, sortable: true, sortValue: (r) => r.expiration_date },
+    { key: 'effective', header: 'Effective', render: (r) => fmtDate(r.effective_date), sortable: true, sortValue: (r) => r.effective_date },
+    { key: 'expiration', header: 'Expiration', render: (r) => fmtDate(r.expiration_date), sortable: true, sortValue: (r) => r.expiration_date },
     { key: 'premium', header: 'Premium', render: (r) => money(r.premium), sortable: true, sortValue: (r) => r.premium },
     { key: 'actions', header: 'Actions', render: (r) => {
       const loading = actionLoading?.startsWith(r.id);

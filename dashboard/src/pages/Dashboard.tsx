@@ -86,54 +86,72 @@ const Dashboard: React.FC = () => {
         {/* ── Agent activity chart ── */}
         <div className="rounded-lg border border-slate-200 bg-white p-5">
           <h2 className="mb-4 text-sm font-semibold text-slate-700">Agent Decisions Today</h2>
-          <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={chartData}>
-              <XAxis dataKey="name" tick={{ fontSize: 12 }} />
-              <YAxis tick={{ fontSize: 12 }} />
-              <Tooltip />
-              <Bar dataKey="decisions" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
+          {chartData.length > 0 ? (
+            <ResponsiveContainer width="100%" height={220}>
+              <BarChart data={chartData}>
+                <XAxis dataKey="name" tick={{ fontSize: 12 }} />
+                <YAxis tick={{ fontSize: 12 }} />
+                <Tooltip />
+                <Bar dataKey="decisions" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="flex h-[220px] items-center justify-center text-sm text-slate-400">
+              No agent activity data available yet
+            </div>
+          )}
         </div>
 
         {/* ── Agent status overview ── */}
         <div className="rounded-lg border border-slate-200 bg-white p-5">
           <h2 className="mb-4 text-sm font-semibold text-slate-700">Agent Status</h2>
-          <div className="space-y-3">
-            {stats.agent_statuses.map((a) => (
-              <div key={a.name} className="flex items-center justify-between rounded-lg border border-slate-100 p-3">
-                <div>
-                  <p className="text-sm font-medium text-slate-900">{a.display_name}</p>
-                  <p className="text-xs text-slate-400">{a.last_action}</p>
+          {stats.agent_statuses.length > 0 ? (
+            <div className="space-y-3">
+              {stats.agent_statuses.map((a) => (
+                <div key={a.name} className="flex items-center justify-between rounded-lg border border-slate-100 p-3">
+                  <div>
+                    <p className="text-sm font-medium text-slate-900">{a.display_name}</p>
+                    <p className="text-xs text-slate-400">{a.last_action}</p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs text-slate-500">{a.decisions_today} today</span>
+                    <StatusBadge label={a.status} variant={agentStatusVariant(a.status)} />
+                  </div>
                 </div>
-                <div className="flex items-center gap-3">
-                  <span className="text-xs text-slate-500">{a.decisions_today} today</span>
-                  <StatusBadge label={a.status} variant={agentStatusVariant(a.status)} />
-                </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          ) : (
+            <div className="flex h-40 items-center justify-center text-sm text-slate-400">
+              Agent status data is populated when agents process submissions
+            </div>
+          )}
         </div>
       </div>
 
       {/* ── Recent activity ── */}
       <div className="rounded-lg border border-slate-200 bg-white p-5">
         <h2 className="mb-4 text-sm font-semibold text-slate-700">Recent Activity</h2>
-        <div className="divide-y divide-slate-100">
-          {stats.recent_activity.map((ev) => (
-            <div key={ev.id} className="flex items-center gap-3 py-2.5">
-              <div
-                className={`h-2 w-2 shrink-0 rounded-full ${
-                  ev.is_agent ? 'bg-blue-500' : 'bg-slate-400'
-                }`}
-              />
-              <span className="flex-1 text-sm text-slate-700">{ev.description}</span>
-              <span className="shrink-0 text-xs text-slate-400">
-                {new Date(ev.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-              </span>
-            </div>
-          ))}
-        </div>
+        {stats.recent_activity.length > 0 ? (
+          <div className="divide-y divide-slate-100">
+            {stats.recent_activity.map((ev) => (
+              <div key={ev.id} className="flex items-center gap-3 py-2.5">
+                <div
+                  className={`h-2 w-2 shrink-0 rounded-full ${
+                    ev.is_agent ? 'bg-blue-500' : 'bg-slate-400'
+                  }`}
+                />
+                <span className="flex-1 text-sm text-slate-700">{ev.description}</span>
+                <span className="shrink-0 text-xs text-slate-400">
+                  {new Date(ev.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="py-4 text-center text-sm text-slate-400">
+            Activity feed will populate as submissions and claims are processed
+          </div>
+        )}
       </div>
     </div>
   );

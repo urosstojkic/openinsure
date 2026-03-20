@@ -37,26 +37,27 @@ const USE_MOCK = import.meta.env.VITE_USE_MOCK === 'true';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 function mapToUWQueueItem(item: any): UnderwriterQueueItem {
+  const rd = item.risk_data || {};
   return {
     id: item.id,
     applicant_name: item.applicant_name || '',
-    company_name: item.company_name || '',
-    lob: item.lob || 'cyber',
+    company_name: item.company_name || item.applicant_name || '',
+    lob: item.lob || item.line_of_business || 'cyber',
     status: item.status || 'received',
-    risk_score: item.risk_score ?? 0,
+    risk_score: item.risk_score ?? rd.risk_score ?? 0,
     confidence: item.confidence ?? 0,
     agent_recommendation: item.agent_recommendation || item.recommendation || '',
     priority: item.priority || 'medium',
     due_date: item.due_date || '',
     received_date: item.received_date || item.created_at || '',
-    annual_revenue: item.annual_revenue ?? 0,
-    employee_count: item.employee_count ?? 0,
-    industry: item.industry || '',
-    requested_coverage: item.requested_coverage ?? 0,
+    annual_revenue: item.annual_revenue || rd.annual_revenue || 0,
+    employee_count: item.employee_count || rd.employee_count || 0,
+    industry: item.industry || rd.industry || '',
+    requested_coverage: item.requested_coverage || rd.requested_coverage || 0,
     documents: item.documents || [],
     risk_factors: item.risk_factors || [],
     comparable_accounts: item.comparable_accounts || [],
-    recommended_terms: item.recommended_terms || { limit: 0, deductible: 0, premium: 0, conditions: [] },
+    recommended_terms: item.recommended_terms || { limit: 0, deductible: 0, premium: item.quoted_premium || 0, conditions: [] },
     reasoning_chain: item.reasoning_chain || [],
     decision_history: item.decision_history || [],
     cyber_risk_data: item.cyber_risk_data,
@@ -64,27 +65,30 @@ function mapToUWQueueItem(item: any): UnderwriterQueueItem {
 }
 
 function mapToClaimsQueueItem(item: any): ClaimsQueueItem {
+  const totalReserved = item.total_reserved ?? 0;
+  const totalPaid = item.total_paid ?? 0;
+  const totalIncurred = item.total_incurred || (totalReserved + totalPaid) || 0;
   return {
     id: item.id,
     claim_number: item.claim_number || item.id,
     policy_id: item.policy_id || '',
     policy_number: item.policy_number || '',
     insured_name: item.insured_name || '',
-    status: item.status || 'open',
+    status: item.status || 'reported',
     severity: item.severity || 'medium',
     loss_date: item.loss_date || item.date_of_loss || '',
-    reserve: item.reserve ?? item.total_reserved ?? 0,
+    reserve: item.reserve ?? totalReserved ?? 0,
     days_open: item.days_open ?? 0,
     fraud_score: item.fraud_score ?? 0,
     description: item.description || '',
     lob: item.lob || 'cyber',
     coverage_verification: item.coverage_verification || { status: 'pending', policy_active: true, within_coverage: true, exclusions_checked: [], notes: '' },
-    reserve_recommendation: item.reserve_recommendation || { recommended_indemnity: 0, recommended_expense: 0, confidence: 0, basis: '' },
+    reserve_recommendation: item.reserve_recommendation || { recommended_indemnity: totalReserved, recommended_expense: 0, confidence: 0, basis: '' },
     comparable_claims: item.comparable_claims || [],
     fraud_indicators: item.fraud_indicators || [],
     timeline: item.timeline || [],
     claim_documents: item.claim_documents || [],
-    financials: item.financials || { indemnity_reserve: 0, expense_reserve: 0, indemnity_paid: 0, expense_paid: 0, total_incurred: 0, recovery: 0 },
+    financials: item.financials || { indemnity_reserve: totalReserved, expense_reserve: 0, indemnity_paid: totalPaid, expense_paid: 0, total_incurred: totalIncurred, recovery: 0 },
   };
 }
 
@@ -119,9 +123,9 @@ function mapToBrokerSubmission(item: any): BrokerSubmission {
   return {
     id: item.id,
     applicant_name: item.applicant_name || '',
-    lob: item.lob || 'cyber',
+    lob: item.lob || item.line_of_business || 'cyber',
     status: item.status || 'received',
-    submitted_date: item.submitted_date || item.created_at || '',
+    submitted_date: item.submitted_date || item.created_at || item.received_date || '',
     last_update: item.last_update || item.updated_at || '',
     status_timeline: item.status_timeline || [],
   };
@@ -132,10 +136,10 @@ function mapToBrokerPolicy(item: any): BrokerPolicy {
     id: item.id,
     policy_number: item.policy_number || item.id,
     insured_name: item.insured_name || item.policyholder_name || '',
-    lob: item.lob || 'cyber',
+    lob: item.lob || item.line_of_business || 'cyber',
     effective_date: item.effective_date || '',
     expiry_date: item.expiry_date || item.expiration_date || '',
-    premium: item.premium ?? 0,
+    premium: item.premium ?? item.total_premium ?? 0,
   };
 }
 
@@ -144,7 +148,7 @@ function mapToBrokerClaim(item: any): BrokerClaim {
     id: item.id,
     claim_number: item.claim_number || item.id,
     policy_number: item.policy_number || '',
-    status: item.status || 'open',
+    status: item.status || 'reported',
     loss_date: item.loss_date || item.date_of_loss || '',
   };
 }

@@ -8,10 +8,15 @@ export async function getDashboardStats(): Promise<DashboardStats> {
   if (USE_MOCK) return mockDashboardStats;
   try {
     const { data } = await client.get('/metrics/summary');
+    const openClaims = data.claims.by_status?.open
+      ?? data.claims.by_status?.reported
+      ?? data.kpis.open_claims
+      ?? data.claims.total
+      ?? 0;
     return {
       total_submissions: data.submissions.total,
       active_policies: data.policies.active,
-      open_claims: data.claims.by_status?.open || data.kpis.open_claims || 0,
+      open_claims: openClaims,
       pending_decisions: data.kpis.pending_escalations || 0,
       approval_rate: data.submissions.bind_rate / 100,
       avg_processing_time_hours: 0,

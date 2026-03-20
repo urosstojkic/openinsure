@@ -24,6 +24,13 @@ const lobLabels: Record<string, string> = {
 const money = (n: number) =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n);
 
+const fmtDate = (d: string) => {
+  if (!d) return '—';
+  const date = new Date(d);
+  if (isNaN(date.getTime())) return d;
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+};
+
 const PolicyDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -61,8 +68,8 @@ const PolicyDetail: React.FC = () => {
             <div><dt className="text-slate-400">Insured</dt><dd className="font-medium text-slate-900">{policy.insured_name}</dd></div>
             <div><dt className="text-slate-400">Line of Business</dt><dd className="font-medium text-slate-900">{lobLabels[policy.lob] ?? policy.lob}</dd></div>
             <div><dt className="text-slate-400">Status</dt><dd><StatusBadge label={policy.status} variant={statusVariant[policy.status]} /></dd></div>
-            <div><dt className="text-slate-400">Effective Date</dt><dd className="font-medium text-slate-900">{policy.effective_date}</dd></div>
-            <div><dt className="text-slate-400">Expiration Date</dt><dd className="font-medium text-slate-900">{policy.expiration_date}</dd></div>
+            <div><dt className="text-slate-400">Effective Date</dt><dd className="font-medium text-slate-900">{fmtDate(policy.effective_date)}</dd></div>
+            <div><dt className="text-slate-400">Expiration Date</dt><dd className="font-medium text-slate-900">{fmtDate(policy.expiration_date)}</dd></div>
           </dl>
         </div>
 

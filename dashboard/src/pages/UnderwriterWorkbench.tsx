@@ -116,7 +116,7 @@ const UnderwriterWorkbench: React.FC = () => {
                   </td>
                   <td className="px-3 py-2 text-xs text-slate-600">{item.confidence ? `${Math.round(item.confidence * 100)}%` : '—'}</td>
                   <td className="px-3 py-2 text-xs text-slate-600 max-w-[120px] truncate">{item.agent_recommendation}</td>
-                  <td className="px-3 py-2 text-xs text-slate-500">{new Date(item.due_date).toLocaleDateString()}</td>
+                  <td className="px-3 py-2 text-xs text-slate-500">{item.due_date ? new Date(item.due_date).toLocaleDateString() : new Date(item.received_date).toLocaleDateString()}</td>
                 </tr>
               ))}
             </tbody>

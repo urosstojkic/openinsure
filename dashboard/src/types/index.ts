@@ -13,7 +13,7 @@ export type SubmissionStatus =
 
 export type PolicyStatus = 'active' | 'expired' | 'cancelled' | 'pending';
 
-export type ClaimStatus = 'open' | 'investigating' | 'reserved' | 'closed' | 'denied' | 'litigation';
+export type ClaimStatus = 'reported' | 'open' | 'investigating' | 'reserved' | 'closed' | 'denied' | 'litigation';
 
 export type ClaimSeverity = 'low' | 'medium' | 'high' | 'critical';
 

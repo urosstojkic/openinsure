@@ -7,7 +7,8 @@ import { getClaimsQueue } from '../api/workbench';
 import client from '../api/client';
 import type { ClaimsQueueItem, ClaimStatus, ClaimSeverity } from '../types';
 
-const statusVariant: Record<ClaimStatus, 'blue' | 'yellow' | 'orange' | 'green' | 'red' | 'purple'> = {
+const statusVariant: Record<ClaimStatus, 'blue' | 'yellow' | 'orange' | 'green' | 'red' | 'purple' | 'cyan'> = {
+  reported: 'cyan',
   open: 'blue',
   investigating: 'yellow',
   reserved: 'orange',
@@ -345,7 +346,7 @@ const ClaimsWorkbench: React.FC = () => {
                         <div className="h-3 w-full overflow-hidden rounded-full bg-slate-200">
                           <div
                             className="h-3 rounded-full bg-blue-500"
-                            style={{ width: `${((selected.financials.indemnity_paid + selected.financials.expense_paid) / selected.financials.total_incurred) * 100}%` }}
+                            style={{ width: `${selected.financials.total_incurred > 0 ? ((selected.financials.indemnity_paid + selected.financials.expense_paid) / selected.financials.total_incurred) * 100 : 0}%` }}
                           />
                         </div>
                       </div>

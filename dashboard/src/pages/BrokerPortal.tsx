@@ -22,7 +22,8 @@ const statusVariant: Record<SubmissionStatus, 'blue' | 'yellow' | 'orange' | 'gr
   referred: 'cyan',
 };
 
-const claimStatusVariant: Record<ClaimStatus, 'blue' | 'yellow' | 'orange' | 'green' | 'red' | 'purple'> = {
+const claimStatusVariant: Record<ClaimStatus, 'blue' | 'yellow' | 'orange' | 'green' | 'red' | 'purple' | 'cyan'> = {
+  reported: 'cyan',
   open: 'blue',
   investigating: 'yellow',
   reserved: 'orange',
@@ -34,9 +35,12 @@ const claimStatusVariant: Record<ClaimStatus, 'blue' | 'yellow' | 'orange' | 'gr
 const money = (n: number) =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n);
 
-const formatSubId = (id: string) => {
-  if (id.startsWith('SUB-')) return id;
-  return `SUB-${id.substring(0, 8)}`;
+const formatSubId = (sub: BrokerSubmission) => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const sn = (sub as any).submission_number;
+  if (sn && typeof sn === 'string') return sn;
+  if (sub.id.startsWith('SUB-')) return sub.id;
+  return `SUB-${sub.id.substring(0, 8).toUpperCase()}`;
 };
 
 const formatDate = (dateStr: string) => {
@@ -110,9 +114,9 @@ const BrokerPortal: React.FC = () => {
                 <tbody className="divide-y divide-slate-100">
                   {submissions.map((sub) => (
                     <tr key={sub.id} className="cursor-pointer hover:bg-slate-50 transition-colors" onClick={() => setSelectedSubmission(sub)}>
-                      <td className="px-4 py-3 font-mono text-xs text-slate-700">{formatSubId(sub.id)}</td>
+                      <td className="px-4 py-3 font-mono text-xs text-slate-700">{formatSubId(sub)}</td>
                       <td className="px-4 py-3 text-sm text-slate-900">{sub.applicant_name}</td>
-                      <td className="px-4 py-3 text-sm text-slate-600">{lobLabels[sub.lob]}</td>
+                      <td className="px-4 py-3 text-sm text-slate-600">{lobLabels[sub.lob] ?? sub.lob}</td>
                       <td className="px-4 py-3"><StatusBadge label={sub.status} variant={statusVariant[sub.status]} /></td>
                       <td className="px-4 py-3 text-sm text-slate-600">{formatDate(sub.submitted_date)}</td>
                       <td className="px-4 py-3 text-sm text-slate-500">{formatDate(sub.last_update)}</td>
@@ -130,29 +134,36 @@ const BrokerPortal: React.FC = () => {
             <button onClick={() => setSelectedSubmission(null)} className="text-sm text-blue-600 hover:text-blue-800">← Back to submissions</button>
             <div className="rounded-lg border border-slate-200 bg-white p-5">
               <h2 className="text-xl font-bold text-slate-900">{selectedSubmission.applicant_name}</h2>
-              <p className="text-sm text-slate-500">{formatSubId(selectedSubmission.id)} · {lobLabels[selectedSubmission.lob]}</p>
+              <p className="text-sm text-slate-500">{formatSubId(selectedSubmission)} · {lobLabels[selectedSubmission.lob] ?? selectedSubmission.lob}</p>
               <div className="mt-2">
                 <StatusBadge label={selectedSubmission.status} variant={statusVariant[selectedSubmission.status]} />
               </div>
 
               <h3 className="mt-6 mb-3 text-sm font-semibold text-slate-700">Status Timeline</h3>
-              <div className="space-y-3">
-                {selectedSubmission.status_timeline.map((ev, i) => (
-                  <div key={i} className="relative flex gap-4 pb-4">
-                    {i < selectedSubmission.status_timeline.length - 1 && (
-                      <div className="absolute left-[11px] top-7 bottom-0 w-px bg-slate-200" />
-                    )}
-                    <div className="relative z-10 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-blue-100">
-                      <span className="h-2.5 w-2.5 rounded-full bg-blue-500" />
+              {selectedSubmission.status_timeline.length > 0 ? (
+                <div className="space-y-3">
+                  {selectedSubmission.status_timeline.map((ev, i) => (
+                    <div key={i} className="relative flex gap-4 pb-4">
+                      {i < selectedSubmission.status_timeline.length - 1 && (
+                        <div className="absolute left-[11px] top-7 bottom-0 w-px bg-slate-200" />
+                      )}
+                      <div className="relative z-10 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-blue-100">
+                        <span className="h-2.5 w-2.5 rounded-full bg-blue-500" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-slate-900">{ev.status}</p>
+                        <p className="text-xs text-slate-500">{ev.description}</p>
+                        <p className="text-xs text-slate-400">{formatDate(ev.timestamp)}</p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-sm font-medium text-slate-900">{ev.status}</p>
-                      <p className="text-xs text-slate-500">{ev.description}</p>
-                      <p className="text-xs text-slate-400">{formatDate(ev.timestamp)}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-lg border border-slate-200 p-4 text-center text-sm text-slate-400">
+                  <p>Current status: <StatusBadge label={selectedSubmission.status} variant={statusVariant[selectedSubmission.status]} /></p>
+                  <p className="mt-1 text-xs">Submitted {formatDate(selectedSubmission.submitted_date)}</p>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -179,7 +190,7 @@ const BrokerPortal: React.FC = () => {
                     <tr key={pol.id}>
                       <td className="px-4 py-3 font-mono text-xs text-slate-700">{pol.policy_number}</td>
                       <td className="px-4 py-3 text-sm text-slate-900">{pol.insured_name}</td>
-                      <td className="px-4 py-3 text-sm text-slate-600">{lobLabels[pol.lob]}</td>
+                      <td className="px-4 py-3 text-sm text-slate-600">{lobLabels[pol.lob] ?? pol.lob}</td>
                       <td className="px-4 py-3 text-sm text-slate-600">{formatDate(pol.effective_date)}</td>
                       <td className="px-4 py-3 text-sm text-slate-600">{formatDate(pol.expiry_date)}</td>
                       <td className="px-4 py-3 text-right font-mono text-sm text-slate-700">{money(pol.premium)}</td>
