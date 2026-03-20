@@ -3,6 +3,7 @@
 from fastapi import APIRouter, Depends
 
 from openinsure.api.actuarial import router as actuarial_router
+from openinsure.api.agent_traces import router as agent_traces_router
 from openinsure.api.billing import router as billing_router
 from openinsure.api.broker import router as broker_router
 from openinsure.api.claims import router as claims_router
@@ -51,6 +52,7 @@ api_v1_router.include_router(broker_router, prefix="/broker", tags=["broker"])
 api_v1_router.include_router(renewals_router, prefix="/renewals", tags=["renewals"])
 api_v1_router.include_router(mga_router, prefix="/mga", tags=["mga-oversight"])
 api_v1_router.include_router(finance_router, prefix="/finance", tags=["finance"])
+api_v1_router.include_router(agent_traces_router, prefix="/agent-traces", tags=["agent-traces"])
 api_v1_router.include_router(demo_router, prefix="/demo", tags=["demo"])
 
 api_router.include_router(api_v1_router)

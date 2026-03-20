@@ -213,8 +213,8 @@ class SqlComplianceRepository:
             """INSERT INTO decision_records
                (id, agent_id, model_used, model_version, decision_type,
                 input_summary, data_sources_used, output_data, reasoning,
-                confidence, human_oversight, created_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                confidence, human_oversight, execution_time_ms, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             [
                 record_id,
                 record.get("agent_id", record.get("model_used", "")),
@@ -227,6 +227,7 @@ class SqlComplianceRepository:
                 reasoning,
                 record.get("confidence", 0),
                 human_oversight,
+                record.get("execution_time_ms"),
                 record.get("created_at", record.get("timestamp", "")),
             ],
         )
@@ -310,8 +311,9 @@ def _deserialize_decision(row: dict[str, Any]) -> dict[str, Any]:
         row["created_at"] = str(row["created_at"]) if row["created_at"] else ""
 
     # Remove DB-only columns not expected by the API model
-    for col in ("agent_version", "knowledge_graph_queries", "fairness_metrics", "execution_time_ms", "error_message"):
+    for col in ("agent_version", "knowledge_graph_queries", "fairness_metrics", "error_message"):
         row.pop(col, None)
+    # Keep execution_time_ms — used by the agent-traces endpoint
 
     return row
 

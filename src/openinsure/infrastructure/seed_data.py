@@ -892,10 +892,8 @@ async def seed_sample_data() -> None:
         }
     )
 
-    # Compliance — decisions & audit events
-    for dec in _sample_decisions():
-        await compliance_repo.add_decision(dec)
-
+    # Compliance — only seed audit events; decisions are recorded only when
+    # real Foundry agents run (no synthetic/mock decision data).
     await compliance_repo.clear_audit_events()
     for evt in _sample_audit_events():
         await compliance_repo.add_audit_event(evt)

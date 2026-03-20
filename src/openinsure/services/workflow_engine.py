@@ -290,6 +290,7 @@ async def execute_workflow(
                         "output": resp if isinstance(resp, dict) else {"raw": str(resp)[:500]},
                         "reasoning": str(resp.get("reasoning", "")) if isinstance(resp, dict) else "",
                         "model_used": "gpt-5.1",
+                        "execution_time_ms": result.get("execution_time_ms"),
                         "human_oversight": "recommended",
                         "created_at": datetime.now(UTC).isoformat(),
                     }

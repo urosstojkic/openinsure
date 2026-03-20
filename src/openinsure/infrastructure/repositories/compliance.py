@@ -78,6 +78,7 @@ class InMemoryComplianceRepository:
             "output_summary": record.get("output", record.get("output_summary", {})),
             "confidence": record.get("confidence", 0),
             "explanation": str(record.get("reasoning", "")),
+            "execution_time_ms": record.get("execution_time_ms"),
             "human_override": bool(record.get("human_override", False)),
             "override_reason": record.get("override_reason"),
             "created_at": record.get("created_at", record.get("timestamp", "")),
