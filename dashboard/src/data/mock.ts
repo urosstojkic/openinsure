@@ -58,7 +58,7 @@ export const mockDashboardStats: DashboardStats = {
 // ── Submissions ──
 export const mockSubmissions: Submission[] = [
   {
-    id: 'SUB-2025-0249', applicant_name: 'Jane Williams', lob: 'cyber', status: 'received',
+    id: 'a1f4e2c0-0249-4b8a-9f3d-1a2b3c4d5e6f', submission_number: 'SUB-2025-0249', applicant_name: 'Jane Williams', lob: 'cyber', status: 'received',
     risk_score: 0, priority: 'medium', assigned_to: null, received_date: '2025-01-15T14:30:00Z',
     company_name: 'Acme Corp', annual_revenue: 25_000_000, employee_count: 200, industry: 'Technology',
     requested_coverage: 5_000_000, documents: [
@@ -70,7 +70,7 @@ export const mockSubmissions: Submission[] = [
     ],
   },
   {
-    id: 'SUB-2025-0248', applicant_name: 'Robert Chen', lob: 'cyber', status: 'triaging',
+    id: 'b2e5d3a1-0248-4c9b-8e4f-2b3c4d5e6f7a', submission_number: 'SUB-2025-0248', applicant_name: 'Robert Chen', lob: 'cyber', status: 'triaging',
     risk_score: 62, priority: 'high', assigned_to: 'triage_agent', received_date: '2025-01-15T12:00:00Z',
     company_name: 'CloudNine Security', annual_revenue: 50_000_000, employee_count: 350, industry: 'Cybersecurity',
     requested_coverage: 10_000_000, documents: [
@@ -90,7 +90,7 @@ export const mockSubmissions: Submission[] = [
     },
   },
   {
-    id: 'SUB-2025-0245', applicant_name: 'Emily Davis', lob: 'professional_liability', status: 'underwriting',
+    id: 'c3f6e4b2-0245-4d0c-7f5a-3c4d5e6f7a8b', submission_number: 'SUB-2025-0245', applicant_name: 'Emily Davis', lob: 'professional_liability', status: 'underwriting',
     risk_score: 45, priority: 'medium', assigned_to: 'Sarah Chen', received_date: '2025-01-14T09:15:00Z',
     company_name: 'TechStart Inc', annual_revenue: 8_000_000, employee_count: 55, industry: 'Software',
     requested_coverage: 2_000_000, documents: [
@@ -115,7 +115,7 @@ export const mockSubmissions: Submission[] = [
     ],
   },
   {
-    id: 'SUB-2025-0240', applicant_name: 'Michael Torres', lob: 'cyber', status: 'quoted',
+    id: 'd4a7f5c3-0240-4e1d-6a6b-4d5e6f7a8b9c', submission_number: 'SUB-2025-0240', applicant_name: 'Michael Torres', lob: 'cyber', status: 'quoted',
     risk_score: 55, priority: 'medium', assigned_to: 'Sarah Chen', received_date: '2025-01-13T11:00:00Z',
     company_name: 'DataFlow Systems', annual_revenue: 35_000_000, employee_count: 180, industry: 'Data Analytics',
     requested_coverage: 5_000_000, documents: [],
@@ -135,7 +135,7 @@ export const mockSubmissions: Submission[] = [
     },
   },
   {
-    id: 'SUB-2025-0235', applicant_name: 'Lisa Park', lob: 'epli', status: 'bound',
+    id: 'e5b8a6d4-0235-4f2e-5b7c-5e6f7a8b9c0d', submission_number: 'SUB-2025-0235', applicant_name: 'Lisa Park', lob: 'epli', status: 'bound',
     risk_score: 30, priority: 'low', assigned_to: 'James Wright', received_date: '2025-01-12T08:30:00Z',
     company_name: 'GreenTech Solutions', annual_revenue: 12_000_000, employee_count: 85, industry: 'Clean Energy',
     requested_coverage: 1_000_000, documents: [],
@@ -145,7 +145,7 @@ export const mockSubmissions: Submission[] = [
     ],
   },
   {
-    id: 'SUB-2025-0230', applicant_name: 'David Kim', lob: 'dnol', status: 'declined',
+    id: 'f6c9b7e5-0230-4a3f-4c8d-6f7a8b9c0d1e', submission_number: 'SUB-2025-0230', applicant_name: 'David Kim', lob: 'dnol', status: 'declined',
     risk_score: 88, priority: 'high', assigned_to: 'underwriting_agent', received_date: '2025-01-11T10:00:00Z',
     company_name: 'CryptoVault Exchange', annual_revenue: 200_000_000, employee_count: 45, industry: 'Cryptocurrency',
     requested_coverage: 50_000_000, documents: [],
@@ -160,7 +160,7 @@ export const mockSubmissions: Submission[] = [
     ],
   },
   {
-    id: 'SUB-2025-0228', applicant_name: 'Anna Kowalski', lob: 'general_liability', status: 'referred',
+    id: 'a7d0c8f6-0228-4b4a-3d9e-7a8b9c0d1e2f', submission_number: 'SUB-2025-0228', applicant_name: 'Anna Kowalski', lob: 'general_liability', status: 'referred',
     risk_score: 72, priority: 'high', assigned_to: 'Sarah Chen', received_date: '2025-01-10T15:45:00Z',
     company_name: 'Metro Construction LLC', annual_revenue: 45_000_000, employee_count: 320, industry: 'Construction',
     requested_coverage: 10_000_000, documents: [],
@@ -251,7 +251,7 @@ export const mockProducts: Product[] = [
 // ── Underwriter Workbench Queue ──
 export const mockUnderwriterQueue: UnderwriterQueueItem[] = [
   {
-    id: 'SUB-2025-0248', applicant_name: 'Robert Chen', company_name: 'CloudNine Security', lob: 'cyber',
+    id: 'b2e5d3a1-0248-4c9b-8e4f-2b3c4d5e6f7a', applicant_name: 'Robert Chen', company_name: 'CloudNine Security', lob: 'cyber',
     status: 'underwriting', risk_score: 62, confidence: 0.78, agent_recommendation: 'Quote — needs review',
     priority: 'high', due_date: '2025-01-17T17:00:00Z', received_date: '2025-01-15T12:00:00Z',
     annual_revenue: 50_000_000, employee_count: 350, industry: 'Cybersecurity', requested_coverage: 10_000_000,
@@ -290,7 +290,7 @@ export const mockUnderwriterQueue: UnderwriterQueueItem[] = [
     cyber_risk_data: { security_rating: 82, open_vulnerabilities: 3, last_breach: null, mfa_enabled: true, encryption_at_rest: true, incident_response_plan: true, employee_training: true, third_party_risk_score: 71 },
   },
   {
-    id: 'SUB-2025-0245', applicant_name: 'Emily Davis', company_name: 'TechStart Inc', lob: 'professional_liability',
+    id: 'c3f6e4b2-0245-4d0c-7f5a-3c4d5e6f7a8b', applicant_name: 'Emily Davis', company_name: 'TechStart Inc', lob: 'professional_liability',
     status: 'underwriting', risk_score: 45, confidence: 0.87, agent_recommendation: 'Approve quote',
     priority: 'medium', due_date: '2025-01-18T17:00:00Z', received_date: '2025-01-14T09:15:00Z',
     annual_revenue: 8_000_000, employee_count: 55, industry: 'Software', requested_coverage: 2_000_000,
@@ -325,7 +325,7 @@ export const mockUnderwriterQueue: UnderwriterQueueItem[] = [
     ],
   },
   {
-    id: 'SUB-2025-0228', applicant_name: 'Anna Kowalski', company_name: 'Metro Construction LLC', lob: 'general_liability',
+    id: 'a7d0c8f6-0228-4b4a-3d9e-7a8b9c0d1e2f', applicant_name: 'Anna Kowalski', company_name: 'Metro Construction LLC', lob: 'general_liability',
     status: 'referred', risk_score: 72, confidence: 0.45, agent_recommendation: 'Refer — manual review required',
     priority: 'urgent', due_date: '2025-01-16T17:00:00Z', received_date: '2025-01-10T15:45:00Z',
     annual_revenue: 45_000_000, employee_count: 320, industry: 'Construction', requested_coverage: 10_000_000,
@@ -358,7 +358,7 @@ export const mockUnderwriterQueue: UnderwriterQueueItem[] = [
     ],
   },
   {
-    id: 'SUB-2025-0252', applicant_name: 'James Morrison', company_name: 'FinEdge Capital', lob: 'dnol',
+    id: 'b8e1d9a7-0252-4c5b-2e0f-8b9c0d1e2f3a', applicant_name: 'James Morrison', company_name: 'FinEdge Capital', lob: 'dnol',
     status: 'underwriting', risk_score: 58, confidence: 0.71, agent_recommendation: 'Quote with conditions',
     priority: 'high', due_date: '2025-01-19T17:00:00Z', received_date: '2025-01-15T16:00:00Z',
     annual_revenue: 120_000_000, employee_count: 85, industry: 'Financial Services', requested_coverage: 25_000_000,
@@ -391,7 +391,7 @@ export const mockUnderwriterQueue: UnderwriterQueueItem[] = [
     ],
   },
   {
-    id: 'SUB-2025-0249', applicant_name: 'Jane Williams', company_name: 'Acme Corp', lob: 'cyber',
+    id: 'a1f4e2c0-0249-4b8a-9f3d-1a2b3c4d5e6f', applicant_name: 'Jane Williams', company_name: 'Acme Corp', lob: 'cyber',
     status: 'received', risk_score: 0, confidence: 0, agent_recommendation: 'Pending triage',
     priority: 'medium', due_date: '2025-01-20T17:00:00Z', received_date: '2025-01-15T14:30:00Z',
     annual_revenue: 25_000_000, employee_count: 200, industry: 'Technology', requested_coverage: 5_000_000,
