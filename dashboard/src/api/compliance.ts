@@ -2,7 +2,7 @@ import client from './client';
 import type { AgentDecision, ComplianceSummary } from '../types';
 import { mockDecisions, mockCompliance } from '../data/mock';
 
-const USE_MOCK = import.meta.env.VITE_USE_MOCK !== 'false';
+const USE_MOCK = import.meta.env.VITE_USE_MOCK === 'true';
 
 export async function getDecisions(): Promise<AgentDecision[]> {
   if (USE_MOCK) return mockDecisions;

@@ -33,7 +33,7 @@ import {
   mockRateAdequacy,
 } from '../data/mock';
 
-const USE_MOCK = import.meta.env.VITE_USE_MOCK !== 'false';
+const USE_MOCK = import.meta.env.VITE_USE_MOCK === 'true';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 function mapToUWQueueItem(item: any): UnderwriterQueueItem {

@@ -2,7 +2,7 @@ import client from './client';
 import type { Policy } from '../types';
 import { mockPolicies } from '../data/mock';
 
-const USE_MOCK = import.meta.env.VITE_USE_MOCK !== 'false';
+const USE_MOCK = import.meta.env.VITE_USE_MOCK === 'true';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function mapPolicy(p: any): Policy {

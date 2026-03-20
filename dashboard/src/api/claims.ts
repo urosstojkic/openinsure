@@ -2,7 +2,7 @@ import client from './client';
 import type { Claim } from '../types';
 import { mockClaims } from '../data/mock';
 
-const USE_MOCK = import.meta.env.VITE_USE_MOCK !== 'false';
+const USE_MOCK = import.meta.env.VITE_USE_MOCK === 'true';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function mapClaim(c: any): Claim {
