@@ -1,7 +1,7 @@
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
-  LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
+  LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell,
 } from 'recharts';
 import {
   DollarSign, TrendingUp, Percent, Activity, Zap,
@@ -66,7 +66,7 @@ const ExecutiveDashboard: React.FC = () => {
               <Tooltip formatter={(v) => pct(Number(v))} />
               <Bar dataKey="loss_ratio" radius={[4, 4, 0, 0]}>
                 {loss_ratio_by_lob.map((entry, i) => (
-                  <rect key={i} fill={entry.loss_ratio > 0.6 ? '#ef4444' : entry.loss_ratio > 0.5 ? '#f59e0b' : '#22c55e'} />
+                  <Cell key={i} fill={entry.loss_ratio > 0.6 ? '#ef4444' : entry.loss_ratio > 0.5 ? '#f59e0b' : '#22c55e'} />
                 ))}
               </Bar>
             </BarChart>
