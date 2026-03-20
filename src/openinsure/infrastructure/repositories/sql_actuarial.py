@@ -162,7 +162,7 @@ class SqlActuarialReserveRepository(BaseRepository):
         params.append(datetime.now(UTC).isoformat())
         params.append(str(entity_id))
         await self.db.execute_query(
-            f"UPDATE actuarial_reserves SET {', '.join(sets)} WHERE id = ?",  # noqa: S608
+            f"UPDATE actuarial_reserves SET {', '.join(sets)} WHERE id = ?",  # noqa: S608  # nosec B608
             params,
         )
         return await self.get_by_id(entity_id)
@@ -262,7 +262,7 @@ class SqlTriangleRepository(BaseRepository):
             return await self.get_by_id(entity_id)
         params.append(str(entity_id))
         await self.db.execute_query(
-            f"UPDATE loss_triangle_entries SET {', '.join(sets)} WHERE id = ?",  # noqa: S608
+            f"UPDATE loss_triangle_entries SET {', '.join(sets)} WHERE id = ?",  # noqa: S608  # nosec B608
             params,
         )
         return await self.get_by_id(entity_id)
@@ -355,7 +355,7 @@ class SqlRateAdequacyRepository(BaseRepository):
             return await self.get_by_id(entity_id)
         params.append(str(entity_id))
         await self.db.execute_query(
-            f"UPDATE rate_adequacy SET {', '.join(sets)} WHERE id = ?",  # noqa: S608
+            f"UPDATE rate_adequacy SET {', '.join(sets)} WHERE id = ?",  # noqa: S608  # nosec B608
             params,
         )
         return await self.get_by_id(entity_id)

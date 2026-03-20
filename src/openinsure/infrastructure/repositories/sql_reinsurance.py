@@ -230,7 +230,7 @@ class SqlReinsuranceRepository(BaseRepository):
         params.append(datetime.now(UTC).isoformat())
         params.append(str(entity_id))
         await self.db.execute_query(
-            f"UPDATE reinsurance_treaties SET {', '.join(sets)} WHERE id = ?",  # noqa: S608
+            f"UPDATE reinsurance_treaties SET {', '.join(sets)} WHERE id = ?",  # noqa: S608  # nosec B608
             params,
         )
         return await self.get_by_id(entity_id)
@@ -407,7 +407,7 @@ class SqlRecoveryRepository(BaseRepository):
             return await self.get_by_id(entity_id)
         params.append(str(entity_id))
         await self.db.execute_query(
-            f"UPDATE reinsurance_recoveries SET {', '.join(sets)} WHERE id = ?",  # noqa: S608
+            f"UPDATE reinsurance_recoveries SET {', '.join(sets)} WHERE id = ?",  # noqa: S608  # nosec B608
             params,
         )
         return await self.get_by_id(entity_id)

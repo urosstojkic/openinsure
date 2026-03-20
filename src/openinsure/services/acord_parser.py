@@ -186,7 +186,7 @@ def parse_acord_xml(xml_content: str | bytes) -> ACORDParseResult:
     result = ACORDParseResult()
 
     try:
-        root = ET.fromstring(  # noqa: S314
+        root = ET.fromstring(  # noqa: S314  # nosec B314
             xml_content if isinstance(xml_content, str) else xml_content.decode("utf-8")
         )
     except ET.ParseError as e:
