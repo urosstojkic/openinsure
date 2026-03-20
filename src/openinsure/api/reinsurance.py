@@ -7,6 +7,7 @@ Uses in-memory storage as a placeholder until the database adapter is wired in.
 
 from __future__ import annotations
 
+import logging
 import uuid
 from datetime import UTC, date, datetime
 from typing import Any
@@ -19,6 +20,8 @@ from openinsure.infrastructure.factory import (
     get_recovery_repository,
     get_reinsurance_repository,
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -247,8 +250,12 @@ async def list_treaties(
     if reinsurer is not None:
         filters["reinsurer_name"] = reinsurer
 
-    total = await _treaty_repo.count(filters)
-    page = await _treaty_repo.list_all(filters=filters, skip=skip, limit=limit)
+    try:
+        total = await _treaty_repo.count(filters)
+        page = await _treaty_repo.list_all(filters=filters, skip=skip, limit=limit)
+    except Exception:
+        logger.warning("reinsurance_treaties table unavailable, returning empty list")
+        return TreatyList(items=[], total=0, skip=skip, limit=limit)
     return TreatyList(
         items=[TreatyResponse(**r) for r in page],
         total=total,
@@ -333,8 +340,12 @@ async def list_cessions(
     if policy_id is not None:
         filters["policy_id"] = policy_id
 
-    total = await _cession_repo.count(filters or None)
-    results = await _cession_repo.list_all(filters=filters or None, skip=skip, limit=limit)
+    try:
+        total = await _cession_repo.count(filters or None)
+        results = await _cession_repo.list_all(filters=filters or None, skip=skip, limit=limit)
+    except Exception:
+        logger.warning("reinsurance_cessions table unavailable, returning empty list")
+        return CessionList(items=[], total=0, skip=skip, limit=limit)
     return CessionList(
         items=[CessionResponse(**c) for c in results],
         total=total,
@@ -387,8 +398,12 @@ async def list_recoveries(
     if status is not None:
         filters["status"] = status
 
-    total = await _recovery_repo.count(filters or None)
-    results = await _recovery_repo.list_all(filters=filters or None, skip=skip, limit=limit)
+    try:
+        total = await _recovery_repo.count(filters or None)
+        results = await _recovery_repo.list_all(filters=filters or None, skip=skip, limit=limit)
+    except Exception:
+        logger.warning("reinsurance_recoveries table unavailable, returning empty list")
+        return RecoveryList(items=[], total=0, skip=skip, limit=limit)
     return RecoveryList(
         items=[RecoveryResponse(**r) for r in results],
         total=total,
