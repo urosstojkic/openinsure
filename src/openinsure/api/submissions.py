@@ -544,7 +544,9 @@ async def generate_quote(submission_id: str, user: CurrentUser = Depends(get_cur
         )
         resp = result.get("response", {})
         if isinstance(resp, dict) and "recommended_premium" in resp:
-            premium = float(resp["recommended_premium"]) or 5000.0  # fallback if agent returns 0
+            raw_premium = resp["recommended_premium"]
+            premium = float(raw_premium) if raw_premium is not None else 5000.0
+            premium = premium or 5000.0  # fallback if agent returns 0
             record["status"] = SubmissionStatus.QUOTED
             record["quoted_premium"] = premium
             record["updated_at"] = _now()
