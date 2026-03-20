@@ -163,16 +163,20 @@ const UnderwriterWorkbench: React.FC = () => {
                   {/* Risk Score Breakdown */}
                   <div>
                     <h3 className="mb-3 text-sm font-semibold text-slate-700">Risk Score Breakdown</h3>
-                    <div className="space-y-2">
-                      {selected.risk_factors.map((rf, i) => (
-                        <div key={i} className="flex items-center gap-3">
-                          <span className={`h-2 w-2 rounded-full ${rf.impact === 'positive' ? 'bg-green-500' : rf.impact === 'negative' ? 'bg-red-500' : 'bg-amber-500'}`} />
-                          <span className="w-36 text-sm font-medium text-slate-700">{rf.factor}</span>
-                          <div className="w-24"><ConfidenceBar value={rf.score / 100} showLabel={false} /></div>
-                          <span className="text-xs text-slate-500">{rf.description}</span>
-                        </div>
-                      ))}
-                    </div>
+                    {selected.risk_factors.length > 0 ? (
+                      <div className="space-y-2">
+                        {selected.risk_factors.map((rf, i) => (
+                          <div key={i} className="flex items-center gap-3">
+                            <span className={`h-2 w-2 rounded-full ${rf.impact === 'positive' ? 'bg-green-500' : rf.impact === 'negative' ? 'bg-red-500' : 'bg-amber-500'}`} />
+                            <span className="w-36 text-sm font-medium text-slate-700">{rf.factor}</span>
+                            <div className="w-24"><ConfidenceBar value={rf.score / 100} showLabel={false} /></div>
+                            <span className="text-xs text-slate-500">{rf.description}</span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-slate-400">No risk factor data available</p>
+                    )}
                   </div>
 
                   {/* Comparable Accounts */}
@@ -235,14 +239,18 @@ const UnderwriterWorkbench: React.FC = () => {
                   {/* Reasoning Chain */}
                   <div>
                     <h3 className="mb-3 text-sm font-semibold text-slate-700">Reasoning Chain</h3>
-                    <ol className="space-y-1">
-                      {selected.reasoning_chain.map((step, i) => (
-                        <li key={i} className="flex gap-2 text-sm text-slate-600">
-                          <span className="shrink-0 font-mono text-xs text-slate-400">{i + 1}.</span>
-                          {step}
-                        </li>
-                      ))}
-                    </ol>
+                    {selected.reasoning_chain.length > 0 ? (
+                      <ol className="space-y-1">
+                        {selected.reasoning_chain.map((step, i) => (
+                          <li key={i} className="flex gap-2 text-sm text-slate-600">
+                            <span className="shrink-0 font-mono text-xs text-slate-400">{i + 1}.</span>
+                            {step}
+                          </li>
+                        ))}
+                      </ol>
+                    ) : (
+                      <p className="text-sm text-slate-400">No reasoning data available</p>
+                    )}
                   </div>
                 </div>
               )}
@@ -289,7 +297,7 @@ const UnderwriterWorkbench: React.FC = () => {
                       <p className="text-lg font-bold text-slate-900">{money(selected.requested_coverage)}</p>
                     </div>
                   </div>
-                  {selected.cyber_risk_data && (
+                  {selected.cyber_risk_data ? (
                     <>
                       <h3 className="text-sm font-semibold text-slate-700">Security Controls</h3>
                       <div className="grid grid-cols-2 gap-3">
@@ -310,6 +318,8 @@ const UnderwriterWorkbench: React.FC = () => {
                         ))}
                       </div>
                     </>
+                  ) : (
+                    <p className="text-sm text-slate-400">No cyber risk data available</p>
                   )}
                 </div>
               )}
@@ -317,17 +327,21 @@ const UnderwriterWorkbench: React.FC = () => {
               {tab === 'history' && (
                 <div>
                   <h3 className="mb-3 text-sm font-semibold text-slate-700">Decision Timeline</h3>
-                  {selected.decision_history.map((ev, i) => (
-                    <TimelineEvent
-                      key={ev.id}
-                      timestamp={ev.timestamp}
-                      actor={ev.actor}
-                      action={ev.action}
-                      details={ev.details}
-                      isAgent={ev.is_agent}
-                      isLast={i === selected.decision_history.length - 1}
-                    />
-                  ))}
+                  {selected.decision_history.length > 0 ? (
+                    selected.decision_history.map((ev, i) => (
+                      <TimelineEvent
+                        key={ev.id}
+                        timestamp={ev.timestamp}
+                        actor={ev.actor}
+                        action={ev.action}
+                        details={ev.details}
+                        isAgent={ev.is_agent}
+                        isLast={i === selected.decision_history.length - 1}
+                      />
+                    ))
+                  ) : (
+                    <p className="text-sm text-slate-400">No decisions recorded yet</p>
+                  )}
                 </div>
               )}
             </div>
