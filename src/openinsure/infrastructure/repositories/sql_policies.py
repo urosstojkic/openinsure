@@ -94,13 +94,16 @@ def _policy_from_sql_row(row: dict[str, Any]) -> dict[str, Any]:
             return {}
 
     premium = float(row["total_premium"]) if row.get("total_premium") else None
-    policyholder = _str(row.get("party_name")) or ""
+    policyholder = _str(row.get("party_name")) or _str(row.get("insured_name")) or ""
+    lob = _str(row.get("product_lob")) or _str(row.get("line_of_business")) or "cyber"
     return {
         "id": _str(row.get("id")),
         "policy_number": _str(row.get("policy_number")),
         "policyholder_name": policyholder,
+        "policyholder": policyholder,
         "insured_name": policyholder,
-        "lob": "cyber",
+        "lob": lob,
+        "line_of_business": lob,
         "status": _str(row.get("status")) or "active",
         "product_id": _str(row.get("product_id")),
         "submission_id": _str(row.get("submission_id")),
@@ -228,8 +231,9 @@ class SqlPolicyRepository(BaseRepository):
 
     async def get_by_id(self, entity_id: UUID | str) -> dict[str, Any] | None:
         row = await self.db.fetch_one(
-            "SELECT p.*, pa.name AS party_name"
+            "SELECT p.*, pa.name AS party_name, pr.line_of_business AS product_lob"
             " FROM policies p LEFT JOIN parties pa ON p.insured_id = pa.id"
+            " LEFT JOIN products pr ON p.product_id = pr.id"
             " WHERE p.id = ?",
             [str(entity_id)],
         )
@@ -241,7 +245,7 @@ class SqlPolicyRepository(BaseRepository):
         skip: int = 0,
         limit: int = 50,
     ) -> list[dict[str, Any]]:
-        query = "SELECT p.*, pa.name AS party_name FROM policies p LEFT JOIN parties pa ON p.insured_id = pa.id"
+        query = "SELECT p.*, pa.name AS party_name, pr.line_of_business AS product_lob FROM policies p LEFT JOIN parties pa ON p.insured_id = pa.id LEFT JOIN products pr ON p.product_id = pr.id"
         params: list[Any] = []
         where_clauses: list[str] = []
         if filters:
