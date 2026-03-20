@@ -3,6 +3,8 @@
 Computes KPIs from Azure SQL data for CEO, CUO, and operations views.
 """
 
+from typing import Any
+
 from fastapi import APIRouter
 
 from openinsure.infrastructure.factory import (
@@ -15,7 +17,7 @@ router = APIRouter()
 
 
 @router.get("/summary")
-async def get_summary_metrics():
+async def get_summary_metrics() -> dict[str, Any]:
     """Top-level KPIs for the main dashboard."""
     from openinsure.services.escalation import count_pending
 
@@ -91,7 +93,7 @@ async def get_summary_metrics():
 
 
 @router.get("/pipeline")
-async def get_pipeline_metrics():
+async def get_pipeline_metrics() -> dict[str, Any]:
     """Submission pipeline funnel."""
     repo = get_submission_repository()
     subs = await repo.list_all(limit=5000)
@@ -104,7 +106,7 @@ async def get_pipeline_metrics():
 
 
 @router.get("/agents")
-async def get_agent_metrics():
+async def get_agent_metrics() -> dict[str, Any]:
     """Agent performance metrics (from decision records)."""
     from openinsure.services.event_publisher import get_recent_events
 
@@ -125,7 +127,7 @@ async def get_agent_metrics():
 
 
 @router.get("/premium-trend")
-async def get_premium_trend():
+async def get_premium_trend() -> dict[str, Any]:
     """Monthly premium trend from policies."""
     repo = get_policy_repository()
     pols = await repo.list_all(limit=5000)
@@ -143,7 +145,7 @@ async def get_premium_trend():
 
 
 @router.get("/executive")
-async def get_executive_dashboard():
+async def get_executive_dashboard() -> dict[str, Any]:
     """Aggregated executive KPIs for CEO / CUO / CFO dashboards.
 
     Returns the shape expected by the React ``ExecutiveDashboardData`` type:

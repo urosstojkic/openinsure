@@ -83,7 +83,7 @@ class DemoWorkflowResult(BaseModel):
 # Sample applicant data
 # ---------------------------------------------------------------------------
 
-_DEMO_APPLICANT = {
+_DEMO_APPLICANT: dict[str, Any] = {
     "applicant_name": "Quantum Dynamics Corp",
     "applicant_email": "ciso@quantumdyn.com",
     "channel": "api",

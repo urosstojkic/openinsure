@@ -23,7 +23,7 @@ async def escalate(
     requested_by: str,
     requested_role: str,
     amount: float,
-    authority_result: dict,
+    authority_result: dict[str, Any],
     context: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Add an item to the escalation queue."""
@@ -50,7 +50,7 @@ async def escalate(
     return item
 
 
-async def get_queue(status: str | None = None, role: str | None = None) -> list[dict]:
+async def get_queue(status: str | None = None, role: str | None = None) -> list[dict[str, Any]]:
     """Get escalation items, optionally filtered."""
     items = _escalation_queue
     if status:
@@ -60,7 +60,7 @@ async def get_queue(status: str | None = None, role: str | None = None) -> list[
     return sorted(items, key=lambda x: x["created_at"], reverse=True)
 
 
-async def get_by_id(item_id: str) -> dict | None:
+async def get_by_id(item_id: str) -> dict[str, Any] | None:
     """Get a single escalation item by ID."""
     for item in _escalation_queue:
         if item["id"] == item_id:
@@ -68,7 +68,7 @@ async def get_by_id(item_id: str) -> dict | None:
     return None
 
 
-async def resolve(item_id: str, decision: str, resolved_by: str, reason: str) -> dict | None:
+async def resolve(item_id: str, decision: str, resolved_by: str, reason: str) -> dict[str, Any] | None:
     """Approve or reject an escalation item."""
     for item in _escalation_queue:
         if item["id"] == item_id:

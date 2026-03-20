@@ -221,7 +221,7 @@ def parse_acord_xml(xml_content: str | bytes) -> ACORDParseResult:
     # --- Prior insurance ---
     _parse_prior_insurance(pkg_rq, result)
 
-    logger.info(
+    logger.info(  # type: ignore[call-arg]
         "acord.parsed",
         applicant=result.applicant_name,
         lob=result.line_of_business,

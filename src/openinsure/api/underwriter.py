@@ -7,6 +7,7 @@ scoring metadata and agent recommendations.
 from __future__ import annotations
 
 import json
+from typing import Any
 
 from fastapi import APIRouter, Query
 
@@ -19,7 +20,7 @@ router = APIRouter()
 async def get_underwriter_queue(
     status: str | None = Query(None, description="Filter by submission status"),
     limit: int = Query(20, ge=1, le=100),
-):
+) -> dict[str, Any]:
     """Get the underwriter's submission queue.
 
     Returns submissions in received/triaging/underwriting/quoted statuses,
@@ -64,7 +65,7 @@ async def get_underwriter_queue(
 # ---------------------------------------------------------------------------
 
 
-def _compute_priority(sub: dict) -> str:
+def _compute_priority(sub: dict[str, Any]) -> str:
     """Compute priority from risk data and status."""
     risk = sub.get("risk_score", 0)
     status = sub.get("status", "")
@@ -77,7 +78,7 @@ def _compute_priority(sub: dict) -> str:
     return "medium"
 
 
-def _get_recommendation(sub: dict) -> str:
+def _get_recommendation(sub: dict[str, Any]) -> str:
     """Generate recommendation text based on submission status."""
     recs = {
         "received": "Pending triage",

@@ -27,7 +27,7 @@ _CLAIM_INTERNAL_FIELDS = frozenset({"fraud_score", "reserves", "payments"})
 
 
 @router.get("/submissions")
-async def broker_submissions(limit: int = Query(20, ge=1, le=100)):
+async def broker_submissions(limit: int = Query(20, ge=1, le=100)) -> dict[str, Any]:
     """Broker's own submissions — internal scoring data stripped."""
     repo = get_submission_repository()
     subs = await repo.list_all(limit=limit)
@@ -38,7 +38,7 @@ async def broker_submissions(limit: int = Query(20, ge=1, le=100)):
 
 
 @router.get("/policies")
-async def broker_policies(limit: int = Query(20, ge=1, le=100)):
+async def broker_policies(limit: int = Query(20, ge=1, le=100)) -> dict[str, Any]:
     """Policies visible to broker — endorsement details excluded."""
     repo = get_policy_repository()
     pols = await repo.list_all(limit=limit)
@@ -49,7 +49,7 @@ async def broker_policies(limit: int = Query(20, ge=1, le=100)):
 
 
 @router.get("/claims")
-async def broker_claims(limit: int = Query(20, ge=1, le=100)):
+async def broker_claims(limit: int = Query(20, ge=1, le=100)) -> dict[str, Any]:
     """Claims visible to broker — fraud and reserve details excluded."""
     repo = get_claim_repository()
     claims = await repo.list_all(limit=limit)

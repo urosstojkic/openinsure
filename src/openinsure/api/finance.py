@@ -279,7 +279,7 @@ async def reconciliation() -> list[ReconciliationItem]:
     reins_actual = round(total_paid * 0.23, 2)
     tax_amount = round(total_premium * 0.03, 2)
 
-    items = [
+    return [
         ReconciliationItem(
             item="Premium receivables",
             expected=round(premium_unearned, 2),
@@ -316,7 +316,6 @@ async def reconciliation() -> list[ReconciliationItem]:
             status="matched",
         ),
     ]
-    return items
 
 
 @router.post("/bordereaux/generate", response_model=BordereauGenerateResponse, status_code=201)

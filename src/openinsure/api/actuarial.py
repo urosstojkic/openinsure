@@ -166,10 +166,10 @@ def _build_triangle_entries(
         ay = _claim_accident_year(c)
         if ay not in ay_data:
             ay_data[ay] = {"incurred": 0.0, "paid": 0.0, "reserved": 0.0, "count": 0}
-        ay_data[ay]["incurred"] += float(c.get("total_incurred", 0) or 0)  # type: ignore[assignment]
-        ay_data[ay]["paid"] += float(c.get("total_paid", 0) or 0)  # type: ignore[assignment]
-        ay_data[ay]["reserved"] += float(c.get("total_reserved", 0) or 0)  # type: ignore[assignment]
-        ay_data[ay]["count"] += 1  # type: ignore[assignment]
+        ay_data[ay]["incurred"] += float(c.get("total_incurred", 0) or 0)
+        ay_data[ay]["paid"] += float(c.get("total_paid", 0) or 0)
+        ay_data[ay]["reserved"] += float(c.get("total_reserved", 0) or 0)
+        ay_data[ay]["count"] += 1
 
     entries: list[dict[str, Any]] = []
     for ay in sorted(ay_data):
@@ -210,7 +210,7 @@ async def list_reserves(
     accident_year: int | None = Query(None, description="Filter by accident year"),
 ) -> list[ReserveResponse]:
     """Actuarial reserves derived from SUM(total_reserved) on actual claims."""
-    claims, pols, subs, pol_lob = await _load_lob_mappings()
+    claims, _pols, _subs, pol_lob = await _load_lob_mappings()
 
     groups: dict[tuple[str, int], dict[str, float | int]] = {}
     for c in claims:
@@ -219,10 +219,10 @@ async def list_reserves(
         key = (c_lob, ay)
         if key not in groups:
             groups[key] = {"reserved": 0.0, "paid": 0.0, "incurred": 0.0, "count": 0}
-        groups[key]["reserved"] += float(c.get("total_reserved", 0) or 0)  # type: ignore[assignment]
-        groups[key]["paid"] += float(c.get("total_paid", 0) or 0)  # type: ignore[assignment]
-        groups[key]["incurred"] += float(c.get("total_incurred", 0) or 0)  # type: ignore[assignment]
-        groups[key]["count"] += 1  # type: ignore[assignment]
+        groups[key]["reserved"] += float(c.get("total_reserved", 0) or 0)
+        groups[key]["paid"] += float(c.get("total_paid", 0) or 0)
+        groups[key]["incurred"] += float(c.get("total_incurred", 0) or 0)
+        groups[key]["count"] += 1
 
     if lob:
         groups = {k: v for k, v in groups.items() if k[0] == lob}
@@ -277,7 +277,7 @@ async def set_reserve(body: ReserveCreate) -> ReserveResponse:
 @router.get("/triangles/{lob}", response_model=TriangleResponse)
 async def get_loss_triangle(lob: str) -> TriangleResponse:
     """Loss-development triangle built from actual claims for the LOB."""
-    claims, pols, subs, pol_lob = await _load_lob_mappings()
+    claims, _pols, _subs, pol_lob = await _load_lob_mappings()
 
     lob_claims = [c for c in claims if _claim_lob(c, pol_lob) == lob]
     if not lob_claims:
@@ -326,12 +326,12 @@ async def rate_adequacy(
     all_lobs = sorted(set(list(lob_premium.keys()) + list(lob_incurred.keys())))
 
     if lob:
-        all_lobs = [l for l in all_lobs if l == lob]
+        all_lobs = [x for x in all_lobs if x == lob]
 
     items: list[RateAdequacyItem] = []
-    for l in all_lobs:
-        prem = lob_premium.get(l, 0)
-        inc = lob_incurred.get(l, 0)
+    for lob_name in all_lobs:
+        prem = lob_premium.get(lob_name, 0)
+        inc = lob_incurred.get(lob_name, 0)
         actual_lr = Decimal(str(round(inc / prem, 4))) if prem > 0 else Decimal("0")
         # Indicated rate adjustment = actual_lr / target_lr
         adequacy = (
@@ -339,10 +339,10 @@ async def rate_adequacy(
             if target_loss_ratio > 0
             else Decimal("0")
         )
-        display = l.replace("_", " ").title()
+        display = lob_name.replace("_", " ").title()
         items.append(
             RateAdequacyItem(
-                line_of_business=l,
+                line_of_business=lob_name,
                 segment=display,
                 current_rate=str(target_loss_ratio),
                 indicated_rate=str(actual_lr),
@@ -359,7 +359,7 @@ async def get_ibnr(
     method: str = Query("chain_ladder", description="IBNR estimation method"),
 ) -> IBNRResponse:
     """IBNR estimate using chain-ladder on claims-derived triangle."""
-    claims, pols, subs, pol_lob = await _load_lob_mappings()
+    claims, _pols, _subs, pol_lob = await _load_lob_mappings()
 
     lob_claims = [c for c in claims if _claim_lob(c, pol_lob) == lob]
     if not lob_claims:

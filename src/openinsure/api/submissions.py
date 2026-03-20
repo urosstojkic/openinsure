@@ -575,7 +575,7 @@ async def generate_quote(submission_id: str, user: CurrentUser = Depends(get_cur
                         "reason": auth_result.reason,
                     },
                 )
-                return JSONResponse(
+                return JSONResponse(  # type: ignore[return-value]
                     status_code=202,
                     content={
                         "status": "escalated",
@@ -645,7 +645,7 @@ async def generate_quote(submission_id: str, user: CurrentUser = Depends(get_cur
                 "reason": auth_result.reason,
             },
         )
-        return JSONResponse(
+        return JSONResponse(  # type: ignore[return-value]
             status_code=202,
             content={
                 "status": "escalated",
@@ -722,7 +722,7 @@ async def bind_submission(submission_id: str, user: CurrentUser = Depends(get_cu
                 "reason": auth_result.reason,
             },
         )
-        return JSONResponse(
+        return JSONResponse(  # type: ignore[return-value]
             status_code=202,
             content={
                 "status": "escalated",
@@ -732,7 +732,6 @@ async def bind_submission(submission_id: str, user: CurrentUser = Depends(get_cu
                 "message": f"Action requires approval from {auth_result.required_role}",
             },
         )
-
     # Create the actual policy record
     policy_repo = get_policy_repository()
     policy_data = _build_policy_data(record, premium, policy_id=policy_id, policy_number=policy_number)

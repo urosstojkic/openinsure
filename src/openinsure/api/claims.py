@@ -243,7 +243,7 @@ def _generate_claim_number() -> str:
 
 
 @router.get("/queue")
-async def get_claims_queue(limit: int = Query(20, ge=1, le=100)):
+async def get_claims_queue(limit: int = Query(20, ge=1, le=100)) -> dict[str, Any]:
     """Get the claims adjuster's work queue.
 
     Returns open claims sorted by severity-based priority.
@@ -408,7 +408,7 @@ async def set_reserve(
                 "reason": auth_result.reason,
             },
         )
-        return JSONResponse(
+        return JSONResponse(  # type: ignore[return-value]
             status_code=202,
             content={
                 "status": "escalated",
@@ -559,7 +559,7 @@ async def close_claim(
                 "reason": auth_result.reason,
             },
         )
-        return JSONResponse(
+        return JSONResponse(  # type: ignore[return-value]
             status_code=202,
             content={
                 "status": "escalated",
