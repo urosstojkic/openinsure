@@ -91,17 +91,19 @@ class SqlComplianceRepository:
 
     async def add_audit_event(self, event: dict[str, Any]) -> dict[str, Any]:
         await self.db.execute_query(
-            """INSERT INTO audit_events (id, timestamp, actor, action,
-               entity_type, entity_id, details)
-               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            """INSERT INTO audit_events (id, event_type, actor_type, actor_id, action,
+               resource_type, resource_id, details, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             [
                 event["id"],
-                event.get("timestamp"),
-                event.get("actor"),
-                event.get("action"),
-                event.get("entity_type"),
-                event.get("entity_id"),
+                event.get("action", ""),
+                "agent" if "agent" in event.get("actor", "") else "system",
+                event.get("actor", ""),
+                event.get("action", ""),
+                event.get("entity_type", ""),
+                event.get("entity_id", ""),
                 json.dumps(event.get("details", {})),
+                event.get("timestamp", event.get("created_at", "")),
             ],
         )
         return event
@@ -118,13 +120,13 @@ class SqlComplianceRepository:
         where_clauses: list[str] = []
         if filters:
             if "entity_type" in filters:
-                where_clauses.append("entity_type = ?")
+                where_clauses.append("resource_type = ?")
                 params.append(filters["entity_type"])
             if "entity_id" in filters:
-                where_clauses.append("entity_id = ?")
+                where_clauses.append("resource_id = ?")
                 params.append(filters["entity_id"])
             if "actor" in filters:
-                where_clauses.append("actor = ?")
+                where_clauses.append("actor_id = ?")
                 params.append(filters["actor"])
             if "action" in filters:
                 where_clauses.append("action = ?")
@@ -137,7 +139,7 @@ class SqlComplianceRepository:
         count_result = await self.db.fetch_one(count_query, params)
         total = count_result.get("cnt", 0) if count_result else 0
 
-        pag_clause, pag_params = safe_pagination_clause("timestamp DESC", skip, limit)
+        pag_clause, pag_params = safe_pagination_clause("created_at DESC", skip, limit)
         query += pag_clause
         params.extend(pag_params)
         rows = await self.db.fetch_all(query, params)
@@ -179,18 +181,21 @@ class SqlComplianceRepository:
         from uuid import uuid4
 
         event_id = str(event.get("id", uuid4()))
+        actor = event.get("actor", event.get("actor_id", "agent"))
         await self.db.execute_query(
-            """INSERT INTO audit_events (id, timestamp, actor, action,
-               entity_type, entity_id, details)
-               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            """INSERT INTO audit_events (id, event_type, actor_type, actor_id, action,
+               resource_type, resource_id, details, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             [
                 event_id,
-                event.get("timestamp", event.get("created_at", "")),
-                event.get("actor", event.get("actor_id", "agent")),
+                event.get("action", ""),
+                "agent" if "agent" in actor else "system",
+                actor,
                 event.get("action", ""),
                 event.get("entity_type", event.get("resource_type", "")),
                 event.get("entity_id", event.get("resource_id", "")),
                 json.dumps(event.get("details", {})),
+                event.get("timestamp", event.get("created_at", "")),
             ],
         )
         return event_id
@@ -206,4 +211,18 @@ def _deserialize_decision(row: dict[str, Any]) -> dict[str, Any]:
 def _deserialize_audit_event(row: dict[str, Any]) -> dict[str, Any]:
     if "details" in row and isinstance(row["details"], str):
         row["details"] = json.loads(row["details"])
+    # Map SQL column names to API field names
+    if "resource_type" in row and "entity_type" not in row:
+        row["entity_type"] = row.pop("resource_type")
+    if "resource_id" in row and "entity_id" not in row:
+        row["entity_id"] = row.pop("resource_id")
+    if "actor_id" in row and "actor" not in row:
+        row["actor"] = row.pop("actor_id")
+    if "created_at" in row and "timestamp" not in row:
+        val = row.pop("created_at")
+        row["timestamp"] = val.isoformat() if hasattr(val, "isoformat") else str(val) if val else ""
+    # Remove SQL-only columns not expected by API
+    row.pop("actor_type", None)
+    row.pop("event_type", None)
+    row.pop("correlation_id", None)
     return row
