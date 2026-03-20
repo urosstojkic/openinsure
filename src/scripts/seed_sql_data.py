@@ -7,7 +7,7 @@ Usage:
     python src/scripts/seed_sql_data.py [BASE_URL]
 
 Example:
-    python src/scripts/seed_sql_data.py https://openinsure-backend.braveriver-f92a9f28.swedencentral.azurecontainerapps.io
+    python src/scripts/seed_sql_data.py https://openinsure-backend.proudplant-9550e5a5.swedencentral.azurecontainerapps.io
 """
 
 import sys
@@ -17,7 +17,7 @@ import httpx
 BASE_URL = (
     sys.argv[1]
     if len(sys.argv) > 1
-    else "https://openinsure-backend.braveriver-f92a9f28.swedencentral.azurecontainerapps.io"
+    else "https://openinsure-backend.proudplant-9550e5a5.swedencentral.azurecontainerapps.io"
 )
 
 client = httpx.Client(base_url=BASE_URL, timeout=30)
