@@ -460,6 +460,28 @@ async def set_reserve(
             },
         )
 
+        # Record claims reserve decision
+        try:
+            _c_repo = get_compliance_repository()
+            await _c_repo.store_decision(
+                {
+                    "decision_id": str(uuid.uuid4()),
+                    "agent_id": "openinsure-claims",
+                    "decision_type": "claims",
+                    "entity_id": claim_id,
+                    "entity_type": "claim",
+                    "confidence": float(resp.get("confidence", 0.8)) if isinstance(resp, dict) else 0.8,
+                    "input_summary": {"claim_id": claim_id, "requested_reserve": float(body.amount)},
+                    "output": resp if isinstance(resp, dict) else {"raw": str(resp)[:500]},
+                    "reasoning": str(resp.get("reasoning", "")) if isinstance(resp, dict) else "",
+                    "model_used": "gpt-5.1",
+                    "human_oversight": "recommended",
+                    "created_at": _now(),
+                }
+            )
+        except Exception:
+            logger.debug("decision_recording_failed", claim_id=claim_id, exc_info=True)
+
     rid = str(uuid.uuid4())
     now = _now()
     reserve_entry: dict[str, Any] = {

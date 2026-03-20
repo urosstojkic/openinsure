@@ -7,6 +7,7 @@ Uses in-memory storage as a placeholder until the database adapter is wired in.
 from __future__ import annotations
 
 import json
+import logging
 import uuid
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -21,6 +22,7 @@ from openinsure.rbac.auth import CurrentUser, get_current_user
 from openinsure.rbac.authority import AuthorityDecision, AuthorityEngine
 
 router = APIRouter()
+_logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Repository — resolved by factory (in-memory or SQL depending on config)
@@ -481,6 +483,31 @@ async def triage_submission(submission_id: str) -> TriageResult:
                 submission_id,
                 {"status": "underwriting", "triage_result": json.dumps(resp), "updated_at": record["updated_at"]},
             )
+
+            # Record triage decision
+            try:
+                from openinsure.infrastructure.factory import get_compliance_repository
+
+                compliance_repo = get_compliance_repository()
+                await compliance_repo.store_decision(
+                    {
+                        "decision_id": str(uuid.uuid4()),
+                        "agent_id": "openinsure-submission",
+                        "decision_type": "triage",
+                        "entity_id": submission_id,
+                        "entity_type": "submission",
+                        "confidence": float(resp.get("confidence", 0.85)),
+                        "input_summary": {"submission_id": submission_id},
+                        "output": resp,
+                        "reasoning": str(resp.get("reasoning", "")),
+                        "model_used": "gpt-5.1",
+                        "human_oversight": "recommended",
+                        "created_at": _now(),
+                    }
+                )
+            except Exception:
+                _logger.debug("Decision recording failed for triage", exc_info=True)
+
             from openinsure.services.event_publisher import publish_domain_event
 
             await publish_domain_event(
@@ -553,6 +580,31 @@ async def generate_quote(submission_id: str, user: CurrentUser = Depends(get_cur
             await _repo.update(
                 submission_id, {"status": "quoted", "quoted_premium": premium, "updated_at": record["updated_at"]}
             )
+
+            # Record underwriting/quote decision
+            try:
+                from openinsure.infrastructure.factory import get_compliance_repository
+
+                compliance_repo = get_compliance_repository()
+                await compliance_repo.store_decision(
+                    {
+                        "decision_id": str(uuid.uuid4()),
+                        "agent_id": "openinsure-underwriting",
+                        "decision_type": "underwriting",
+                        "entity_id": submission_id,
+                        "entity_type": "submission",
+                        "confidence": float(resp.get("confidence", 0.85)),
+                        "input_summary": {"submission_id": submission_id},
+                        "output": resp,
+                        "reasoning": str(resp.get("reasoning", "")),
+                        "model_used": "gpt-5.1",
+                        "human_oversight": "recommended",
+                        "created_at": _now(),
+                    }
+                )
+            except Exception:
+                _logger.debug("Decision recording failed for quote", exc_info=True)
+
             from openinsure.services.event_publisher import publish_domain_event
 
             # Authority check
@@ -765,6 +817,31 @@ async def bind_submission(submission_id: str, user: CurrentUser = Depends(get_cu
                 else None,
             },
         )
+
+        # Record policy review decision
+        try:
+            from openinsure.infrastructure.factory import get_compliance_repository
+
+            compliance_repo = get_compliance_repository()
+            pr_resp = policy_review.get("response", {})
+            await compliance_repo.store_decision(
+                {
+                    "decision_id": str(uuid.uuid4()),
+                    "agent_id": "openinsure-policy",
+                    "decision_type": "policy_review",
+                    "entity_id": submission_id,
+                    "entity_type": "submission",
+                    "confidence": float(pr_resp.get("confidence", 0.9)) if isinstance(pr_resp, dict) else 0.9,
+                    "input_summary": {"submission_id": submission_id, "policy_number": policy_number},
+                    "output": pr_resp if isinstance(pr_resp, dict) else {"raw": str(pr_resp)[:500]},
+                    "reasoning": str(pr_resp.get("notes", "")) if isinstance(pr_resp, dict) else "",
+                    "model_used": "gpt-5.1",
+                    "human_oversight": "recommended",
+                    "created_at": _now(),
+                }
+            )
+        except Exception:
+            _logger.debug("Decision recording failed for bind", exc_info=True)
 
     await policy_repo.create(policy_data)
 

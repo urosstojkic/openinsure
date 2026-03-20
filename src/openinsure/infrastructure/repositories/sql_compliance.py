@@ -1,7 +1,13 @@
-"""SQL-backed compliance repository using Azure SQL Database."""
+"""SQL-backed compliance repository using Azure SQL Database.
+
+Maps the API-level decision fields (entity_id, model_id, output_summary,
+explanation, human_override) to the actual ``decision_records`` SQL table
+columns (agent_id, model_used, output_data, reasoning, human_oversight).
+"""
 
 from __future__ import annotations
 
+import contextlib
 import json
 from typing import TYPE_CHECKING, Any
 
@@ -20,24 +26,46 @@ class SqlComplianceRepository:
     # -- decisions -----------------------------------------------------------
 
     async def add_decision(self, decision: dict[str, Any]) -> dict[str, Any]:
+        # Pack entity_id/entity_type into input_summary and data_sources_used
+        input_data = decision.get("input_summary", {})
+        if isinstance(input_data, str):
+            try:
+                input_data = json.loads(input_data)
+            except (json.JSONDecodeError, TypeError):
+                input_data = {"raw": input_data}
+        input_data.setdefault("entity_id", decision.get("entity_id", ""))
+        input_data.setdefault("entity_type", decision.get("entity_type", ""))
+
+        data_sources = {
+            "entity_id": decision.get("entity_id", ""),
+            "entity_type": decision.get("entity_type", ""),
+        }
+
+        human_oversight = json.dumps(
+            {
+                "human_override": bool(decision.get("human_override", False)),
+                "override_reason": decision.get("override_reason"),
+            }
+        )
+
         await self.db.execute_query(
-            """INSERT INTO decision_records (id, decision_type, entity_id, entity_type,
-               model_id, model_version, input_summary, output_summary, confidence,
-               explanation, human_override, override_reason, created_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            """INSERT INTO decision_records
+               (id, agent_id, model_used, model_version, decision_type,
+                input_summary, data_sources_used, output_data, reasoning,
+                confidence, human_oversight, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             [
                 decision["id"],
+                decision.get("model_id", decision.get("agent_id", "")),
+                decision.get("model_id", ""),
+                decision.get("model_version", ""),
                 decision.get("decision_type"),
-                decision.get("entity_id"),
-                decision.get("entity_type"),
-                decision.get("model_id"),
-                decision.get("model_version"),
-                json.dumps(decision.get("input_summary", {})),
+                json.dumps(input_data),
+                json.dumps(data_sources),
                 json.dumps(decision.get("output_summary", {})),
+                decision.get("explanation", ""),
                 decision.get("confidence"),
-                decision.get("explanation"),
-                decision.get("human_override", False),
-                decision.get("override_reason"),
+                human_oversight,
                 decision.get("created_at"),
             ],
         )
@@ -64,10 +92,10 @@ class SqlComplianceRepository:
                 where_clauses.append("decision_type = ?")
                 params.append(filters["decision_type"])
             if "entity_type" in filters:
-                where_clauses.append("entity_type = ?")
+                where_clauses.append("JSON_VALUE(data_sources_used, '$.entity_type') = ?")
                 params.append(filters["entity_type"])
             if "entity_id" in filters:
-                where_clauses.append("entity_id = ?")
+                where_clauses.append("JSON_VALUE(data_sources_used, '$.entity_id') = ?")
                 params.append(filters["entity_id"])
         if where_clauses:
             clause = " WHERE " + " AND ".join(where_clauses)
@@ -153,24 +181,52 @@ class SqlComplianceRepository:
     async def store_decision(self, record: dict[str, Any]) -> str:
         """Persist an agent DecisionRecord to the decision_records table."""
         record_id = str(record.get("decision_id", record.get("id", "")))
+
+        entity_id = record.get("entity_id", record.get("agent_id", ""))
+        entity_type = record.get("entity_type", "agent")
+
+        input_data = record.get("input_summary", {})
+        if isinstance(input_data, str):
+            try:
+                input_data = json.loads(input_data)
+            except (json.JSONDecodeError, TypeError):
+                input_data = {"raw": input_data}
+        input_data.setdefault("entity_id", entity_id)
+        input_data.setdefault("entity_type", entity_type)
+
+        data_sources = {"entity_id": entity_id, "entity_type": entity_type}
+
+        output = record.get("output", record.get("output_summary", {}))
+        reasoning = record.get("reasoning", "")
+        if isinstance(reasoning, dict):
+            reasoning = json.dumps(reasoning)
+
+        human_oversight = json.dumps(
+            {
+                "human_override": bool(record.get("human_override", False)),
+                "override_reason": record.get("override_reason"),
+                "level": record.get("human_oversight", "recommended"),
+            }
+        )
+
         await self.db.execute_query(
-            """INSERT INTO decision_records (id, decision_type, entity_id, entity_type,
-               model_id, model_version, input_summary, output_summary, confidence,
-               explanation, human_override, override_reason, created_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            """INSERT INTO decision_records
+               (id, agent_id, model_used, model_version, decision_type,
+                input_summary, data_sources_used, output_data, reasoning,
+                confidence, human_oversight, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             [
                 record_id,
-                record.get("decision_type"),
-                record.get("entity_id", record.get("agent_id", "")),
-                record.get("entity_type", "agent"),
+                record.get("agent_id", record.get("model_used", "")),
                 record.get("model_used", record.get("model_id", "")),
-                record.get("model_version"),
-                json.dumps(record.get("input_summary", {})),
-                json.dumps(record.get("output", record.get("output_summary", {}))),
+                record.get("model_version", ""),
+                record.get("decision_type"),
+                json.dumps(input_data),
+                json.dumps(data_sources),
+                json.dumps(output),
+                reasoning,
                 record.get("confidence", 0),
-                json.dumps(record.get("reasoning", {})),
-                bool(record.get("human_override", False)),
-                record.get("override_reason"),
+                human_oversight,
                 record.get("created_at", record.get("timestamp", "")),
             ],
         )
@@ -202,9 +258,61 @@ class SqlComplianceRepository:
 
 
 def _deserialize_decision(row: dict[str, Any]) -> dict[str, Any]:
-    for col in ("input_summary", "output_summary"):
+    """Map SQL decision_records columns back to API-level field names."""
+    # Parse JSON columns
+    for col in ("input_summary", "output_data", "data_sources_used", "human_oversight", "fairness_metrics"):
         if col in row and isinstance(row[col], str):
-            row[col] = json.loads(row[col])
+            with contextlib.suppress(json.JSONDecodeError, TypeError):
+                row[col] = json.loads(row[col])
+
+    # Extract entity_id / entity_type from data_sources_used or input_summary
+    ds = row.pop("data_sources_used", None) or {}
+    if isinstance(ds, str):
+        ds = {}
+    inp = row.get("input_summary", {})
+    if isinstance(inp, str):
+        try:
+            inp = json.loads(inp)
+            row["input_summary"] = inp
+        except (json.JSONDecodeError, TypeError):
+            inp = {}
+
+    row["entity_id"] = ds.get("entity_id") or (inp.get("entity_id") if isinstance(inp, dict) else "") or ""
+    row["entity_type"] = ds.get("entity_type") or (inp.get("entity_type") if isinstance(inp, dict) else "") or ""
+
+    # Map model_used / agent_id → model_id
+    row["model_id"] = row.pop("model_used", "") or row.get("agent_id", "")
+    row.pop("agent_id", None)
+
+    # Map output_data → output_summary
+    row["output_summary"] = row.pop("output_data", {}) or {}
+
+    # Map reasoning → explanation
+    reasoning = row.pop("reasoning", "")
+    row["explanation"] = reasoning if isinstance(reasoning, str) else json.dumps(reasoning) if reasoning else ""
+
+    # Parse human_oversight → human_override + override_reason
+    oversight = row.pop("human_oversight", None)
+    if isinstance(oversight, dict):
+        row["human_override"] = bool(oversight.get("human_override", False))
+        row["override_reason"] = oversight.get("override_reason")
+    elif isinstance(oversight, str):
+        row["human_override"] = "true" in oversight.lower() if oversight else False
+        row["override_reason"] = None
+    else:
+        row["human_override"] = False
+        row["override_reason"] = None
+
+    # Normalise created_at to ISO string
+    if "created_at" in row and hasattr(row["created_at"], "isoformat"):
+        row["created_at"] = row["created_at"].isoformat()
+    elif "created_at" in row:
+        row["created_at"] = str(row["created_at"]) if row["created_at"] else ""
+
+    # Remove DB-only columns not expected by the API model
+    for col in ("agent_version", "knowledge_graph_queries", "fairness_metrics", "execution_time_ms", "error_message"):
+        row.pop(col, None)
+
     return row
 
 

@@ -272,6 +272,31 @@ async def execute_workflow(
             execution.steps_completed.append(step_record)
             execution.context[f"{step.name}_result"] = result.get("response", {})
 
+            # Record decision for each completed step
+            try:
+                from openinsure.infrastructure.factory import get_compliance_repository
+
+                compliance_repo = get_compliance_repository()
+                resp = result.get("response", {})
+                await compliance_repo.store_decision(
+                    {
+                        "decision_id": str(uuid4()),
+                        "agent_id": step.agent,
+                        "decision_type": step.name,
+                        "entity_id": entity_id,
+                        "entity_type": entity_type,
+                        "confidence": resp.get("confidence", 0.8) if isinstance(resp, dict) else 0.8,
+                        "input_summary": {"entity_id": entity_id, "prompt_preview": prompt[:300]},
+                        "output": resp if isinstance(resp, dict) else {"raw": str(resp)[:500]},
+                        "reasoning": str(resp.get("reasoning", "")) if isinstance(resp, dict) else "",
+                        "model_used": "gpt-5.1",
+                        "human_oversight": "recommended",
+                        "created_at": datetime.now(UTC).isoformat(),
+                    }
+                )
+            except Exception:
+                logger.debug("decision_recording_failed", step=step.name, exc_info=True)
+
             await publish_domain_event(
                 f"workflow.{workflow_name}.step_completed",
                 f"/{entity_type}/{entity_id}",
