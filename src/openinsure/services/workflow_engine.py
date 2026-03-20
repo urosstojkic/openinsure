@@ -4,6 +4,7 @@ Defines insurance workflows as step sequences, executes them through
 Foundry agents, tracks state, and handles errors/escalations.
 """
 
+import asyncio
 from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
@@ -258,7 +259,9 @@ async def execute_workflow(
 
         # Execute via Foundry
         try:
-            result = await foundry.invoke(step.agent, prompt)
+            result = await asyncio.wait_for(
+                foundry.invoke(step.agent, prompt), timeout=30
+            )
             step_record: dict[str, Any] = {
                 "name": step.name,
                 "agent": step.agent,
@@ -280,6 +283,25 @@ async def execute_workflow(
                     "source": result.get("source"),
                 },
             )
+        except TimeoutError:
+            logger.warning(
+                "workflow.step_timeout",
+                workflow=workflow_name,
+                step=step.name,
+                timeout=30,
+            )
+            step_record = {
+                "name": step.name,
+                "agent": step.agent,
+                "status": "failed",
+                "error": f"Step '{step.name}' timed out after 30s",
+                "timestamp": datetime.now(UTC).isoformat(),
+            }
+            execution.steps_completed.append(step_record)
+            if step.required:
+                execution.status = "failed"
+                execution.error = f"Required step '{step.name}' timed out after 30s"
+                break
         except Exception as e:
             logger.exception(
                 "workflow.step_failed",
