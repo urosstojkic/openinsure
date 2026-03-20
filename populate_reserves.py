@@ -1,4 +1,4 @@
-"""Populate realistic reserves directly into Azure SQL claim_reserves table using Node.js."""
+"""Populate realistic reserves directly into Azure SQL claim_reserves table."""
 import random
 import uuid
 import json
@@ -19,61 +19,75 @@ RESERVE_RANGES = {
     "other": (10_000, 150_000),
 }
 
+def get_token():
+    """Get Azure SQL access token via az CLI."""
+    result = subprocess.run(
+        ['az', 'account', 'get-access-token', '--resource', 'https://database.windows.net', '--query', 'accessToken', '-o', 'tsv'],
+        capture_output=True, text=True, shell=True
+    )
+    if result.returncode != 0:
+        raise RuntimeError(f"Failed to get token: {result.stderr}")
+    return result.stdout.strip()
+
+def run_node_script(script_content, cwd):
+    """Run a Node.js script and return (stdout, stderr)."""
+    script_path = os.path.join(cwd, '_sql_script.js')
+    with open(script_path, 'w') as f:
+        f.write(script_content)
+    try:
+        result = subprocess.run(['node', script_path], capture_output=True, text=True, cwd=cwd, timeout=120)
+        if result.returncode != 0:
+            raise RuntimeError(f"Node script failed: {result.stderr}")
+        return result.stdout, result.stderr
+    finally:
+        if os.path.exists(script_path):
+            os.unlink(script_path)
+
 def main():
     random.seed(42)
-
-    # Generate SQL statements
-    # First, get claims list via Node.js
-    node_fetch = """
-const sql = require('mssql');
-const { DefaultAzureCredential } = require('@azure/identity');
-
-async function main() {
-    const cred = new DefaultAzureCredential();
-    const tokenResponse = await cred.getToken('https://database.windows.net/.default');
+    cwd = os.path.dirname(os.path.abspath(__file__))
     
-    const config = {
+    print("Getting Azure SQL access token...")
+    token = get_token()
+    print(f"Got token (length: {len(token)})")
+    
+    # Step 1: Fetch claims and existing reserves
+    fetch_script = f"""
+const sql = require('mssql');
+const TOKEN = {json.dumps(token)};
+
+async function main() {{
+    const config = {{
         server: 'openinsure-dev-sql-knshtzbusr734.database.windows.net',
         database: 'openinsure-db',
-        authentication: { type: 'azure-active-directory-access-token', options: { token: tokenResponse.token } },
-        options: { encrypt: true, trustServerCertificate: false }
-    };
+        authentication: {{ type: 'azure-active-directory-access-token', options: {{ token: TOKEN }} }},
+        options: {{ encrypt: true, trustServerCertificate: false, requestTimeout: 30000 }}
+    }};
     
     const pool = await sql.connect(config);
-    
-    // Fetch claims
     const claims = await pool.request().query('SELECT id, claim_number, cause_of_loss, status FROM claims');
+    const reserves = await pool.request().query('SELECT COUNT(*) as cnt FROM claim_reserves');
     
-    // Check existing reserves
-    const existing = await pool.request().query('SELECT COUNT(*) as cnt FROM claim_reserves');
-    console.error('Existing reserves: ' + existing.recordset[0].cnt);
-    
-    // Output claims as JSON
-    console.log(JSON.stringify(claims.recordset));
+    console.log(JSON.stringify({{
+        claims: claims.recordset,
+        existing_reserves: reserves.recordset[0].cnt
+    }}));
     
     await pool.close();
-}
+}}
 
-main().catch(e => { console.error(e.message); process.exit(1); });
+main().catch(e => {{ console.error(e.message); process.exit(1); }});
 """
     
     print("Fetching claims from SQL...")
-    script_path = os.path.join(os.path.dirname(__file__), '_fetch_claims.js')
-    with open(script_path, 'w') as f:
-        f.write(node_fetch)
+    stdout, stderr = run_node_script(fetch_script, cwd)
+    if stderr.strip():
+        print(f"  stderr: {stderr.strip()}")
+    data = json.loads(stdout)
+    claims = data['claims']
+    print(f"Found {len(claims)} claims, {data['existing_reserves']} existing reserves")
     
-    result = subprocess.run(['node', script_path], capture_output=True, text=True, cwd=os.path.dirname(__file__))
-    os.unlink(script_path)
-    
-    if result.returncode != 0:
-        print(f"Error fetching claims: {result.stderr}")
-        sys.exit(1)
-    
-    print(result.stderr.strip())
-    claims = json.loads(result.stdout)
-    print(f"Found {len(claims)} claims\n")
-    
-    # Generate reserve inserts
+    # Step 2: Generate reserve data
     inserts = []
     for c in claims:
         ctype = c.get('cause_of_loss') or 'other'
@@ -88,85 +102,126 @@ main().catch(e => { console.error(e.message); process.exit(1); });
             'amount': amount,
         })
     
-    # Write insert script
-    node_insert = """
-const sql = require('mssql');
-const { DefaultAzureCredential } = require('@azure/identity');
-
-const inserts = INSERTS_PLACEHOLDER;
-
-async function main() {
-    const cred = new DefaultAzureCredential();
-    const tokenResponse = await cred.getToken('https://database.windows.net/.default');
+    total_amount = sum(r['amount'] for r in inserts)
+    print(f"\nGenerated {len(inserts)} reserves totaling ${total_amount:,.2f}")
     
-    const config = {
+    # Step 3: Insert reserves in batches
+    # Build batch SQL to avoid 115 individual round-trips
+    batch_size = 50
+    all_success = 0
+    all_failed = 0
+    
+    for batch_start in range(0, len(inserts), batch_size):
+        batch = inserts[batch_start:batch_start + batch_size]
+        
+        # Build VALUES clause
+        values_clauses = []
+        for r in batch:
+            values_clauses.append(
+                f"('{r['id']}', '{r['claim_id']}', 'indemnity', {r['amount']}, GETUTCDATE(), 'system', 0.85)"
+            )
+        
+        values_sql = ',\\n'.join(values_clauses)
+        
+        insert_script = f"""
+const sql = require('mssql');
+const TOKEN = {json.dumps(token)};
+
+async function main() {{
+    const config = {{
         server: 'openinsure-dev-sql-knshtzbusr734.database.windows.net',
         database: 'openinsure-db',
-        authentication: { type: 'azure-active-directory-access-token', options: { token: tokenResponse.token } },
-        options: { encrypt: true, trustServerCertificate: false }
-    };
+        authentication: {{ type: 'azure-active-directory-access-token', options: {{ token: TOKEN }} }},
+        options: {{ encrypt: true, trustServerCertificate: false, requestTimeout: 30000 }}
+    }};
     
     const pool = await sql.connect(config);
     
-    // Clear existing reserves
-    await pool.request().query('DELETE FROM claim_reserves');
-    console.error('Cleared existing reserves');
+    // Delete existing reserves on first batch
+    {"await pool.request().query('DELETE FROM claim_reserves');" if batch_start == 0 else ""}
     
-    let success = 0, failed = 0;
-    for (const r of inserts) {
-        try {
-            await pool.request()
-                .input('id', sql.UniqueIdentifier, r.id)
-                .input('claim_id', sql.UniqueIdentifier, r.claim_id)
-                .input('amount', sql.Decimal(18, 2), r.amount)
-                .query(`INSERT INTO claim_reserves (id, claim_id, reserve_type, amount, set_date, set_by, confidence)
-                        VALUES (@id, @claim_id, 'indemnity', @amount, GETUTCDATE(), 'system', 0.85)`);
-            success++;
-            console.error('  OK ' + r.claim_number + ' | ' + r.cause_of_loss + ' | $' + r.amount.toFixed(2));
-        } catch (e) {
-            failed++;
-            console.error('  FAIL ' + r.claim_number + ' | ' + e.message);
-        }
-    }
+    // Batch insert
+    await pool.request().query(`
+        INSERT INTO claim_reserves (id, claim_id, reserve_type, amount, set_date, set_by, confidence)
+        VALUES {values_sql}
+    `);
     
-    console.error('\\nInserted: ' + success + ' success, ' + failed + ' failed');
-    
-    // Verify
+    // Get stats
     const stats = await pool.request().query(`
-        SELECT COUNT(*) as cnt, SUM(amount) as total_reserved, AVG(amount) as avg_reserve
+        SELECT COUNT(*) as cnt, CAST(SUM(amount) AS FLOAT) as total, CAST(AVG(amount) AS FLOAT) as avg_amt
         FROM claim_reserves
     `);
-    const s = stats.recordset[0];
-    console.error('\\nVerification:');
-    console.error('  Reserve records: ' + s.cnt);
-    console.error('  Total reserved:  $' + Number(s.total_reserved).toFixed(2));
-    console.error('  Average reserve: $' + Number(s.avg_reserve).toFixed(2));
     
-    // Output summary as JSON for the Python wrapper
-    console.log(JSON.stringify({ success, failed, total: s.cnt, total_reserved: Number(s.total_reserved) }));
-    
+    console.log(JSON.stringify({{ success: {len(batch)}, stats: stats.recordset[0] }}));
     await pool.close();
-}
+}}
 
-main().catch(e => { console.error(e.message); process.exit(1); });
-""".replace('INSERTS_PLACEHOLDER', json.dumps(inserts))
+main().catch(e => {{ console.error(e.message); process.exit(1); }});
+"""
+        
+        stdout, stderr = run_node_script(insert_script, cwd)
+        if stderr.strip():
+            print(f"  stderr: {stderr.strip()}")
+        result = json.loads(stdout)
+        all_success += result['success']
+        print(f"  Batch {batch_start//batch_size + 1}: inserted {result['success']} reserves (total so far: {result['stats']['cnt']})")
+        
+        # Print individual reserves from this batch
+        for r in batch:
+            print(f"    ✓ {r['claim_number']:12s} | {r['cause_of_loss']:25s} | ${r['amount']:>12,.2f}")
     
-    script_path = os.path.join(os.path.dirname(__file__), '_insert_reserves.js')
-    with open(script_path, 'w') as f:
-        f.write(node_insert)
+    print(f"\n✓ Inserted {all_success} reserves into claim_reserves table")
     
-    print("Inserting reserves into SQL...")
-    result = subprocess.run(['node', script_path], capture_output=True, text=True, cwd=os.path.dirname(__file__))
-    os.unlink(script_path)
+    # Step 4: Final verification
+    verify_script = f"""
+const sql = require('mssql');
+const TOKEN = {json.dumps(token)};
+
+async function main() {{
+    const config = {{
+        server: 'openinsure-dev-sql-knshtzbusr734.database.windows.net',
+        database: 'openinsure-db',
+        authentication: {{ type: 'azure-active-directory-access-token', options: {{ token: TOKEN }} }},
+        options: {{ encrypt: true, trustServerCertificate: false, requestTimeout: 30000 }}
+    }};
     
-    print(result.stderr)
+    const pool = await sql.connect(config);
     
-    if result.returncode != 0:
-        print(f"Error: {result.stderr}")
-        sys.exit(1)
+    const stats = await pool.request().query(`
+        SELECT 
+            (SELECT COUNT(*) FROM claim_reserves) as reserve_count,
+            (SELECT CAST(SUM(amount) AS FLOAT) FROM claim_reserves) as total_reserved,
+            (SELECT CAST(AVG(amount) AS FLOAT) FROM claim_reserves) as avg_reserve,
+            (SELECT COUNT(DISTINCT claim_id) FROM claim_reserves) as claims_with_reserves,
+            (SELECT COUNT(*) FROM claims) as total_claims
+    `);
     
-    summary = json.loads(result.stdout)
-    print(f"\n✓ Summary: {summary['success']}/{summary['total']} reserves, ${summary['total_reserved']:,.2f} total")
+    // Sample by cause_of_loss
+    const byCause = await pool.request().query(`
+        SELECT c.cause_of_loss, COUNT(cr.id) as cnt, CAST(SUM(cr.amount) AS FLOAT) as total, CAST(AVG(cr.amount) AS FLOAT) as avg_amt
+        FROM claim_reserves cr JOIN claims c ON cr.claim_id = c.id
+        GROUP BY c.cause_of_loss
+    `);
+    
+    console.log(JSON.stringify({{ stats: stats.recordset[0], by_cause: byCause.recordset }}));
+    await pool.close();
+}}
+
+main().catch(e => {{ console.error(e.message); process.exit(1); }});
+"""
+    
+    print("\nVerifying...")
+    stdout, stderr = run_node_script(verify_script, cwd)
+    result = json.loads(stdout)
+    s = result['stats']
+    print(f"  Total claims: {s['total_claims']}")
+    print(f"  Claims with reserves: {s['claims_with_reserves']}")
+    print(f"  Reserve records: {s['reserve_count']}")
+    print(f"  Total reserved: ${s['total_reserved']:,.2f}")
+    print(f"  Average reserve: ${s['avg_reserve']:,.2f}")
+    print(f"\n  By cause of loss:")
+    for row in result['by_cause']:
+        print(f"    {row['cause_of_loss']:25s} | {row['cnt']:3d} claims | ${row['total']:>12,.2f} total | ${row['avg_amt']:>10,.2f} avg")
 
 if __name__ == "__main__":
     main()
