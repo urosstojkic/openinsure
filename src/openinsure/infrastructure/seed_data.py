@@ -30,6 +30,7 @@ SUBMISSION_IDS = [str(uuid.uuid4()) for _ in range(5)]
 POLICY_IDS = [str(uuid.uuid4()) for _ in range(3)]
 CLAIM_IDS = [str(uuid.uuid4()) for _ in range(2)]
 PRODUCT_ID = str(uuid.uuid4())
+PRODUCT_IDS = [PRODUCT_ID] + [str(uuid.uuid4()) for _ in range(3)]
 DECISION_IDS = [str(uuid.uuid4()) for _ in range(5)]
 AUDIT_IDS = [str(uuid.uuid4()) for _ in range(4)]
 TREATY_IDS = [str(uuid.uuid4()) for _ in range(3)]
@@ -258,8 +259,8 @@ def _sample_claims() -> list[dict[str, Any]]:
 def _sample_products() -> list[dict[str, Any]]:
     return [
         {
-            "id": PRODUCT_ID,
-            "name": "Cyber Liability — SMB",
+            "id": PRODUCT_IDS[0],
+            "name": "Cyber Liability",
             "product_line": "cyber",
             "description": "Comprehensive cyber liability coverage for small-to-medium businesses.",
             "version": "1.0",
@@ -287,7 +288,92 @@ def _sample_products() -> list[dict[str, Any]]:
             "metadata": {},
             "created_at": _days_ago(120),
             "updated_at": _days_ago(30),
-        }
+        },
+        {
+            "id": PRODUCT_IDS[1],
+            "name": "Professional Indemnity",
+            "product_line": "mpl",
+            "description": "Professional indemnity coverage for errors, omissions, and negligent acts.",
+            "version": "1.0",
+            "status": "active",
+            "coverages": [
+                {
+                    "name": "Professional Indemnity",
+                    "description": "Coverage for claims arising from professional services.",
+                    "default_limit": 2_000_000.0,
+                    "max_limit": 10_000_000.0,
+                    "default_deductible": 25_000.0,
+                    "is_optional": False,
+                },
+            ],
+            "rating_rules": {"base_rate": 1800.0},
+            "underwriting_rules": {"min_revenue": 250_000, "max_revenue": 200_000_000},
+            "metadata": {},
+            "created_at": _days_ago(120),
+            "updated_at": _days_ago(30),
+        },
+        {
+            "id": PRODUCT_IDS[2],
+            "name": "Directors & Officers",
+            "product_line": "mpl",
+            "description": "D&O liability coverage protecting directors and officers from personal losses.",
+            "version": "1.0",
+            "status": "active",
+            "coverages": [
+                {
+                    "name": "Side A — Directors & Officers",
+                    "description": "Direct coverage for individual directors and officers.",
+                    "default_limit": 5_000_000.0,
+                    "max_limit": 25_000_000.0,
+                    "default_deductible": 50_000.0,
+                    "is_optional": False,
+                },
+                {
+                    "name": "Side B — Corporate Reimbursement",
+                    "description": "Reimburses the company for indemnifying directors.",
+                    "default_limit": 5_000_000.0,
+                    "max_limit": 25_000_000.0,
+                    "default_deductible": 100_000.0,
+                    "is_optional": True,
+                },
+            ],
+            "rating_rules": {"base_rate": 2500.0},
+            "underwriting_rules": {"min_revenue": 1_000_000, "max_revenue": 500_000_000},
+            "metadata": {},
+            "created_at": _days_ago(90),
+            "updated_at": _days_ago(15),
+        },
+        {
+            "id": PRODUCT_IDS[3],
+            "name": "Technology E&O",
+            "product_line": "tech_eo",
+            "description": "Technology errors and omissions coverage for tech companies and service providers.",
+            "version": "1.0",
+            "status": "active",
+            "coverages": [
+                {
+                    "name": "Technology E&O",
+                    "description": "Coverage for technology product or service failures.",
+                    "default_limit": 2_000_000.0,
+                    "max_limit": 10_000_000.0,
+                    "default_deductible": 15_000.0,
+                    "is_optional": False,
+                },
+                {
+                    "name": "Media Liability",
+                    "description": "Coverage for IP infringement and media content errors.",
+                    "default_limit": 1_000_000.0,
+                    "max_limit": 5_000_000.0,
+                    "default_deductible": 10_000.0,
+                    "is_optional": True,
+                },
+            ],
+            "rating_rules": {"base_rate": 1500.0},
+            "underwriting_rules": {"min_revenue": 500_000, "max_revenue": 150_000_000},
+            "metadata": {},
+            "created_at": _days_ago(90),
+            "updated_at": _days_ago(15),
+        },
     ]
 
 
