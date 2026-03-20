@@ -50,7 +50,8 @@ POLICY_TRANSITIONS: dict[str, set[str]] = {
 }
 
 CLAIM_TRANSITIONS: dict[str, set[str]] = {
-    "fnol": {"investigating"},
+    "reported": {"investigating", "reserved"},
+    "fnol": {"investigating", "reserved"},
     "investigating": {"reserved", "denied"},
     "reserved": {"settling", "investigating", "denied"},
     "settling": {"closed"},
