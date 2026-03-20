@@ -259,9 +259,7 @@ async def execute_workflow(
 
         # Execute via Foundry
         try:
-            result = await asyncio.wait_for(
-                foundry.invoke(step.agent, prompt), timeout=30
-            )
+            result = await asyncio.wait_for(foundry.invoke(step.agent, prompt), timeout=30)
             step_record: dict[str, Any] = {
                 "name": step.name,
                 "agent": step.agent,

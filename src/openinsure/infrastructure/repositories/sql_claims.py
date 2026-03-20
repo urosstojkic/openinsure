@@ -234,9 +234,7 @@ class SqlClaimRepository(BaseRepository):
     )
 
     async def get_by_id(self, entity_id: UUID | str) -> dict[str, Any] | None:
-        row = await self.db.fetch_one(
-            self._BASE_QUERY + " WHERE c.id = ?", [str(entity_id)]
-        )
+        row = await self.db.fetch_one(self._BASE_QUERY + " WHERE c.id = ?", [str(entity_id)])
         return _claim_from_sql_row(row) if row else None
 
     async def list_all(
