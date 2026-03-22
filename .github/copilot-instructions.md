@@ -1,5 +1,45 @@
 # OpenInsure — Copilot Instructions
 
+## Squad-First Development (MANDATORY)
+
+This project uses the **Squad framework** (`.squad/`) for all development. Every task MUST be routed through Squad agents.
+
+### Routing Rules (from `.squad/routing.md`)
+
+| Work Type | Route To | Charter |
+|-----------|----------|---------|
+| Backend API, services, repos | **Backend** | `.squad/agents/backend/charter.md` |
+| React pages, components, UX | **Frontend** | `.squad/agents/frontend/charter.md` |
+| Azure infra, Bicep, CI/CD | **Infra** | `.squad/agents/infra/charter.md` |
+| Insurance domain, products, regs | **Insurance** | `.squad/agents/insurance/charter.md` |
+| Tests, quality gates, Playwright | **QA** | `.squad/agents/qa/charter.md` |
+| Security, RBAC, auth, audit | **Security** | `.squad/agents/security/charter.md` |
+| Docs, history, decisions | **Scribe** | `.squad/agents/scribe/charter.md` |
+
+### How to Route Work
+
+1. **Read the user's request** and determine which Squad agent(s) should handle it
+2. **Reference the agent's charter** in the prompt — include the charter file path
+3. **Fan-out for cross-cutting work** — spawn multiple agents in parallel (e.g., Backend + Frontend + QA)
+4. **After completion**: update the agent's `history.md` with learnings
+5. **Record decisions** in `.squad/decisions.md` if architectural choices were made
+6. **Label GitHub issues** with `squad:{agent}` for tracking
+
+### Quality Gates (ALWAYS, before deploy)
+
+1. `python -m ruff check src/ tests/ --fix && python -m ruff format src/ tests/`
+2. `python -m pytest tests/ -x -q --ignore=tests/e2e/test_full_lifecycle.py`
+3. `cd dashboard && npm run build`
+4. `python scripts/smoke_test.py {backend_url}` — 15 checks must pass
+5. Deploy: `pwsh scripts/deploy.ps1` (auto-versioning, sequential builds, no login prompts)
+
+### Never Do
+
+- Never launch generic unnamed agents — always route through Squad
+- Never deploy without smoke test passing
+- Never use mock data in production (VITE_USE_MOCK must be false)
+- Never use Start-Job for Azure CLI (breaks auth — use sequential commands)
+
 ## Mandatory Pre-Merge Checklist
 
 Before ANY merge to main, ALL of these must pass:
