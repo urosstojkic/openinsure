@@ -217,10 +217,20 @@ const Claims: React.FC = () => {
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
+        <div className="relative">
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input
+            type="text"
+            placeholder="Search claim #, policy #…"
+            value={searchQuery}
+            onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
+            className="rounded-lg border border-slate-300 pl-9 pr-3 py-1.5 text-sm text-slate-700 placeholder:text-slate-400 w-64"
+          />
+        </div>
         <select
           className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-700"
           value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
+          onChange={(e) => { setStatusFilter(e.target.value); setCurrentPage(1); }}
         >
           <option value="all">All Statuses</option>
           {Object.keys(statusVariant).map((s) => (
@@ -230,7 +240,7 @@ const Claims: React.FC = () => {
         <select
           className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-700"
           value={severityFilter}
-          onChange={(e) => setSeverityFilter(e.target.value)}
+          onChange={(e) => { setSeverityFilter(e.target.value); setCurrentPage(1); }}
         >
           <option value="all">All Severities</option>
           {Object.keys(severityVariant).map((s) => (
@@ -238,13 +248,47 @@ const Claims: React.FC = () => {
           ))}
         </select>
         <span className="text-xs text-slate-400">{filtered.length} claims</span>
+        {selectedIds.size > 0 && (
+          <div className="ml-auto flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5">
+            <span className="text-sm font-medium text-blue-700">Selected ({selectedIds.size})</span>
+            <button onClick={handleExportSelected} className="inline-flex items-center gap-1 rounded-md bg-blue-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-blue-700">
+              <Download size={12} /> Export
+            </button>
+            <button onClick={() => setSelectedIds(new Set())} className="text-xs text-blue-600 hover:text-blue-800">Clear</button>
+          </div>
+        )}
       </div>
 
       <DataTable
         columns={columns}
-        data={filtered}
+        data={paginated}
         keyExtractor={(r) => r.id}
       />
+
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-4 py-3">
+          <span className="text-xs text-slate-500">
+            Showing {(currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, filtered.length)} of {filtered.length}
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              disabled={currentPage <= 1}
+              onClick={() => setCurrentPage((p) => p - 1)}
+              className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <ChevronLeft size={14} /> Previous
+            </button>
+            <span className="text-sm text-slate-700">Page {currentPage} of {totalPages}</span>
+            <button
+              disabled={currentPage >= totalPages}
+              onClick={() => setCurrentPage((p) => p + 1)}
+              className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Next <ChevronRight size={14} />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

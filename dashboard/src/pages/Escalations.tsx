@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getEscalations, approveEscalation, rejectEscalation, type Escalation } from '../api/escalations';
 import { useAuth } from '../context/AuthContext';
+import EmptyState from '../components/EmptyState';
+import { AlertTriangle } from 'lucide-react';
 
 const ACTION_LABELS: Record<string, string> = {
   bind: 'Bind Policy',
@@ -104,7 +106,14 @@ const Escalations: React.FC = () => {
               </tr>
             ) : items.length === 0 ? (
               <tr>
-                <td colSpan={8} className="px-4 py-12 text-center text-slate-400">No escalations found</td>
+                <td colSpan={8}>
+                  <EmptyState
+                    icon={AlertTriangle}
+                    title="No escalations pending"
+                    description="Escalations appear when agent actions exceed authority limits or require human approval."
+                    action={{ label: "View Submissions", href: "/submissions" }}
+                  />
+                </td>
               </tr>
             ) : (
               items.map((item) => (

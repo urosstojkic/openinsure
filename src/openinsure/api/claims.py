@@ -125,6 +125,8 @@ class ClaimResponse(BaseModel):
     lob: str = "cyber"
     reported_date: str = ""
     metadata: dict[str, Any] = Field(default_factory=dict)
+    notification_required: bool = False
+    notification_sent_at: str | None = None
     created_at: str = ""
     updated_at: str = ""
 
@@ -315,6 +317,10 @@ async def create_claim(body: ClaimCreate) -> ClaimResponse:
         "created_at": now,
         "updated_at": now,
     }
+    # Data breach claims require regulatory notification within 72h
+    record["notification_required"] = body.claim_type in {ClaimType.DATA_BREACH, ClaimType.REGULATORY_PROCEEDING}
+    record["notification_sent_at"] = None
+
     await _repo.create(record)
     return ClaimResponse(**record)
 
@@ -531,11 +537,47 @@ async def set_reserve(
 
 
 @router.post("/{claim_id}/payment", response_model=PaymentResponse, status_code=201)
-async def record_payment(claim_id: str, body: PaymentRequest) -> PaymentResponse:
+async def record_payment(
+    claim_id: str, body: PaymentRequest, user: CurrentUser = Depends(get_current_user)
+) -> PaymentResponse:
     """Record a payment against a claim."""
     record = await _get_claim(claim_id)
     if record["status"] == ClaimStatus.CLOSED:
         raise HTTPException(status_code=409, detail="Cannot record payments on a closed claim")
+
+    # Payment authority check
+    engine = AuthorityEngine()
+    user_role = user.roles[0] if user.roles else "openinsure-claims-adjuster"
+    auth_result = engine.check_settlement_authority(Decimal(str(body.amount)), user_role)
+
+    if auth_result.decision == AuthorityDecision.ESCALATE:
+        from starlette.responses import JSONResponse
+
+        from openinsure.services.escalation import escalate
+
+        esc = await escalate(
+            action="payment",
+            entity_type="claim",
+            entity_id=claim_id,
+            requested_by=user.display_name,
+            requested_role=user_role,
+            amount=float(body.amount),
+            authority_result={
+                "required_role": auth_result.required_role,
+                "escalation_chain": auth_result.escalation_chain,
+                "reason": auth_result.reason,
+            },
+        )
+        return JSONResponse(  # type: ignore[return-value]
+            status_code=202,
+            content={
+                "status": "escalated",
+                "escalation_id": esc["id"],
+                "reason": auth_result.reason,
+                "required_role": auth_result.required_role,
+                "message": f"Action requires approval from {auth_result.required_role}",
+            },
+        )
 
     pid = str(uuid.uuid4())
     now = _now()
@@ -655,6 +697,60 @@ async def reopen_claim(claim_id: str, body: ReopenRequest) -> ReopenResponse:
         status=ClaimStatus.REOPENED,
         reason=body.reason,
         reopened_at=now,
+    )
+
+
+class NotifyRequest(BaseModel):
+    """Record a regulatory notification for a claim."""
+
+    authority: str = Field(..., min_length=1, description="Regulatory authority notified")
+    reference: str | None = Field(None, description="Notification reference number")
+    notes: str | None = None
+
+
+class NotifyResponse(BaseModel):
+    """Result of recording a regulatory notification."""
+
+    claim_id: str
+    notification_sent_at: str
+    authority: str
+    reference: str | None
+    notes: str | None
+
+
+@router.post("/{claim_id}/notify", response_model=NotifyResponse)
+async def record_notification(claim_id: str, body: NotifyRequest) -> NotifyResponse:
+    """Record that a regulatory notification has been sent for a claim."""
+    record = await _get_claim(claim_id)
+    if not record.get("notification_required", False):
+        raise HTTPException(status_code=409, detail="This claim does not require regulatory notification")
+    if record.get("notification_sent_at"):
+        raise HTTPException(status_code=409, detail="Notification has already been recorded for this claim")
+
+    now = _now()
+    record["notification_sent_at"] = now
+    record["updated_at"] = now
+    record.setdefault("metadata", {})["notification"] = {
+        "authority": body.authority,
+        "reference": body.reference,
+        "notes": body.notes,
+        "sent_at": now,
+    }
+    await _repo.update(
+        claim_id,
+        {
+            "notification_sent_at": now,
+            "metadata": record["metadata"],
+            "updated_at": now,
+        },
+    )
+
+    return NotifyResponse(
+        claim_id=claim_id,
+        notification_sent_at=now,
+        authority=body.authority,
+        reference=body.reference,
+        notes=body.notes,
     )
 
 

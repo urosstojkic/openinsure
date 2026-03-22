@@ -5,9 +5,11 @@ import TrafficLight from '../components/TrafficLight';
 import ConfidenceBar from '../components/ConfidenceBar';
 import ReasoningPanel from '../components/ReasoningPanel';
 import StatusBadge from '../components/StatusBadge';
+import EmptyState from '../components/EmptyState';
 import { getDecisions } from '../api/compliance';
 import { formatTimestamp } from '../utils/formatDate';
 import type { AgentDecision, AgentName, OversightLevel } from '../types';
+import { Bot } from 'lucide-react';
 
 const agentLabels: Record<AgentName, string> = {
   triage_agent: 'Triage Agent',
@@ -149,12 +151,21 @@ const AgentDecisions: React.FC = () => {
         <span className="text-xs text-slate-400">{filtered.length} decisions</span>
       </div>
 
-      <DataTable
-        columns={columns}
-        data={filtered}
-        keyExtractor={(r) => r.id}
-        onRowClick={(r) => setExpandedId(expandedId === r.id ? null : r.id)}
-      />
+      {filtered.length === 0 ? (
+        <EmptyState
+          icon={Bot}
+          title="No agent decisions yet"
+          description="Process a submission to generate agent decisions. Decisions will appear here with confidence scores and oversight levels."
+          action={{ label: "View Submissions", href: "/submissions" }}
+        />
+      ) : (
+        <DataTable
+          columns={columns}
+          data={filtered}
+          keyExtractor={(r) => r.id}
+          onRowClick={(r) => setExpandedId(expandedId === r.id ? null : r.id)}
+        />
+      )}
 
       {/* Expanded reasoning panel */}
       {expandedId && (() => {

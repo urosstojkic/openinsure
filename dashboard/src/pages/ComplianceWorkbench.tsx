@@ -3,8 +3,10 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine, Cell } from 'recharts';
 import StatusBadge from '../components/StatusBadge';
 import ConfidenceBar from '../components/ConfidenceBar';
+import EmptyState from '../components/EmptyState';
 import { getDecisionAudit, getOverrideLog, getBiasChartData, getComplianceWorkbenchData, getBiasReport } from '../api/workbench';
 import type { BiasAnalysis } from '../types';
+import { Server, ClipboardList, BarChart3, RotateCcw } from 'lucide-react';
 
 const ComplianceWorkbench: React.FC = () => {
   const { data: compliance } = useQuery({ queryKey: ['compliance-wb'], queryFn: getComplianceWorkbenchData });
@@ -56,7 +58,17 @@ const ComplianceWorkbench: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
-                {aiSystems.map((sys) => (
+                {aiSystems.length === 0 ? (
+                  <tr>
+                    <td colSpan={6}>
+                      <EmptyState
+                        icon={Server}
+                        title="No AI systems registered"
+                        description="AI systems will appear here once they are configured and deployed."
+                      />
+                    </td>
+                  </tr>
+                ) : aiSystems.map((sys) => (
                   <tr key={sys.id}>
                     <td className="px-3 py-2 font-medium text-slate-900">{sys.name}</td>
                     <td className="px-3 py-2 font-mono text-xs text-slate-500">v{sys.version}</td>
@@ -75,8 +87,7 @@ const ComplianceWorkbench: React.FC = () => {
                     </td>
                   </tr>
                 ))}
-              </tbody>
-            </table>
+              </tbody>            </table>
           </div>
         </div>
 
@@ -84,7 +95,14 @@ const ComplianceWorkbench: React.FC = () => {
         <div className="rounded-lg border border-slate-200 bg-white p-5">
           <h2 className="mb-4 text-sm font-semibold text-slate-700">Decision Audit — Random Sample</h2>
           <div className="space-y-3 max-h-[400px] overflow-y-auto">
-            {auditItems.map((item) => {
+            {auditItems.length === 0 ? (
+              <EmptyState
+                icon={ClipboardList}
+                title="No audit items"
+                description="Decision audit entries will appear once AI agents process submissions or claims."
+                action={{ label: "View Agent Decisions", href: "/agent-decisions" }}
+              />
+            ) : auditItems.map((item) => {
               const state = getAuditState(item.id);
               return (
                 <div key={item.id} className={`rounded-lg border p-3 ${state.flagged ? 'border-red-200 bg-red-50' : state.reviewed ? 'border-green-200 bg-green-50' : 'border-slate-200'}`}>
@@ -282,13 +300,27 @@ const ComplianceWorkbench: React.FC = () => {
           {biasReportLoading && (
             <p className="text-xs text-slate-400 text-center py-8">Loading bias report…</p>
           )}
+
+          {!biasReportLoading && !biasReport && !biasData && (
+            <EmptyState
+              icon={BarChart3}
+              title="No bias data available"
+              description="Generate a bias report to monitor fairness metrics across AI decisions."
+            />
+          )}
         </div>
 
         {/* ── Panel 4: Override Log ── */}
         <div className="rounded-lg border border-slate-200 bg-white p-5">
           <h2 className="mb-4 text-sm font-semibold text-slate-700">Override Log</h2>
           <div className="space-y-3 max-h-[400px] overflow-y-auto">
-            {overrides.map((ov) => (
+            {overrides.length === 0 ? (
+              <EmptyState
+                icon={RotateCcw}
+                title="No overrides recorded"
+                description="Override entries appear when a human overrides an AI agent recommendation."
+              />
+            ) : overrides.map((ov) => (
               <div key={ov.id} className="rounded-lg border border-slate-200 p-3">
                 <div className="flex items-center justify-between mb-1">
                   <span className="text-sm font-medium text-slate-900">{ov.who}</span>
