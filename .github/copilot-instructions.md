@@ -40,7 +40,17 @@ This project uses the **Squad framework** (`.squad/`) for all development. Every
 - Never use mock data in production (VITE_USE_MOCK must be false)
 - Never use Start-Job for Azure CLI (breaks auth — use sequential commands)
 
-## Mandatory Pre-Merge Checklist
+## Project Vision
+
+OpenInsure is an **enterprise-grade, open-source core insurance platform** — agent-native, built on Azure and Microsoft Foundry. This is not a prototype or demo. Every feature must be production-ready, every endpoint must handle real data, every UI must satisfy a VP of Underwriting using it daily.
+
+**There are no token limits.** Every Squad agent should take as much resources as needed to deliver the best output possible. No shortcuts, no "good enough," no stubs. Read the full context, understand the domain, implement completely, test thoroughly. Quality over speed, always.
+
+### North Star Documents
+- `docs/architecture/architecture-spec-v01.md` — Technical architecture vision
+- `docs/architecture/operating-model-v02.md` — Operating model with 16+ personas
+- `docs/architecture/data-model.md` — Entity relationships and state machines
+- `docs/architecture/process-flows.md` — Agent workflows and integration architecture
 
 Before ANY merge to main, ALL of these must pass:
 1. `pytest tests/ -v` — all green
