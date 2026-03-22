@@ -254,7 +254,7 @@ async def list_treaties(
         total = await _treaty_repo.count(filters)
         page = await _treaty_repo.list_all(filters=filters, skip=skip, limit=limit)
     except Exception:
-        logger.warning("reinsurance_treaties table unavailable, returning empty list")
+        logger.warning("reinsurance.treaties_unavailable", exc_info=True)
         return TreatyList(items=[], total=0, skip=skip, limit=limit)
     return TreatyList(
         items=[TreatyResponse(**r) for r in page],
@@ -344,7 +344,7 @@ async def list_cessions(
         total = await _cession_repo.count(filters or None)
         results = await _cession_repo.list_all(filters=filters or None, skip=skip, limit=limit)
     except Exception:
-        logger.warning("reinsurance_cessions table unavailable, returning empty list")
+        logger.warning("reinsurance.cessions_unavailable", exc_info=True)
         return CessionList(items=[], total=0, skip=skip, limit=limit)
     return CessionList(
         items=[CessionResponse(**c) for c in results],
@@ -402,7 +402,7 @@ async def list_recoveries(
         total = await _recovery_repo.count(filters or None)
         results = await _recovery_repo.list_all(filters=filters or None, skip=skip, limit=limit)
     except Exception:
-        logger.warning("reinsurance_recoveries table unavailable, returning empty list")
+        logger.warning("reinsurance.recoveries_unavailable", exc_info=True)
         return RecoveryList(items=[], total=0, skip=skip, limit=limit)
     return RecoveryList(
         items=[RecoveryResponse(**r) for r in results],

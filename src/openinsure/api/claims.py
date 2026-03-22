@@ -292,7 +292,7 @@ async def create_claim(body: ClaimCreate) -> ClaimResponse:
         if policy:
             policy_number = policy.get("policy_number", "")
     except Exception:
-        logger.debug("Failed to fetch policy details")
+        logger.warning("claims.policy_lookup_failed", policy_id=body.policy_id, exc_info=True)
 
     record: dict[str, Any] = {
         "id": cid,
@@ -480,7 +480,7 @@ async def set_reserve(
                 }
             )
         except Exception:
-            logger.debug("decision_recording_failed", claim_id=claim_id, exc_info=True)
+            logger.warning("claims.decision_recording_failed", claim_id=claim_id, exc_info=True)
 
     rid = str(uuid.uuid4())
     now = _now()

@@ -2,12 +2,14 @@
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from uuid import uuid4
 
 import structlog
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from openinsure.api.errors import make_error
 from openinsure.api.router import api_router
 from openinsure.config import get_settings
 
@@ -94,13 +96,32 @@ def create_app() -> FastAPI:
 
     @app.exception_handler(Exception)
     async def _global_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+        request_id = str(uuid4())
+        logger.error(
+            "unhandled_exception",
+            path=request.url.path,
+            error=str(exc),
+            error_type=type(exc).__name__,
+            request_id=request_id,
+        )
         if settings.debug:
             return JSONResponse(
                 status_code=500,
-                content={"detail": str(exc), "type": type(exc).__name__},
+                content=make_error(
+                    error=str(exc),
+                    code="INTERNAL_ERROR",
+                    request_id=request_id,
+                    reason=type(exc).__name__,
+                ),
             )
-        logger.error("unhandled_exception", path=request.url.path, error=str(exc))
-        return JSONResponse(status_code=500, content={"detail": "Internal server error"})
+        return JSONResponse(
+            status_code=500,
+            content=make_error(
+                error="Internal server error",
+                code="INTERNAL_ERROR",
+                request_id=request_id,
+            ),
+        )
 
     # Include API router
     app.include_router(api_router)

@@ -506,7 +506,7 @@ async def triage_submission(submission_id: str) -> TriageResult:
                     }
                 )
             except Exception:
-                _logger.debug("Decision recording failed for triage", exc_info=True)
+                _logger.warning("submissions.decision_recording_failed", decision_type="triage", submission_id=submission_id, exc_info=True)
 
             from openinsure.services.event_publisher import publish_domain_event
 
@@ -603,7 +603,7 @@ async def generate_quote(submission_id: str, user: CurrentUser = Depends(get_cur
                     }
                 )
             except Exception:
-                _logger.debug("Decision recording failed for quote", exc_info=True)
+                _logger.warning("submissions.decision_recording_failed", decision_type="quote", submission_id=submission_id, exc_info=True)
 
             from openinsure.services.event_publisher import publish_domain_event
 
@@ -841,7 +841,7 @@ async def bind_submission(submission_id: str, user: CurrentUser = Depends(get_cu
                 }
             )
         except Exception:
-            _logger.debug("Decision recording failed for bind", exc_info=True)
+            _logger.warning("submissions.decision_recording_failed", decision_type="bind", submission_id=submission_id, exc_info=True)
 
     await policy_repo.create(policy_data)
 

@@ -86,22 +86,42 @@ class FoundryAgentClient:
     async def invoke(self, agent_name: str, message: str) -> dict[str, Any]:
         """Invoke a Foundry agent and return parsed response.
 
-        Returns dict with at minimum: {"response": str, "source": "foundry"|"fallback"}
-        Also includes ``execution_time_ms`` for latency tracking.
+        Always returns a dict with these keys:
+        - ``response``: Parsed agent response (dict or str)
+        - ``source``: ``"foundry"`` or ``"fallback"``
+        - ``raw``: Raw text from the agent (empty string on fallback)
+        - ``execution_time_ms``: Latency in milliseconds (0 on fast-fail)
+        - ``error``: Error message if present, otherwise absent
+
+        The consistent shape prevents downstream code from hitting
+        KeyError on missing fields.
         """
+        base: dict[str, Any] = {
+            "response": "",
+            "source": "fallback",
+            "raw": "",
+            "execution_time_ms": 0,
+        }
+
         if not self.is_available:
-            return {"response": "", "source": "fallback", "error": "Foundry not available"}
+            return {**base, "error": "Foundry not available"}
 
         start = time.monotonic()
         try:
             if self._openai is None:
-                return {"response": "", "source": "fallback", "error": "OpenAI client not initialized"}
+                return {**base, "error": "OpenAI client not initialized"}
             response = self._openai.responses.create(
                 input=[{"role": "user", "content": message}],
                 extra_body={"agent_reference": {"name": agent_name, "type": "agent_reference"}},
             )
             text = response.output_text
             elapsed_ms = int((time.monotonic() - start) * 1000)
+
+            result: dict[str, Any] = {
+                "source": "foundry",
+                "raw": text,
+                "execution_time_ms": elapsed_ms,
+            }
 
             # Try to parse as JSON
             try:
@@ -111,29 +131,16 @@ class FoundryAgentClient:
                     clean = clean.split("\n", 1)[1] if "\n" in clean else clean[3:]
                     clean = clean.rsplit("```", 1)[0]
                 parsed = json.loads(clean)
-                return {
-                    "response": parsed,
-                    "source": "foundry",
-                    "raw": text,
-                    "execution_time_ms": elapsed_ms,
-                }
+                result["response"] = parsed
             except (json.JSONDecodeError, ValueError):
-                return {
-                    "response": text,
-                    "source": "foundry",
-                    "raw": text,
-                    "execution_time_ms": elapsed_ms,
-                }
+                result["response"] = text
+
+            return result
 
         except Exception as e:
             elapsed_ms = int((time.monotonic() - start) * 1000)
             logger.exception("foundry_client.invoke_failed", agent=agent_name, error=str(e))
-            return {
-                "response": "",
-                "source": "fallback",
-                "error": str(e),
-                "execution_time_ms": elapsed_ms,
-            }
+            return {**base, "execution_time_ms": elapsed_ms, "error": str(e)}
 
 
 # Singleton
