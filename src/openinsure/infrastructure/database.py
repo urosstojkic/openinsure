@@ -11,6 +11,7 @@ from __future__ import annotations
 import asyncio
 import functools
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING, Any
 
 import pyodbc
@@ -18,7 +19,7 @@ import structlog
 from azure.identity import DefaultAzureCredential
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import AsyncIterator, Sequence
 
 logger = structlog.get_logger()
 
@@ -33,6 +34,36 @@ def _detect_odbc_driver() -> str:
         if preferred in drivers:
             return preferred
     return "ODBC Driver 18 for SQL Server"
+
+
+class TransactionContext:
+    """Provides query execution methods within a single database transaction."""
+
+    def __init__(self, conn: pyodbc.Connection) -> None:
+        self._conn = conn
+
+    def execute_query(self, query: str, params: Sequence[Any] | None = None) -> int:
+        """Execute a write query within the transaction. Synchronous — called inside executor."""
+        cursor = self._conn.cursor()
+        cursor.execute(query, params or [])
+        return cursor.rowcount
+
+    def fetch_one(self, query: str, params: Sequence[Any] | None = None) -> dict[str, Any] | None:
+        """Fetch a single row within the transaction. Synchronous."""
+        cursor = self._conn.cursor()
+        cursor.execute(query, params or [])
+        row = cursor.fetchone()
+        if row is None:
+            return None
+        columns = [desc[0] for desc in cursor.description]
+        return dict(zip(columns, row, strict=False))
+
+    def fetch_all(self, query: str, params: Sequence[Any] | None = None) -> list[dict[str, Any]]:
+        """Fetch all rows within the transaction. Synchronous."""
+        cursor = self._conn.cursor()
+        cursor.execute(query, params or [])
+        columns = [desc[0] for desc in cursor.description]
+        return [dict(zip(columns, row, strict=False)) for row in cursor.fetchall()]
 
 
 class DatabaseAdapter:
@@ -238,6 +269,35 @@ class DatabaseAdapter:
                 conn.close()
 
         return await self._run_in_executor(_check)
+
+    @asynccontextmanager
+    async def transaction(self) -> AsyncIterator[TransactionContext]:
+        """Async context manager that wraps multiple operations in a single transaction.
+
+        Usage::
+
+            async with db.transaction() as txn:
+                txn.execute_query("INSERT INTO ...", [...])
+                txn.execute_query("UPDATE ...", [...])
+            # auto-commits on exit; rolls back on exception
+        """
+
+        def _begin() -> tuple[pyodbc.Connection, TransactionContext]:
+            conn = self._connect()
+            return conn, TransactionContext(conn)
+
+        conn, txn = await self._run_in_executor(_begin)
+
+        try:
+            yield txn
+            await self._run_in_executor(conn.commit)
+            logger.debug("database.transaction.committed")
+        except Exception:
+            await self._run_in_executor(conn.rollback)
+            logger.warning("database.transaction.rolled_back", exc_info=True)
+            raise
+        finally:
+            await self._run_in_executor(conn.close)
 
     async def close(self) -> None:
         """Shut down the thread-pool executor."""
