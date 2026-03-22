@@ -20,9 +20,15 @@ import {
   Calculator,
   Repeat2,
   Banknote,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Menu,
+  X,
 } from 'lucide-react';
 import { useAuth, NAV_ACCESS, type UserRole } from '../context/AuthContext';
 import { useMockMode } from '../context/MockContext';
+
+const SIDEBAR_COLLAPSED_KEY = 'openinsure_sidebar_collapsed';
 
 const navItems = [
   { to: '/',            label: 'Dashboard',        icon: LayoutDashboard },
@@ -81,12 +87,13 @@ const NavSection: React.FC<{
   items: typeof navItems;
   role: UserRole;
   sectionLabel?: string;
-}> = ({ items, role, sectionLabel }) => {
+  collapsed?: boolean;
+}> = ({ items, role, sectionLabel, collapsed }) => {
   const visible = filterItems(items, role);
   if (visible.length === 0) return null;
   return (
     <>
-      {sectionLabel && (
+      {sectionLabel && !collapsed && (
         <div className="pt-5 pb-1.5 px-3">
           <div className="flex items-center gap-2">
             <span className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">{sectionLabel}</span>
@@ -94,21 +101,27 @@ const NavSection: React.FC<{
           </div>
         </div>
       )}
+      {sectionLabel && collapsed && (
+        <div className="pt-4 pb-1 px-2">
+          <div className="h-px bg-slate-200/70" />
+        </div>
+      )}
       {visible.map(({ to, label, icon: Icon }) => (
         <NavLink
           key={to}
           to={to}
           end={to === '/'}
+          title={collapsed ? label : undefined}
           className={({ isActive }) =>
-            `group flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium transition-all duration-150 ${
+            `group flex items-center ${collapsed ? 'justify-center' : 'gap-2.5'} rounded-xl ${collapsed ? 'px-2 py-2' : 'px-3 py-2'} text-sm font-medium transition-all duration-150 ${
               isActive
-                ? 'bg-indigo-50 text-indigo-700 border-l-[3px] border-indigo-500 pl-[9px]'
+                ? `bg-indigo-50 text-indigo-700 ${collapsed ? '' : 'border-l-[3px] border-indigo-500 pl-[9px]'}`
                 : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900 hover:scale-[1.01]'
             }`
           }
         >
           <Icon size={18} className="shrink-0" />
-          {label}
+          {!collapsed && label}
         </NavLink>
       ))}
     </>
@@ -123,6 +136,24 @@ const Layout: React.FC = () => {
 
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+
+  // Sidebar collapse state (persisted in localStorage)
+  const [collapsed, setCollapsed] = useState(() => {
+    try { return localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === 'true'; }
+    catch { return false; }
+  });
+  // Mobile sidebar open state
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  const toggleCollapsed = () => {
+    const next = !collapsed;
+    setCollapsed(next);
+    try { localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(next)); }
+    catch { /* localStorage unavailable */ }
+  };
+
+  // Close mobile sidebar on route change
+  useEffect(() => { setMobileOpen(false); }, [location.pathname]);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -207,38 +238,71 @@ const Layout: React.FC = () => {
   return (
     <div className="flex h-screen flex-col overflow-hidden" style={{ background: 'var(--color-surface)' }}>
       <div className="flex flex-1 overflow-hidden">
+        {/* ── Mobile overlay ── */}
+        {mobileOpen && (
+          <div
+            className="fixed inset-0 z-30 bg-black/30 md:hidden"
+            onClick={() => setMobileOpen(false)}
+          />
+        )}
+
         {/* ── Sidebar ── */}
-        <aside className="flex w-60 shrink-0 flex-col border-r border-slate-200/60 bg-gradient-to-b from-white to-slate-50">
+        <aside className={`
+          ${collapsed ? 'w-16' : 'w-60'} shrink-0 flex-col border-r border-slate-200/60 bg-gradient-to-b from-white to-slate-50 transition-all duration-200
+          fixed inset-y-0 left-0 z-40 md:static
+          ${mobileOpen ? 'flex' : 'hidden md:flex'}
+        `}>
           {/* Logo */}
-          <div className="flex h-16 items-center gap-2.5 border-b border-slate-200/60 px-4">
+          <div className={`flex h-16 items-center ${collapsed ? 'justify-center' : 'gap-2.5'} border-b border-slate-200/60 px-4`}>
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-indigo-700 text-sm font-bold text-white shadow-lg shadow-indigo-500/20">
               OI
             </div>
-            <div className="flex flex-col">
-              <span className="text-base font-bold tracking-tight text-slate-900">OpenInsure</span>
-              <span className="text-[10px] text-slate-400">AI Oversight Platform</span>
-            </div>
+            {!collapsed && (
+              <div className="flex flex-col">
+                <span className="text-base font-bold tracking-tight text-slate-900">OpenInsure</span>
+                <span className="text-[10px] text-slate-400">AI Oversight Platform</span>
+              </div>
+            )}
+            {/* Close button on mobile */}
+            <button
+              onClick={() => setMobileOpen(false)}
+              className="ml-auto rounded-lg p-1 text-slate-400 hover:bg-slate-100 md:hidden"
+            >
+              <X size={18} />
+            </button>
           </div>
 
           {/* Nav */}
           <nav className="flex-1 space-y-0.5 overflow-y-auto px-2 py-3">
-            <NavSection items={navItems} role={user.role} />
-            <NavSection items={workbenchItems} role={user.role} sectionLabel="Workbenches" />
-            <NavSection items={extraItems} role={user.role} sectionLabel="Views" />
+            <NavSection items={navItems} role={user.role} collapsed={collapsed} />
+            <NavSection items={workbenchItems} role={user.role} sectionLabel="Workbenches" collapsed={collapsed} />
+            <NavSection items={extraItems} role={user.role} sectionLabel="Views" collapsed={collapsed} />
           </nav>
 
           {/* Footer */}
           <div className="border-t border-slate-200/60 px-4 py-3">
+            {!collapsed && (
+              <>
+                <button
+                  onClick={toggleMock}
+                  className="flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-[11px] text-slate-400 hover:bg-slate-100 transition-colors"
+                >
+                  <span>Demo Mode</span>
+                  <span className={`relative inline-flex h-4 w-7 items-center rounded-full transition-colors ${useMock ? 'bg-indigo-500' : 'bg-slate-300'}`}>
+                    <span className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${useMock ? 'translate-x-3.5' : 'translate-x-0.5'}`} />
+                  </span>
+                </button>
+                <p className="mt-1.5 px-2 text-[10px] text-slate-400">v1.0.0 · AI Oversight Platform</p>
+              </>
+            )}
+            {/* Collapse toggle (hidden on mobile) */}
             <button
-              onClick={toggleMock}
-              className="flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-[11px] text-slate-400 hover:bg-slate-100 transition-colors"
+              onClick={toggleCollapsed}
+              className="mt-1 hidden w-full items-center justify-center rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 transition-colors md:flex"
+              title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
             >
-              <span>Demo Mode</span>
-              <span className={`relative inline-flex h-4 w-7 items-center rounded-full transition-colors ${useMock ? 'bg-indigo-500' : 'bg-slate-300'}`}>
-                <span className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${useMock ? 'translate-x-3.5' : 'translate-x-0.5'}`} />
-              </span>
+              {collapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
             </button>
-            <p className="mt-1.5 px-2 text-[10px] text-slate-400">v1.0.0 · AI Oversight Platform</p>
           </div>
         </aside>
 
@@ -246,8 +310,14 @@ const Layout: React.FC = () => {
         <div className="flex flex-1 flex-col overflow-hidden">
           {/* Top bar — frosted glass */}
           <header className="sticky top-0 z-20 flex h-14 items-center justify-between border-b border-slate-200/60 bg-white/80 px-6 backdrop-blur-sm">
-            {/* Breadcrumb */}
+            {/* Mobile hamburger + Breadcrumb */}
             <div className="flex items-center gap-2 text-sm">
+              <button
+                onClick={() => setMobileOpen(true)}
+                className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 md:hidden"
+              >
+                <Menu size={20} />
+              </button>
               <span className="text-slate-400">OpenInsure</span>
               <span className="text-slate-300">/</span>
               <span className="font-medium text-slate-700">{getBreadcrumb(location.pathname)}</span>
