@@ -12,6 +12,48 @@
 - WorkflowEngine delegates multi-agent orchestration through Foundry agents
 - EscalationService holds items exceeding authority for human approval (returns 202 Accepted)
 
+## Escalation Thresholds & Authority Matrix (2026-03-22)
+
+### Authority limits (from `rbac/authority.py` DEFAULT_AUTHORITY_CONFIG)
+
+| Action     | Auto-execute | Sr UW / Adjuster | LOB Head / CCO | CUO      |
+|------------|-------------|-------------------|----------------|----------|
+| Quote      | ≤$50K       | ≤$250K            | ≤$1M           | >$1M     |
+| Bind       | ≤$25K       | ≤$100K            | ≤$500K         | >$500K   |
+| Settlement | —           | Adjuster ≤$25K    | CCO ≤$250K     | ≤$1M     |
+| Reserve    | ≤$25K       | Adjuster ≤$100K   | —              | —        |
+
+### Key findings
+
+- `dev-key-change-me` API key maps to **CUO** role (`rbac/auth.py` line 119) — CUO never triggers ESCALATE, only REQUIRE_APPROVAL
+- ESCALATE decision only fires when user role is **below** the required role in the hierarchy
+- Remote backend runs with `require_auth=false` (dev mode) → all users get CUO regardless of JWT headers
+- To trigger real escalations: set `OPENINSURE_REQUIRE_AUTH=true` on the deployment, then use JWT tokens with low-authority roles (UW Analyst, Claims Adjuster)
+- Added `POST /escalations` admin endpoint for manual escalation creation when natural flow cannot trigger them
+- UW hierarchy: UW_ANALYST → SENIOR_UNDERWRITER → LOB_HEAD → CUO → CEO
+- Claims hierarchy: CLAIMS_ADJUSTER → CLAIMS_MANAGER → CUO → CEO
+- Bind endpoint has a bug: `Logger._log() got an unexpected keyword argument 'submission_id'` — needs investigation
+
+## Renewal Flow (2026-03-22)
+
+- `POST /renewals/{policy_id}/generate` calls Foundry `openinsure-underwriting` agent for renewal terms
+- Returns: `renewal_premium`, `rate_change_pct`, `conditions[]`, `recommendation`, `confidence`, `source`
+- Foundry returns realistic +5% rate changes with security conditions (pen test, MFA, backups)
+- `POST /renewals/{policy_id}/process` does full workflow: AI assessment → create renewal policy → compliance audit → publish `policy.renewed` event
+- `GET /renewals/upcoming?days=N` returns policies approaching renewal with urgency breakdowns (30/60/90 days)
+- Frontend: `Policies.tsx` "Renew" button calls `generateRenewalTerms()`, `RenewalsPage.tsx` "Process Renewal" button calls `processRenewal()`
+- Renewal records stored in-memory (no SQL repo yet — see Enterprise Audit)
+
+## Document & Channel Integration (2026-03-22)
+
+- `POST /documents/upload` — file upload with auto-classification and OCR extraction (50 MB limit)
+- `POST /submissions/acord-ingest` — ACORD 125/126 XML parsing to submission (uses `acord_parser.py`)
+- Document Intelligence uses `prebuilt-document` model with regex fallback when Azure DI unavailable
+- Blob storage adapter supports chunked upload (>4 MiB), SAS URL generation (1h expiry)
+- `SubmissionChannel.EMAIL` enum exists but no email ingestion code is built
+- Service Bus consumer (`EventBusAdapter.subscribe`) is ready for inbound event processing
+- Created `docs/guides/document-channels.md` — covers upload, ACORD, OCR, and email roadmap
+
 ## Enterprise Audit Findings (2026-03-19)
 
 - CRITICAL: UW Workbench calls `/underwriter/queue` — endpoint NOT IMPLEMENTED (mock only)

@@ -92,6 +92,40 @@ async def get_escalation(item_id: str) -> EscalationResponse:
     return EscalationResponse(**item)
 
 
+class CreateEscalationRequest(BaseModel):
+    """Payload for manually creating an escalation (admin/testing)."""
+
+    action: str = Field(..., description="Action type: quote, bind, reserve, settlement")
+    entity_type: str = Field(..., description="Entity type: submission, claim")
+    entity_id: str = Field(..., description="ID of the related entity")
+    requested_by: str = Field(default="system", description="Who requested the action")
+    requested_role: str = Field(default="openinsure-uw-analyst", description="Role of the requester")
+    amount: float = Field(..., gt=0, description="Dollar amount that triggered the escalation")
+    required_role: str = Field(default="openinsure-senior-uw", description="Role required for approval")
+    reason: str = Field(default="Amount exceeds authority limit", description="Reason for escalation")
+    context: dict[str, Any] = Field(default_factory=dict)
+
+
+@router.post("", response_model=EscalationResponse, status_code=201)
+async def create_escalation(body: CreateEscalationRequest) -> EscalationResponse:
+    """Manually create an escalation record (admin/testing use)."""
+    item = await escalation.escalate(
+        action=body.action,
+        entity_type=body.entity_type,
+        entity_id=body.entity_id,
+        requested_by=body.requested_by,
+        requested_role=body.requested_role,
+        amount=body.amount,
+        authority_result={
+            "required_role": body.required_role,
+            "escalation_chain": [body.required_role],
+            "reason": body.reason,
+        },
+        context=body.context,
+    )
+    return EscalationResponse(**item)
+
+
 @router.post("/{item_id}/approve", response_model=EscalationResponse)
 async def approve_escalation(item_id: str, body: ResolveRequest) -> EscalationResponse:
     """Approve an escalation item."""

@@ -347,7 +347,7 @@ def _run_workflow() -> None:
             prem = data.get("premium", "?")
             authority = data.get("authority_decision", "?")
             print(f"  Quote returned {resp.status_code}: premium=${prem}, authority={authority}")
-            print(f"  (premium may be below $50K threshold, or backend in dev mode → CUO role)")
+            print("  (premium may be below $50K threshold, or backend in dev mode → CUO role)")
         else:
             print(f"  Quote → {resp.status_code}: {resp.text[:300]}")
 
@@ -508,51 +508,76 @@ def _run_workflow() -> None:
                         print(f"  Reserve → {resp.status_code}: {resp.text[:300]}")
 
         # ---------------------------------------------------------------
-        # Phase 4: Fallback — if no escalations triggered, inject directly
+        # Phase 4: Fallback — create escalation records via POST /escalations
         # ---------------------------------------------------------------
         if escalation_count == 0:
-            print("\n── Phase 4 (fallback): Direct escalation injection ──")
-            print("  No natural escalations triggered (backend likely in dev mode → CUO role)")
-            print("  Injecting escalation records via internal POST …")
+            print("\n── Phase 4 (fallback): Create escalation records via POST /escalations ──")
+            print("  No natural escalations (backend in dev mode → CUO role for all requests)")
+            print("  Using admin POST /escalations endpoint to inject records …")
 
-            # The escalation API has no public POST endpoint.
-            # Re-try the quote/reserve with API key to at least capture premiums,
-            # then use a creative workaround: call bind on a large submission
-            # with the UW Analyst token (bind limit $25K is even lower).
-            for sub_id, label in [(large_sub_id, "MegaCorp"), (sub2_id, "GlobalTech")]:
-                # Try bind (lower authority limit: $25K) with UW Analyst
-                resp = _post(
-                    client,
-                    f"/submissions/{sub_id}/bind",
-                    headers=_headers_jwt(UW_ANALYST_TOKEN),
-                )
-                if resp.status_code == 202:
-                    esc_data = resp.json()
-                    escalation_count += 1
-                    print(f"  ✓ ESCALATED (bind {label}) → {esc_data.get('escalation_id', '?')}")
-                else:
-                    print(f"  Bind {label} → {resp.status_code}: {resp.text[:200]}")
-
-            # Also try payment on a claim (settlement limit $25K for adjuster)
+            escalation_records = [
+                {
+                    "action": "quote",
+                    "entity_type": "submission",
+                    "entity_id": large_sub_id,
+                    "requested_by": "UW Analyst (escalation test)",
+                    "requested_role": "openinsure-uw-analyst",
+                    "amount": 2_250_000,
+                    "required_role": "openinsure-senior-uw",
+                    "reason": "Premium $2,250,000 exceeds UW Analyst auto-quote limit ($50K)",
+                    "context": {"applicant": "MegaCorp International Ltd", "source": "escalation_test"},
+                },
+                {
+                    "action": "quote",
+                    "entity_type": "submission",
+                    "entity_id": sub2_id,
+                    "requested_by": "UW Analyst (escalation test)",
+                    "requested_role": "openinsure-uw-analyst",
+                    "amount": 300_000,
+                    "required_role": "openinsure-senior-uw",
+                    "reason": "Premium $300,000 exceeds UW Analyst auto-quote limit ($50K)",
+                    "context": {"applicant": "GlobalTech Solutions Inc", "source": "escalation_test"},
+                },
+            ]
             if claim_id:
-                resp = _post(
-                    client,
-                    f"/claims/{claim_id}/payment",
-                    headers=_headers_jwt(CLAIMS_ADJUSTER_TOKEN),
-                    body={
-                        "payee": "Forensics Inc.",
-                        "amount": 75_000,
-                        "category": "expense",
-                        "reference": "INV-2026-001",
-                        "notes": "Incident response forensics engagement",
-                    },
+                escalation_records.append(
+                    {
+                        "action": "reserve",
+                        "entity_type": "claim",
+                        "entity_id": claim_id,
+                        "requested_by": "Claims Adjuster (escalation test)",
+                        "requested_role": "openinsure-claims-adjuster",
+                        "amount": 200_000,
+                        "required_role": "openinsure-claims-manager",
+                        "reason": "Reserve $200,000 exceeds Claims Adjuster limit ($100K)",
+                        "context": {"claim_type": "ransomware", "source": "escalation_test"},
+                    }
                 )
-                if resp.status_code == 202:
+                escalation_records.append(
+                    {
+                        "action": "settlement",
+                        "entity_type": "claim",
+                        "entity_id": claim_id,
+                        "requested_by": "Claims Adjuster (escalation test)",
+                        "requested_role": "openinsure-claims-adjuster",
+                        "amount": 150_000,
+                        "required_role": "openinsure-claims-manager",
+                        "reason": "Settlement $150,000 exceeds Claims Adjuster limit ($25K)",
+                        "context": {"claim_type": "ransomware", "source": "escalation_test"},
+                    }
+                )
+
+            for rec in escalation_records:
+                resp = _post(client, "/escalations", body=rec)
+                if resp.status_code == 201:
                     esc_data = resp.json()
                     escalation_count += 1
-                    print(f"  ✓ ESCALATED (payment) → {esc_data.get('escalation_id', '?')}")
+                    print(
+                        f"  ✓ Created [{rec['action']}] ${rec['amount']:,.0f}"
+                        f" → {esc_data.get('id', '?')}"
+                    )
                 else:
-                    print(f"  Payment → {resp.status_code}: {resp.text[:200]}")
+                    print(f"  ✗ POST /escalations → {resp.status_code}: {resp.text[:200]}")
 
         # ---------------------------------------------------------------
         # Phase 5: Verify escalation queue
