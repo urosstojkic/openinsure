@@ -5,13 +5,14 @@ import TrafficLight from '../components/TrafficLight';
 import ConfidenceBar from '../components/ConfidenceBar';
 import TimelineEvent from '../components/TimelineEvent';
 import { getUnderwriterQueue } from '../api/workbench';
+import { formatDate } from '../utils/formatDate';
 import type { UnderwriterQueueItem, LOB } from '../types';
 
-const priorityColor: Record<string, string> = {
-  urgent: 'bg-red-500',
-  high: 'bg-orange-500',
-  medium: 'bg-amber-500',
-  low: 'bg-green-500',
+const priorityVariant: Record<string, 'red' | 'orange' | 'yellow' | 'green'> = {
+  urgent: 'red',
+  high: 'orange',
+  medium: 'yellow',
+  low: 'green',
 };
 
 const lobLabels: Record<LOB, string> = {
@@ -105,8 +106,8 @@ const UnderwriterWorkbench: React.FC = () => {
                   className={`cursor-pointer transition-colors ${selectedId === item.id ? 'bg-blue-50' : 'hover:bg-slate-50'}`}
                   onClick={() => handleSelect(item)}
                 >
-                  <td className="px-3 py-2"><span className={`inline-block h-3 w-3 rounded-full ${priorityColor[item.priority]}`} title={item.priority} /></td>
-                  <td className="px-3 py-2 font-mono text-xs text-slate-700">{item.id}</td>
+                  <td className="px-3 py-2"><StatusBadge label={item.priority} variant={priorityVariant[item.priority] ?? 'yellow'} /></td>
+                  <td className="px-3 py-2 font-mono text-xs text-slate-700 max-w-[120px] truncate" title={item.id}>{item.submission_number || item.id.substring(0, 8) + '…'}</td>
                   <td className="px-3 py-2 text-xs text-slate-900">{item.applicant_name}</td>
                   <td className="px-3 py-2 text-xs text-slate-600">{lobLabels[item.lob]}</td>
                   <td className="px-3 py-2">
@@ -116,7 +117,7 @@ const UnderwriterWorkbench: React.FC = () => {
                   </td>
                   <td className="px-3 py-2 text-xs text-slate-600">{item.confidence ? `${Math.round(item.confidence * 100)}%` : '—'}</td>
                   <td className="px-3 py-2 text-xs text-slate-600 max-w-[120px] truncate">{item.agent_recommendation}</td>
-                  <td className="px-3 py-2 text-xs text-slate-500">{item.due_date ? new Date(item.due_date).toLocaleDateString() : new Date(item.received_date).toLocaleDateString()}</td>
+                  <td className="px-3 py-2 text-xs text-slate-500">{formatDate(item.due_date || item.received_date)}</td>
                 </tr>
               ))}
             </tbody>
@@ -137,7 +138,7 @@ const UnderwriterWorkbench: React.FC = () => {
               <div>
                 <h2 className="text-lg font-bold text-slate-900">{selected.company_name}</h2>
                 <p className="text-xs text-slate-500">
-                  {selected.applicant_name} · {lobLabels[selected.lob]} · Received {new Date(selected.received_date).toLocaleDateString()}
+                  {selected.applicant_name} · {lobLabels[selected.lob]} · Received {formatDate(selected.received_date)}
                 </p>
               </div>
               <TrafficLight confidence={selected.confidence} humanOversight={selected.confidence < 0.5 ? 'required' : selected.confidence < 0.8 ? 'recommended' : 'none'} />

@@ -258,6 +258,7 @@ export interface RecommendedTerms {
 
 export interface UnderwriterQueueItem {
   id: string;
+  submission_number?: string;
   applicant_name: string;
   company_name: string;
   lob: LOB;

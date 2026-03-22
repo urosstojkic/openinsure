@@ -40,6 +40,7 @@ function mapToUWQueueItem(item: any): UnderwriterQueueItem {
   const rd = item.risk_data || {};
   return {
     id: item.id,
+    submission_number: item.submission_number || '',
     applicant_name: item.applicant_name || '',
     company_name: item.company_name || item.applicant_name || '',
     lob: item.lob || item.line_of_business || 'cyber',
