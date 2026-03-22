@@ -3,7 +3,7 @@ import { ChevronUp, ChevronDown } from 'lucide-react';
 
 export interface Column<T> {
   key: string;
-  header: string;
+  header: React.ReactNode;
   render: (row: T) => React.ReactNode;
   sortable?: boolean;
   sortValue?: (row: T) => string | number;

@@ -141,6 +141,7 @@ class SubmissionStatus(StrEnum):
     RECEIVED = "received"
     TRIAGING = "triaging"
     UNDERWRITING = "underwriting"
+    REFERRED = "referred"
     QUOTED = "quoted"
     BOUND = "bound"
     DECLINED = "declined"
@@ -230,6 +231,9 @@ class SubmissionResponse(BaseModel):
     priority: str = "medium"
     assigned_to: str | None = None
     decision_history: list[dict[str, Any]] = Field(default_factory=list)
+    subjectivities: list[dict[str, Any]] = Field(default_factory=list)
+    referral_reason: str | None = None
+    declination_reason: str | None = None
 
 
 class SubmissionList(BaseModel):
@@ -943,6 +947,140 @@ async def upload_documents(
 
     record["updated_at"] = _now()
     return DocumentUploadResponse(submission_id=submission_id, document_ids=doc_ids)
+
+
+class ReferRequest(BaseModel):
+    """Request to refer a submission for senior review."""
+
+    referral_reason: str = Field(..., min_length=1)
+
+
+class ReferResponse(BaseModel):
+    """Result of referring a submission."""
+
+    submission_id: str
+    status: SubmissionStatus
+    referral_reason: str
+    referred_at: str
+
+
+@router.post("/{submission_id}/refer", response_model=ReferResponse)
+async def refer_submission(submission_id: str, body: ReferRequest) -> ReferResponse:
+    """Refer a submission for senior underwriter review."""
+    record = await _get_submission(submission_id)
+    if record["status"] != SubmissionStatus.UNDERWRITING:
+        raise HTTPException(status_code=409, detail="Only submissions in underwriting can be referred")
+
+    now = _now()
+    record["status"] = SubmissionStatus.REFERRED
+    record["referral_reason"] = body.referral_reason
+    record["updated_at"] = now
+    await _repo.update(
+        submission_id,
+        {"status": "referred", "referral_reason": body.referral_reason, "updated_at": now},
+    )
+
+    return ReferResponse(
+        submission_id=submission_id,
+        status=SubmissionStatus.REFERRED,
+        referral_reason=body.referral_reason,
+        referred_at=now,
+    )
+
+
+class DeclineRequest(BaseModel):
+    """Request to decline a submission."""
+
+    declination_reason: str = Field(..., min_length=1)
+
+
+class DeclineResponse(BaseModel):
+    """Result of declining a submission."""
+
+    submission_id: str
+    status: SubmissionStatus
+    declination_reason: str
+    declined_at: str
+
+
+@router.post("/{submission_id}/decline", response_model=DeclineResponse)
+async def decline_submission(submission_id: str, body: DeclineRequest) -> DeclineResponse:
+    """Decline a submission with a required reason."""
+    from openinsure.domain.state_machine import InvalidTransitionError, validate_submission_transition
+
+    record = await _get_submission(submission_id)
+    current_status = record["status"]
+    try:
+        validate_submission_transition(current_status, "declined")
+    except InvalidTransitionError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    now = _now()
+    record["status"] = SubmissionStatus.DECLINED
+    record["declination_reason"] = body.declination_reason
+    record["updated_at"] = now
+    await _repo.update(
+        submission_id,
+        {"status": "declined", "declination_reason": body.declination_reason, "updated_at": now},
+    )
+
+    return DeclineResponse(
+        submission_id=submission_id,
+        status=SubmissionStatus.DECLINED,
+        declination_reason=body.declination_reason,
+        declined_at=now,
+    )
+
+
+class SubjectivityRequest(BaseModel):
+    """Add a subjectivity (condition to clear before binding)."""
+
+    description: str = Field(..., min_length=1)
+    due_date: str | None = Field(None, description="ISO-8601 date by which the subjectivity must be cleared")
+
+
+class SubjectivityResponse(BaseModel):
+    """Result of adding a subjectivity."""
+
+    submission_id: str
+    subjectivity_id: str
+    description: str
+    status: str
+    due_date: str | None
+    created_at: str
+
+
+@router.post("/{submission_id}/subjectivities", response_model=SubjectivityResponse, status_code=201)
+async def add_subjectivity(submission_id: str, body: SubjectivityRequest) -> SubjectivityResponse:
+    """Add a subjectivity to a submission."""
+    record = await _get_submission(submission_id)
+    if record["status"] in {SubmissionStatus.BOUND, SubmissionStatus.DECLINED, SubmissionStatus.EXPIRED}:
+        raise HTTPException(status_code=409, detail="Cannot add subjectivities to a terminal submission")
+
+    sid = str(uuid.uuid4())
+    now = _now()
+    subjectivity = {
+        "subjectivity_id": sid,
+        "description": body.description,
+        "status": "open",
+        "due_date": body.due_date,
+        "created_at": now,
+    }
+
+    if "subjectivities" not in record:
+        record["subjectivities"] = []
+    record["subjectivities"].append(subjectivity)
+    record["updated_at"] = now
+    await _repo.update(submission_id, {"subjectivities": record["subjectivities"], "updated_at": now})
+
+    return SubjectivityResponse(
+        submission_id=submission_id,
+        subjectivity_id=sid,
+        description=body.description,
+        status="open",
+        due_date=body.due_date,
+        created_at=now,
+    )
 
 
 @router.post("/{submission_id}/process")

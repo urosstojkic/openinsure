@@ -34,7 +34,8 @@ class DomainInvariantError(ValueError):
 SUBMISSION_TRANSITIONS: dict[str, set[str]] = {
     "received": {"triaging", "underwriting", "declined"},
     "triaging": {"underwriting", "declined"},
-    "underwriting": {"quoted", "declined"},
+    "underwriting": {"quoted", "declined", "referred"},
+    "referred": {"quoted", "declined"},
     "quoted": {"bound", "declined", "expired"},
     "bound": set(),  # terminal
     "declined": set(),  # terminal

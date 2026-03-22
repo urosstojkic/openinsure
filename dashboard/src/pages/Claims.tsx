@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Plus, Play, Eye, Loader2, DollarSign, XCircle } from 'lucide-react';
+import { Plus, Play, Eye, Loader2, DollarSign, XCircle, Search, ChevronLeft, ChevronRight, Download } from 'lucide-react';
 import DataTable, { type Column } from '../components/DataTable';
 import StatusBadge from '../components/StatusBadge';
 import { ToastContainer } from '../components/Toast';
@@ -35,6 +35,9 @@ const Claims: React.FC = () => {
   const { data: claims = [], isLoading, refetch } = useQuery({ queryKey: ['claims'], queryFn: getClaims });
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [severityFilter, setSeverityFilter] = useState<string>('all');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const { toasts, addToast, dismissToast } = useToast();
@@ -69,11 +72,64 @@ const Claims: React.FC = () => {
     let list = claims;
     if (statusFilter !== 'all') list = list.filter((c) => c.status === statusFilter);
     if (severityFilter !== 'all') list = list.filter((c) => c.severity === severityFilter);
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      list = list.filter((c) =>
+        c.claim_number?.toLowerCase().includes(q) ||
+        c.policy_number?.toLowerCase().includes(q) ||
+        c.assigned_to?.toLowerCase().includes(q) ||
+        c.lob?.toLowerCase().includes(q)
+      );
+    }
     return list;
-  }, [claims, statusFilter, severityFilter]);
+  }, [claims, statusFilter, severityFilter, searchQuery]);
+
+  const PAGE_SIZE = 25;
+  const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
+  const paginated = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+  const pageIds = paginated.map((r) => r.id);
+  const allPageSelected = pageIds.length > 0 && pageIds.every((id) => selectedIds.has(id));
+
+  const toggleSelectAll = () => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (allPageSelected) pageIds.forEach((id) => next.delete(id));
+      else pageIds.forEach((id) => next.add(id));
+      return next;
+    });
+  };
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const handleExportSelected = () => {
+    const selected = claims.filter((c) => selectedIds.has(c.id));
+    const headers = ['Claim Number', 'Policy', 'Type', 'Status', 'Severity', 'Reserved', 'Total Incurred'];
+    const rows = selected.map((c) => [c.claim_number, c.policy_number, c.lob, c.status, c.severity, c.total_reserved, c.total_incurred].join(','));
+    const csv = [headers.join(','), ...rows].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'claims_export.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   const columns: Column<Claim>[] = [
-    { key: 'number', header: 'Claim Number', render: (r) => <span className="font-mono text-xs">{r.claim_number}</span>, sortable: true, sortValue: (r) => r.claim_number },
+    { key: 'select', header: (
+        <input type="checkbox" checked={allPageSelected} onChange={toggleSelectAll} className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
+      ), render: (r) => (
+        <input type="checkbox" checked={selectedIds.has(r.id)} onChange={() => toggleSelect(r.id)} onClick={(e) => e.stopPropagation()} className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
+      ),
+    },
+    { key: 'number', header: 'Claim Number',render: (r) => <span className="font-mono text-xs">{r.claim_number}</span>, sortable: true, sortValue: (r) => r.claim_number },
     { key: 'policy', header: 'Policy', render: (r) => <span className="font-mono text-xs">{r.policy_number || '—'}</span> },
     { key: 'lob', header: 'Type', render: (r) => <span className="text-sm text-slate-600">{r.lob?.replace(/_/g, ' ') || '—'}</span> },
     { key: 'status', header: 'Status', render: (r) => <StatusBadge label={r.status} variant={statusVariant[r.status] || 'gray'} /> },

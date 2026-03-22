@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Plus, Eye, RefreshCw, FileText, Loader2 } from 'lucide-react';
+import { Plus, Eye, RefreshCw, FileText, Loader2, Search, ChevronLeft, ChevronRight, Download } from 'lucide-react';
 import DataTable, { type Column } from '../components/DataTable';
 import StatusBadge from '../components/StatusBadge';
 import { ToastContainer } from '../components/Toast';
@@ -36,6 +36,9 @@ const Policies: React.FC = () => {
   const navigate = useNavigate();
   const { data: policies = [], isLoading, refetch } = useQuery({ queryKey: ['policies'], queryFn: getPolicies });
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const { toasts, addToast, dismissToast } = useToast();
 
@@ -56,12 +59,65 @@ const Policies: React.FC = () => {
   }, [refetch, addToast]);
 
   const filtered = useMemo(() => {
-    if (statusFilter === 'all') return policies;
-    return policies.filter((p) => p.status === statusFilter);
-  }, [policies, statusFilter]);
+    let list = policies;
+    if (statusFilter !== 'all') list = list.filter((p) => p.status === statusFilter);
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      list = list.filter((p) =>
+        p.policy_number?.toLowerCase().includes(q) ||
+        p.insured_name?.toLowerCase().includes(q) ||
+        p.lob?.toLowerCase().includes(q)
+      );
+    }
+    return list;
+  }, [policies, statusFilter, searchQuery]);
+
+  const PAGE_SIZE = 25;
+  const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
+  const paginated = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+  const pageIds = paginated.map((r) => r.id);
+  const allPageSelected = pageIds.length > 0 && pageIds.every((id) => selectedIds.has(id));
+
+  const toggleSelectAll = () => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (allPageSelected) pageIds.forEach((id) => next.delete(id));
+      else pageIds.forEach((id) => next.add(id));
+      return next;
+    });
+  };
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const handleExportSelected = () => {
+    const selected = policies.filter((p) => selectedIds.has(p.id));
+    const headers = ['Policy Number', 'Insured', 'LOB', 'Status', 'Effective', 'Expiration', 'Premium'];
+    const rows = selected.map((p) => [p.policy_number, p.insured_name, p.lob, p.status, p.effective_date, p.expiration_date, p.premium].join(','));
+    const csv = [headers.join(','), ...rows].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'policies_export.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   const columns: Column<Policy>[] = [
-    { key: 'number', header: 'Policy Number', render: (r) => <span className="font-mono text-xs">{r.policy_number}</span>, sortable: true, sortValue: (r) => r.policy_number },
+    { key: 'select', header: (
+        <input type="checkbox" checked={allPageSelected} onChange={toggleSelectAll} className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
+      ), render: (r) => (
+        <input type="checkbox" checked={selectedIds.has(r.id)} onChange={() => toggleSelect(r.id)} onClick={(e) => e.stopPropagation()} className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
+      ),
+    },
+    { key: 'number', header: 'Policy Number',render: (r) => <span className="font-mono text-xs">{r.policy_number}</span>, sortable: true, sortValue: (r) => r.policy_number },
     { key: 'insured', header: 'Insured', render: (r) => <span className="font-medium text-slate-900">{r.insured_name}</span>, sortable: true, sortValue: (r) => r.insured_name },
     { key: 'lob', header: 'LOB', render: (r) => lobLabels[r.lob] ?? r.lob },
     { key: 'status', header: 'Status', render: (r) => <StatusBadge label={r.status} variant={statusVariant[r.status]} /> },

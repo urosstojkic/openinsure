@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Plus, Play, Sparkles, Eye, Loader2 } from 'lucide-react';
+import { Plus, Play, Sparkles, Eye, Loader2, Search, ChevronLeft, ChevronRight, Download } from 'lucide-react';
 import DataTable, { type Column } from '../components/DataTable';
 import StatusBadge from '../components/StatusBadge';
 import { ToastContainer } from '../components/Toast';
@@ -37,6 +37,9 @@ const Submissions: React.FC = () => {
 
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [lobFilter, setLobFilter] = useState<string>('all');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const { toasts, addToast, dismissToast } = useToast();
@@ -74,11 +77,63 @@ const Submissions: React.FC = () => {
     let list = submissions;
     if (statusFilter !== 'all') list = list.filter((s) => s.status === statusFilter);
     if (lobFilter !== 'all') list = list.filter((s) => s.lob === lobFilter);
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      list = list.filter((s) =>
+        s.applicant_name?.toLowerCase().includes(q) ||
+        s.company_name?.toLowerCase().includes(q) ||
+        (s.submission_number || s.id)?.toLowerCase().includes(q)
+      );
+    }
     return list;
-  }, [submissions, statusFilter, lobFilter]);
+  }, [submissions, statusFilter, lobFilter, searchQuery]);
+
+  const PAGE_SIZE = 25;
+  const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
+  const paginated = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+  const pageIds = paginated.map((r) => r.id);
+  const allPageSelected = pageIds.length > 0 && pageIds.every((id) => selectedIds.has(id));
+
+  const toggleSelectAll = () => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (allPageSelected) pageIds.forEach((id) => next.delete(id));
+      else pageIds.forEach((id) => next.add(id));
+      return next;
+    });
+  };
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const handleExportSelected = () => {
+    const selected = submissions.filter((s) => selectedIds.has(s.id));
+    const headers = ['ID', 'Applicant', 'Company', 'LOB', 'Status', 'Risk Score', 'Priority'];
+    const rows = selected.map((s) => [s.submission_number || s.id, s.applicant_name, s.company_name, s.lob, s.status, s.risk_score, s.priority].join(','));
+    const csv = [headers.join(','), ...rows].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'submissions_export.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   const columns: Column<Submission>[] = [
-    { key: 'id', header: 'ID', render: (r) => <span className="font-mono text-xs">{r.submission_number || r.id}</span>, sortable: true, sortValue: (r) => r.submission_number || r.id },
+    { key: 'select', header: (
+        <input type="checkbox" checked={allPageSelected} onChange={toggleSelectAll} className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
+      ), render: (r) => (
+        <input type="checkbox" checked={selectedIds.has(r.id)} onChange={() => toggleSelect(r.id)} onClick={(e) => e.stopPropagation()} className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
+      ),
+    },
+    { key: 'id', header: 'ID',render: (r) => <span className="font-mono text-xs">{r.submission_number || r.id}</span>, sortable: true, sortValue: (r) => r.submission_number || r.id },
     { key: 'applicant', header: 'Applicant', render: (r) => (
         <div>
           <p className="font-medium text-slate-900">{r.applicant_name}</p>
