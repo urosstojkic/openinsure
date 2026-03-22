@@ -174,8 +174,9 @@ class TestEvaluateCondition:
         # Missing path resolves to "" which won't match the expected value
         assert _evaluate_condition("nonexistent.field == 'x'", {}) is False
 
-    def test_malformed_condition_defaults_true(self) -> None:
-        assert _evaluate_condition("this is not a real condition", {}) is True
+    def test_malformed_condition_defaults_false(self) -> None:
+        """Fail-closed: malformed conditions reject (safety default per #58)."""
+        assert _evaluate_condition("this is not a real condition", {}) is False
 
 
 # ---------------------------------------------------------------------------

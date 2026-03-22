@@ -292,8 +292,7 @@ async def execute_workflow(
             if needs_human_review and step.required:
                 execution.status = "escalated"
                 execution.error = (
-                    f"Step '{step.name}' returned low confidence ({confidence:.2f}); "
-                    "flagged for human review"
+                    f"Step '{step.name}' returned low confidence ({confidence:.2f}); flagged for human review"
                 )
                 await publish_domain_event(
                     f"workflow.{workflow_name}.escalated",
