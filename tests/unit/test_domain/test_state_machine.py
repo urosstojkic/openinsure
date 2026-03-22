@@ -89,6 +89,7 @@ class TestPolicyTransitions:
             ("active", "suspended"),
             ("suspended", "active"),
             ("suspended", "cancelled"),
+            ("cancelled", "reinstated"),
         ],
     )
     def test_valid_transitions(self, current: str, target: str) -> None:
@@ -111,7 +112,7 @@ class TestPolicyTransitions:
         assert exc_info.value.entity_type == "Policy"
 
     def test_terminal_states(self) -> None:
-        for state in ("cancelled", "expired"):
+        for state in ("expired",):
             assert POLICY_TRANSITIONS[state] == set()
 
 

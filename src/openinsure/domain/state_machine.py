@@ -46,7 +46,8 @@ POLICY_TRANSITIONS: dict[str, set[str]] = {
     "pending": {"active"},
     "active": {"cancelled", "expired", "suspended"},
     "suspended": {"active", "cancelled"},
-    "cancelled": set(),
+    "cancelled": {"reinstated"},
+    "reinstated": {"active"},
     "expired": set(),
 }
 

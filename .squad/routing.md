@@ -6,12 +6,15 @@ How to decide who handles what.
 
 | Work Type | Route To | Examples |
 |-----------|----------|----------|
-| {domain 1} | {Name} | {example tasks} |
-| {domain 2} | {Name} | {example tasks} |
-| {domain 3} | {Name} | {example tasks} |
-| Code review | {Name} | Review PRs, check quality, suggest improvements |
-| Testing | {Name} | Write tests, find edge cases, verify fixes |
-| Scope & priorities | {Name} | What to build next, trade-offs, decisions |
+| Backend API, services, repos | Backend | New endpoints, SQL repos, workflow engine, Foundry integration |
+| React pages, components, UX | Frontend | Dashboard pages, components, API clients, Tailwind styling |
+| Azure infra, Bicep, CI/CD | Infra | Container Apps, SQL networking, GitHub Actions, deploy scripts |
+| Insurance domain, products, regs | Insurance | Underwriting rules, claims workflows, reinsurance, ACORD, EU AI Act |
+| Tests, quality gates, Playwright | QA | Unit tests, E2E tests, smoke tests, coverage, Playwright audits |
+| Security, RBAC, auth, audit | Security | Authority engine, JWT/API key auth, bias monitoring, audit trail |
+| Docs, history, decisions | Scribe | README, architecture docs, decision records, session logs |
+| Code review | QA + Security | Review PRs, check quality, suggest improvements |
+| Scope & priorities | Insurance | What to build next, trade-offs, domain decisions |
 | Async issue work (bugs, tests, small features) | @copilot 🤖 | Well-defined tasks matching capability profile |
 | Session logging | Scribe | Automatic — never needs routing |
 

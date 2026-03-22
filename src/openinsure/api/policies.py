@@ -37,6 +37,8 @@ class PolicyStatus(StrEnum):
     EXPIRED = "expired"
     CANCELLED = "cancelled"
     RENEWED = "renewed"
+    REINSTATED = "reinstated"
+    SUSPENDED = "suspended"
 
 
 # ---------------------------------------------------------------------------
@@ -136,6 +138,7 @@ class CancelRequest(BaseModel):
 
     reason: str = Field(..., min_length=1)
     cancellation_date: str = Field(..., description="ISO-8601 effective cancellation date")
+    method: str = Field("pro_rata", description="Cancellation method: pro_rata or short_rate")
 
 
 class CancelResponse(BaseModel):
@@ -146,6 +149,23 @@ class CancelResponse(BaseModel):
     reason: str
     cancellation_date: str
     cancelled_at: str
+    return_premium: float = 0.0
+
+
+class ReinstateRequest(BaseModel):
+    """Request to reinstate a cancelled policy."""
+
+    reason: str = Field(..., min_length=1)
+    effective_date: str = Field(..., description="ISO-8601 reinstatement effective date")
+
+
+class ReinstateResponse(BaseModel):
+    """Result of reinstating a policy."""
+
+    policy_id: str
+    status: PolicyStatus
+    reason: str
+    reinstated_at: str
 
 
 class DocumentItem(BaseModel):
@@ -288,6 +308,20 @@ async def endorse_policy(policy_id: str, body: EndorsementRequest) -> Endorsemen
     record["premium"] += body.premium_delta
     record["updated_at"] = now
 
+    # Apply coverage changes if specified
+    if body.changes.get("add_coverage"):
+        record.setdefault("coverages", []).append(body.changes["add_coverage"])
+    if body.changes.get("remove_coverage"):
+        code = body.changes["remove_coverage"]
+        record["coverages"] = [c for c in record.get("coverages", []) if c.get("coverage_code") != code]
+    if body.changes.get("update_limits"):
+        for cov in record.get("coverages", []):
+            if cov.get("coverage_code") == body.changes["update_limits"].get("coverage_code"):
+                if "limit" in body.changes["update_limits"]:
+                    cov["limit"] = body.changes["update_limits"]["limit"]
+                if "deductible" in body.changes["update_limits"]:
+                    cov["deductible"] = body.changes["update_limits"]["deductible"]
+
     return EndorsementResponse(policy_id=policy_id, **endorsement)
 
 
@@ -336,13 +370,36 @@ async def renew_policy(policy_id: str) -> RenewalResponse:
 
 @router.post("/{policy_id}/cancel", response_model=CancelResponse)
 async def cancel_policy(policy_id: str, body: CancelRequest) -> CancelResponse:
-    """Cancel an active policy."""
+    """Cancel an active policy with return premium calculation."""
+    from openinsure.domain.state_machine import validate_policy_transition
+
     record = await _get_policy(policy_id)
-    if record["status"] != PolicyStatus.ACTIVE:
-        raise HTTPException(status_code=409, detail="Only active policies can be cancelled")
+    validate_policy_transition(record["status"], "cancelled")
+
+    now = _now()
+
+    # Calculate return premium (pro-rata or short-rate)
+    total_premium = record.get("premium") or record.get("total_premium") or 0
+    return_premium = 0.0
+    if total_premium and record.get("effective_date") and record.get("expiration_date"):
+        from datetime import date as date_type
+
+        eff = date_type.fromisoformat(record["effective_date"][:10])
+        exp = date_type.fromisoformat(record["expiration_date"][:10])
+        cancel_dt = date_type.fromisoformat(body.cancellation_date[:10])
+        total_days = (exp - eff).days or 1
+        elapsed_days = max(0, (cancel_dt - eff).days)
+        remaining_days = max(0, total_days - elapsed_days)
+
+        if body.method == "short_rate":
+            # Short-rate: carrier keeps a penalty (10% of return)
+            pro_rata_return = total_premium * (remaining_days / total_days)
+            return_premium = round(pro_rata_return * 0.9, 2)
+        else:
+            # Pro-rata: straight proportion
+            return_premium = round(total_premium * (remaining_days / total_days), 2)
 
     record["status"] = PolicyStatus.CANCELLED
-    now = _now()
     record["updated_at"] = now
 
     return CancelResponse(
@@ -351,6 +408,35 @@ async def cancel_policy(policy_id: str, body: CancelRequest) -> CancelResponse:
         reason=body.reason,
         cancellation_date=body.cancellation_date,
         cancelled_at=now,
+        return_premium=return_premium,
+    )
+
+
+@router.post("/{policy_id}/reinstate", response_model=ReinstateResponse)
+async def reinstate_policy(policy_id: str, body: ReinstateRequest) -> ReinstateResponse:
+    """Reinstate a cancelled policy."""
+    from openinsure.domain.state_machine import validate_policy_transition
+
+    record = await _get_policy(policy_id)
+    validate_policy_transition(record["status"], "reinstated")
+
+    now = _now()
+    record["status"] = PolicyStatus.REINSTATED
+    record["updated_at"] = now
+    record.setdefault("metadata", {})["reinstatement"] = {
+        "reason": body.reason,
+        "effective_date": body.effective_date,
+        "reinstated_at": now,
+    }
+
+    # Transition reinstated → active
+    record["status"] = PolicyStatus.ACTIVE
+
+    return ReinstateResponse(
+        policy_id=policy_id,
+        status=PolicyStatus.ACTIVE,
+        reason=body.reason,
+        reinstated_at=now,
     )
 
 
