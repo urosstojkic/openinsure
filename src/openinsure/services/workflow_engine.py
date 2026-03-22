@@ -260,24 +260,59 @@ async def execute_workflow(
         # Execute via Foundry
         try:
             result = await asyncio.wait_for(foundry.invoke(step.agent, prompt), timeout=30)
+            resp = result.get("response", {})
+            confidence = resp.get("confidence", 0.8) if isinstance(resp, dict) else 0.8
+
+            # Confidence gating: flag low-confidence responses for human review
+            needs_human_review = confidence < 0.5
+            if needs_human_review:
+                logger.warning(
+                    "workflow.low_confidence_flagged",
+                    workflow=workflow_name,
+                    step=step.name,
+                    confidence=confidence,
+                    entity_id=entity_id,
+                )
+
             step_record: dict[str, Any] = {
                 "name": step.name,
                 "agent": step.agent,
                 "status": "completed",
                 "source": result.get("source", "unknown"),
-                "response": result.get("response", {}),
+                "response": resp,
                 "raw": str(result.get("raw", ""))[:1000],
+                "confidence": confidence,
+                "human_review_required": needs_human_review,
                 "timestamp": datetime.now(UTC).isoformat(),
             }
             execution.steps_completed.append(step_record)
-            execution.context[f"{step.name}_result"] = result.get("response", {})
+            execution.context[f"{step.name}_result"] = resp
+
+            # Escalate workflow when confidence is below threshold
+            if needs_human_review and step.required:
+                execution.status = "escalated"
+                execution.error = (
+                    f"Step '{step.name}' returned low confidence ({confidence:.2f}); "
+                    "flagged for human review"
+                )
+                await publish_domain_event(
+                    f"workflow.{workflow_name}.escalated",
+                    f"/{entity_type}/{entity_id}",
+                    {
+                        "workflow_id": execution.id,
+                        "step": step.name,
+                        "confidence": confidence,
+                        "reason": "low_confidence",
+                    },
+                )
+                break
 
             # Record decision for each completed step
+            oversight = "required" if needs_human_review else "recommended"
             try:
                 from openinsure.infrastructure.factory import get_compliance_repository
 
                 compliance_repo = get_compliance_repository()
-                resp = result.get("response", {})
                 await compliance_repo.store_decision(
                     {
                         "decision_id": str(uuid4()),
@@ -285,13 +320,13 @@ async def execute_workflow(
                         "decision_type": step.name,
                         "entity_id": entity_id,
                         "entity_type": entity_type,
-                        "confidence": resp.get("confidence", 0.8) if isinstance(resp, dict) else 0.8,
+                        "confidence": float(confidence),
                         "input_summary": {"entity_id": entity_id, "prompt_preview": prompt[:300]},
                         "output": resp if isinstance(resp, dict) else {"raw": str(resp)[:500]},
                         "reasoning": str(resp.get("reasoning", "")) if isinstance(resp, dict) else "",
                         "model_used": "gpt-5.1",
                         "execution_time_ms": result.get("execution_time_ms"),
-                        "human_oversight": "recommended",
+                        "human_oversight": oversight,
                         "created_at": datetime.now(UTC).isoformat(),
                     }
                 )
@@ -369,7 +404,12 @@ def _evaluate_condition(condition: str, context: dict[str, Any]) -> bool:
 
     Supports ``step.field == 'value'`` patterns by traversing the context
     dictionary, looking up ``<step>_result`` keys automatically.
+
+    Returns ``False`` on any evaluation error (fail-closed) to prevent
+    malformed agent responses from bypassing safety checks.
     """
+    result = False
+    reason = "unknown"
     try:
         parts = condition.split("==")
         if len(parts) == 2:
@@ -380,7 +420,21 @@ def _evaluate_condition(condition: str, context: dict[str, Any]) -> bool:
             for k in keys:
                 if isinstance(val, dict):
                     val = val.get(f"{k}_result", val.get(k, ""))
-            return str(val).lower() == expected.lower()
+            result = str(val).lower() == expected.lower()
+            reason = "evaluated" if result else "condition_not_met"
+        else:
+            reason = "unparseable_condition"
     except Exception:
-        pass
-    return True  # Default to true if can't evaluate
+        logger.warning(
+            "workflow.condition_eval_error",
+            condition=condition,
+            exc_info=True,
+        )
+        reason = "evaluation_error"
+    logger.info(
+        "workflow.condition_evaluated",
+        condition=condition,
+        result=result,
+        reason=reason,
+    )
+    return result
