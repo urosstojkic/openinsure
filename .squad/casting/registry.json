@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "universe": "Insurance Operations",
+  "agents": {
+    "Backend": {
+      "status": "active",
+      "cast_date": "2026-03-09",
+      "specialization": "Python/FastAPI"
+    },
+    "Frontend": {
+      "status": "active",
+      "cast_date": "2026-03-09",
+      "specialization": "React/TypeScript"
+    },
+    "Infra": {
+      "status": "active",
+      "cast_date": "2026-03-09",
+      "specialization": "Azure/DevOps"
+    },
+    "Insurance": {
+      "status": "active",
+      "cast_date": "2026-03-09",
+      "specialization": "Insurance Domain"
+    },
+    "QA": {
+      "status": "active",
+      "cast_date": "2026-03-09",
+      "specialization": "Testing/Quality"
+    },
+    "Security": {
+      "status": "active",
+      "cast_date": "2026-03-09",
+      "specialization": "Security/Compliance"
+    },
+    "Scribe": {
+      "status": "active",
+      "cast_date": "2026-03-09",
+      "specialization": "Documentation"
+    }
+  }
+}
