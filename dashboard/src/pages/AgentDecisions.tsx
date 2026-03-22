@@ -6,6 +6,7 @@ import ConfidenceBar from '../components/ConfidenceBar';
 import ReasoningPanel from '../components/ReasoningPanel';
 import StatusBadge from '../components/StatusBadge';
 import { getDecisions } from '../api/compliance';
+import { formatTimestamp } from '../utils/formatDate';
 import type { AgentDecision, AgentName, OversightLevel } from '../types';
 
 const agentLabels: Record<AgentName, string> = {
@@ -84,12 +85,7 @@ const AgentDecisions: React.FC = () => {
     {
       key: 'timestamp',
       header: 'Timestamp',
-      render: (r) => {
-        const raw = r.timestamp || r.created_at;
-        if (!raw) return '—';
-        const d = new Date(raw);
-        return isNaN(d.getTime()) ? '—' : d.toLocaleString();
-      },
+      render: (r) => formatTimestamp(r.timestamp || r.created_at),
       sortable: true,
       sortValue: (r) => r.timestamp || r.created_at || '',
     },

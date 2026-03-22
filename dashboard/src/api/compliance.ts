@@ -11,7 +11,9 @@ export async function getDecisions(): Promise<AgentDecision[]> {
     const items: Record<string, unknown>[] = Array.isArray(data) ? data : (data.items || []);
     return items.map((d) => ({
       ...d,
+      // Normalize timestamp: prefer `timestamp`, fall back to `created_at`
       timestamp: (d.timestamp as string) || (d.created_at as string) || '',
+      created_at: (d.created_at as string) || (d.timestamp as string) || '',
     })) as AgentDecision[];
   } catch (error) {
     console.warn('[API] Decisions fallback:', error);
