@@ -9,7 +9,11 @@ an ``asyncio`` event loop.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import functools
+import queue
+import threading
+import time
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING, Any
@@ -17,6 +21,7 @@ from typing import TYPE_CHECKING, Any
 import pyodbc
 import structlog
 from azure.identity import DefaultAzureCredential
+from tenacity import retry, retry_if_exception, stop_after_attempt, wait_exponential
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Sequence
@@ -25,6 +30,19 @@ logger = structlog.get_logger()
 
 # Azure AD resource identifier for Azure SQL
 _SQL_RESOURCE = "https://database.windows.net/.default"
+
+_TRANSIENT_SQLSTATES = {"08S01", "08001", "40001", "40P01", "HYT00", "HY008"}
+
+
+def _is_transient(exc: BaseException) -> bool:
+    """Check if a pyodbc error is transient and worth retrying."""
+    if isinstance(exc, pyodbc.Error):
+        sqlstate = getattr(exc, "args", [None, None])[0] if exc.args else None
+        if sqlstate and str(sqlstate) in _TRANSIENT_SQLSTATES:
+            return True
+        msg = str(exc).lower()
+        return any(kw in msg for kw in ("timeout", "connection", "deadlock", "login failed"))
+    return False
 
 
 def _detect_odbc_driver() -> str:
@@ -93,6 +111,10 @@ class DatabaseAdapter:
         self._credential = credential or DefaultAzureCredential()
         self._pool_size = pool_size
         self._executor = ThreadPoolExecutor(max_workers=pool_size)
+        self._pool: queue.Queue[pyodbc.Connection] = queue.Queue(maxsize=pool_size)
+        self._cached_token: str | None = None
+        self._token_expires_at: float = 0.0
+        self._token_lock = threading.Lock()
 
         # Detect if this is a full ODBC connection string or just a server name
         if "Driver=" in connection_string_or_server or "driver=" in connection_string_or_server:
@@ -121,8 +143,19 @@ class DatabaseAdapter:
     # ------------------------------------------------------------------
 
     def _get_access_token(self) -> str:
-        token = self._credential.get_token(_SQL_RESOURCE)
-        return token.token
+        """Get an AAD access token, using a cached value if still valid."""
+        with self._token_lock:
+            now = time.monotonic()
+            # Refresh if token expires within 5 minutes
+            if self._cached_token and now < self._token_expires_at - 300:
+                return self._cached_token
+
+            token_response = self._credential.get_token(_SQL_RESOURCE)
+            self._cached_token = token_response.token
+            # Azure tokens typically expire in 1 hour; use 55 minutes
+            self._token_expires_at = now + 3300
+            logger.debug("database.token_refreshed")
+            return self._cached_token
 
     def _connect(self) -> pyodbc.Connection:
         """Create a new connection using AAD access-token authentication.
@@ -152,6 +185,42 @@ class DatabaseAdapter:
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(self._executor, functools.partial(fn, *args, **kwargs))
 
+    def _acquire(self) -> pyodbc.Connection:
+        """Get a connection from the pool, creating one if needed."""
+        try:
+            conn = self._pool.get_nowait()
+            try:
+                conn.execute("SELECT 1")
+                return conn
+            except Exception:
+                with contextlib.suppress(Exception):
+                    conn.close()
+        except queue.Empty:
+            pass
+        return self._connect()
+
+    def _release(self, conn: pyodbc.Connection) -> None:
+        """Return a connection to the pool."""
+        try:
+            self._pool.put_nowait(conn)
+        except queue.Full:
+            conn.close()
+
+    async def _run_with_retry(self, fn, *args: Any, **kwargs: Any) -> Any:
+        """Run a function in the executor with retry for transient errors."""
+
+        @retry(
+            retry=retry_if_exception(_is_transient),
+            stop=stop_after_attempt(3),
+            wait=wait_exponential(multiplier=0.5, min=0.5, max=5),
+            reraise=True,
+        )
+        def _retryable():
+            return fn(*args, **kwargs)
+
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(self._executor, _retryable)
+
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
@@ -163,20 +232,21 @@ class DatabaseAdapter:
         """
 
         def _execute(q: str, p: Sequence[Any] | None) -> int:
-            conn = self._connect()
+            conn = self._acquire()
             try:
                 cursor = conn.cursor()
                 cursor.execute(q, p or [])
                 rowcount = cursor.rowcount
                 conn.commit()
+                self._release(conn)
                 return rowcount
             except Exception:
                 conn.rollback()
+                with contextlib.suppress(Exception):
+                    conn.close()
                 raise
-            finally:
-                conn.close()
 
-        rowcount: int = await self._run_in_executor(_execute, query, params)
+        rowcount: int = await self._run_with_retry(_execute, query, params)
         logger.debug("database.execute_query", rows_affected=rowcount)
         return rowcount
 
@@ -184,34 +254,42 @@ class DatabaseAdapter:
         """Fetch a single row as a dictionary, or ``None``."""
 
         def _fetch(q: str, p: Sequence[Any] | None) -> dict[str, Any] | None:
-            conn = self._connect()
+            conn = self._acquire()
             try:
                 cursor = conn.cursor()
                 cursor.execute(q, p or [])
                 row = cursor.fetchone()
                 if row is None:
+                    self._release(conn)
                     return None
                 columns = [desc[0] for desc in cursor.description]
+                self._release(conn)
                 return dict(zip(columns, row, strict=False))
-            finally:
-                conn.close()
+            except Exception:
+                with contextlib.suppress(Exception):
+                    conn.close()
+                raise
 
-        return await self._run_in_executor(_fetch, query, params)
+        return await self._run_with_retry(_fetch, query, params)
 
     async def fetch_all(self, query: str, params: Sequence[Any] | None = None) -> list[dict[str, Any]]:
         """Fetch all rows as a list of dictionaries."""
 
         def _fetch(q: str, p: Sequence[Any] | None) -> list[dict[str, Any]]:
-            conn = self._connect()
+            conn = self._acquire()
             try:
                 cursor = conn.cursor()
                 cursor.execute(q, p or [])
                 columns = [desc[0] for desc in cursor.description]
-                return [dict(zip(columns, row, strict=False)) for row in cursor.fetchall()]
-            finally:
-                conn.close()
+                result = [dict(zip(columns, row, strict=False)) for row in cursor.fetchall()]
+                self._release(conn)
+                return result
+            except Exception:
+                with contextlib.suppress(Exception):
+                    conn.close()
+                raise
 
-        return await self._run_in_executor(_fetch, query, params)
+        return await self._run_with_retry(_fetch, query, params)
 
     async def execute_many(
         self,
@@ -224,21 +302,22 @@ class DatabaseAdapter:
         """
 
         def _exec_many(q: str, pl: Sequence[Sequence[Any]]) -> int:
-            conn = self._connect()
+            conn = self._acquire()
             try:
                 cursor = conn.cursor()
                 cursor.fast_executemany = True
                 cursor.executemany(q, pl)
                 rowcount = cursor.rowcount
                 conn.commit()
+                self._release(conn)
                 return rowcount
             except Exception:
                 conn.rollback()
+                with contextlib.suppress(Exception):
+                    conn.close()
                 raise
-            finally:
-                conn.close()
 
-        rowcount: int = await self._run_in_executor(_exec_many, query, params_list)
+        rowcount: int = await self._run_with_retry(_exec_many, query, params_list)
         logger.debug("database.execute_many", rows_affected=rowcount)
         return rowcount
 
@@ -246,27 +325,28 @@ class DatabaseAdapter:
         """Verify connectivity and return basic server info."""
 
         def _check() -> dict[str, Any]:
-            conn = self._connect()
+            conn = self._acquire()
             try:
                 cursor = conn.cursor()
                 cursor.execute("SELECT @@VERSION AS version, GETUTCDATE() AS server_time")
                 row = cursor.fetchone()
+                self._release(conn)
                 return {
                     "status": "healthy",
-                    "server": self._server,
-                    "database": self._database,
+                    "server": getattr(self, "_server", "unknown"),
+                    "database": getattr(self, "_database", "unknown"),
                     "version": row[0] if row else "unknown",
                     "server_time": str(row[1]) if row else "unknown",
                 }
             except Exception as exc:
+                with contextlib.suppress(Exception):
+                    conn.close()
                 return {
                     "status": "unhealthy",
-                    "server": self._server,
-                    "database": self._database,
+                    "server": getattr(self, "_server", "unknown"),
+                    "database": getattr(self, "_database", "unknown"),
                     "error": str(exc),
                 }
-            finally:
-                conn.close()
 
         return await self._run_in_executor(_check)
 
@@ -283,7 +363,7 @@ class DatabaseAdapter:
         """
 
         def _begin() -> tuple[pyodbc.Connection, TransactionContext]:
-            conn = self._connect()
+            conn = self._acquire()
             return conn, TransactionContext(conn)
 
         conn, txn = await self._run_in_executor(_begin)
@@ -300,6 +380,10 @@ class DatabaseAdapter:
             await self._run_in_executor(conn.close)
 
     async def close(self) -> None:
-        """Shut down the thread-pool executor."""
+        """Shut down connection pool and thread-pool executor."""
+        while not self._pool.empty():
+            with contextlib.suppress(Exception):
+                conn = self._pool.get_nowait()
+                conn.close()
         self._executor.shutdown(wait=False)
-        logger.info("database.closed", server=self._server)
+        logger.info("database.closed", server=getattr(self, "_server", "unknown"))
