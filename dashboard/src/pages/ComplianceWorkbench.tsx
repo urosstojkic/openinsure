@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine, Cell } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine, Cell, CartesianGrid } from 'recharts';
 import StatusBadge from '../components/StatusBadge';
 import ConfidenceBar from '../components/ConfidenceBar';
 import EmptyState from '../components/EmptyState';
 import { getDecisionAudit, getOverrideLog, getBiasChartData, getComplianceWorkbenchData, getBiasReport } from '../api/workbench';
 import type { BiasAnalysis } from '../types';
 import { Server, ClipboardList, BarChart3, RotateCcw } from 'lucide-react';
+import { ChartSkeleton } from '../components/Skeleton';
 
 const ComplianceWorkbench: React.FC = () => {
   const { data: compliance } = useQuery({ queryKey: ['compliance-wb'], queryFn: getComplianceWorkbenchData });
@@ -37,24 +38,24 @@ const ComplianceWorkbench: React.FC = () => {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-slate-900">Compliance Workbench</h1>
-        <p className="text-sm text-slate-500">AI governance, decision auditing, and bias monitoring</p>
+        <h1 className="text-2xl font-bold tracking-tight text-slate-900">Compliance Workbench</h1>
+        <p className="text-sm text-slate-500 mt-0.5">AI governance, decision auditing, and bias monitoring</p>
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         {/* ── Panel 1: AI System Inventory ── */}
-        <div className="rounded-lg border border-slate-200 bg-white p-5">
-          <h2 className="mb-4 text-sm font-semibold text-slate-700">AI System Inventory</h2>
+        <div className="rounded-xl border border-slate-200/60 bg-white p-5 shadow-[var(--shadow-xs)]">
+          <h2 className="mb-4 text-sm font-semibold text-slate-800">AI System Inventory</h2>
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
-              <thead className="bg-slate-50">
+              <thead className="sticky top-0 z-10 bg-slate-50/80 backdrop-blur-sm">
                 <tr>
-                  <th className="px-3 py-2 text-left text-xs font-semibold text-slate-600">Name</th>
-                  <th className="px-3 py-2 text-left text-xs font-semibold text-slate-600">Version</th>
-                  <th className="px-3 py-2 text-left text-xs font-semibold text-slate-600">Risk Class</th>
-                  <th className="px-3 py-2 text-left text-xs font-semibold text-slate-600">Status</th>
-                  <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600">Decisions</th>
-                  <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600">Avg Conf</th>
+                  <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">Name</th>
+                  <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">Version</th>
+                  <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">Risk Class</th>
+                  <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">Status</th>
+                  <th className="px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-wider text-slate-400">Decisions</th>
+                  <th className="px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-wider text-slate-400">Avg Conf</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
@@ -92,8 +93,8 @@ const ComplianceWorkbench: React.FC = () => {
         </div>
 
         {/* ── Panel 2: Decision Audit ── */}
-        <div className="rounded-lg border border-slate-200 bg-white p-5">
-          <h2 className="mb-4 text-sm font-semibold text-slate-700">Decision Audit — Random Sample</h2>
+        <div className="rounded-xl border border-slate-200/60 bg-white p-5 shadow-[var(--shadow-xs)]">
+          <h2 className="mb-4 text-sm font-semibold text-slate-800">Decision Audit — Random Sample</h2>
           <div className="space-y-3 max-h-[400px] overflow-y-auto">
             {auditItems.length === 0 ? (
               <EmptyState
@@ -147,9 +148,9 @@ const ComplianceWorkbench: React.FC = () => {
         </div>
 
         {/* ── Panel 3: Bias Monitoring ── */}
-        <div className="rounded-lg border border-slate-200 bg-white p-5 lg:col-span-2">
+        <div className="rounded-xl border border-slate-200/60 bg-white p-5 lg:col-span-2 shadow-[var(--shadow-xs)]">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-sm font-semibold text-slate-700">Bias Monitoring</h2>
+            <h2 className="text-sm font-semibold text-slate-800">Bias Monitoring</h2>
             <div className="flex items-center gap-3">
               {biasReport && (
                 <StatusBadge
@@ -160,7 +161,7 @@ const ComplianceWorkbench: React.FC = () => {
               <button
                 onClick={() => generateReport.mutate()}
                 disabled={generateReport.isPending}
-                className="rounded bg-blue-600 px-3 py-1 text-xs text-white hover:bg-blue-700 disabled:opacity-50"
+                className="rounded bg-indigo-600 px-3 py-1 text-xs text-white shadow-sm shadow-indigo-500/20 active:scale-[0.98] hover:bg-indigo-700 disabled:opacity-50"
               >
                 {generateReport.isPending ? 'Generating…' : 'Generate Report'}
               </button>
@@ -195,7 +196,7 @@ const ComplianceWorkbench: React.FC = () => {
                 return (
                   <div key={idx} className="rounded border border-slate-100 p-3">
                     <div className="flex items-center justify-between mb-2">
-                      <h3 className="text-xs font-semibold text-slate-600">{analysis.metric}</h3>
+                      <h3 className="text-xs font-semibold text-slate-800">{analysis.metric}</h3>
                       <div className="flex items-center gap-2">
                         <span className="text-xs text-slate-500">4/5ths ratio:</span>
                         <span className={`text-xs font-mono font-bold ${analysis.passes_threshold ? 'text-green-600' : 'text-red-600'}`}>
@@ -208,16 +209,22 @@ const ComplianceWorkbench: React.FC = () => {
                       </div>
                     </div>
                     <ResponsiveContainer width="100%" height={180}>
-                      <BarChart data={chartData}>
-                        <XAxis dataKey="name" tick={{ fontSize: 10 }} />
-                        <YAxis domain={[0, 1]} tick={{ fontSize: 10 }} tickFormatter={(v: number) => `${Math.round(v * 100)}%`} />
+                      <BarChart data={chartData} barCategoryGap="20%" maxBarSize={40}>
+                        <CartesianGrid stroke="#f1f5f9" vertical={false} />
+                        <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#94a3b8' }} />
+                        <YAxis domain={[0, 1]} axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#94a3b8' }} tickFormatter={(v: number) => `${Math.round(v * 100)}%`} />
                         <Tooltip
-                          formatter={(v) => [
-                            `${Math.round(Number(v) * 100)}%`,
-                            'Approval Rate',
-                          ]}
+                          content={({ active, payload, label }) => {
+                            if (!active || !payload?.length) return null;
+                            return (
+                              <div className="rounded-lg border border-slate-200/60 bg-white/95 px-3 py-2 shadow-lg backdrop-blur-sm">
+                                <p className="text-[11px] font-medium text-slate-400">{label}</p>
+                                <p className="text-sm font-bold text-slate-800">{Math.round(Number(payload[0].value) * 100)}% Approval Rate</p>
+                              </div>
+                            );
+                          }}
                         />
-                        <Bar dataKey="rate" radius={[3, 3, 0, 0]}>
+                        <Bar dataKey="rate" radius={[6, 6, 0, 0]}>
                           {chartData.map((entry, i) => (
                             <Cell key={i} fill={entry.flagged ? '#ef4444' : '#3b82f6'} />
                           ))}
@@ -241,13 +248,24 @@ const ComplianceWorkbench: React.FC = () => {
             <div className="space-y-5">
               {/* Approval rates by sector */}
               <div>
-                <h3 className="mb-2 text-xs font-semibold text-slate-600">Approval Rates by Industry Sector</h3>
+                <h3 className="mb-2 text-xs font-semibold text-slate-800">Approval Rates by Industry Sector</h3>
                 <ResponsiveContainer width="100%" height={180}>
-                  <BarChart data={biasData.approval_by_sector}>
-                    <XAxis dataKey="sector" tick={{ fontSize: 10 }} />
-                    <YAxis domain={[0, 1]} tick={{ fontSize: 10 }} tickFormatter={(v: number) => `${Math.round(v * 100)}%`} />
-                    <Tooltip formatter={(v) => `${Math.round(Number(v) * 100)}%`} />
-                    <Bar dataKey="rate" fill="#3b82f6" radius={[3, 3, 0, 0]} />
+                  <BarChart data={biasData.approval_by_sector} barCategoryGap="20%" maxBarSize={40}>
+                    <CartesianGrid stroke="#f1f5f9" vertical={false} />
+                    <XAxis dataKey="sector" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#94a3b8' }} />
+                    <YAxis domain={[0, 1]} axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#94a3b8' }} tickFormatter={(v: number) => `${Math.round(v * 100)}%`} />
+                    <Tooltip
+                      content={({ active, payload, label }) => {
+                        if (!active || !payload?.length) return null;
+                        return (
+                          <div className="rounded-lg border border-slate-200/60 bg-white/95 px-3 py-2 shadow-lg backdrop-blur-sm">
+                            <p className="text-[11px] font-medium text-slate-400">{label}</p>
+                            <p className="text-sm font-bold text-slate-800">{Math.round(Number(payload[0].value) * 100)}% Approval Rate</p>
+                          </div>
+                        );
+                      }}
+                    />
+                    <Bar dataKey="rate" fill="#3b82f6" radius={[6, 6, 0, 0]} />
                     <ReferenceLine y={0.8} stroke="#ef4444" strokeDasharray="4 4" label={{ value: '4/5ths', fill: '#ef4444', fontSize: 10 }} />
                   </BarChart>
                 </ResponsiveContainer>
@@ -255,20 +273,31 @@ const ComplianceWorkbench: React.FC = () => {
 
               {/* Premium distribution by company size */}
               <div>
-                <h3 className="mb-2 text-xs font-semibold text-slate-600">Premium Distribution by Company Size</h3>
+                <h3 className="mb-2 text-xs font-semibold text-slate-800">Premium Distribution by Company Size</h3>
                 <ResponsiveContainer width="100%" height={160}>
-                  <BarChart data={biasData.premium_by_size}>
-                    <XAxis dataKey="size" tick={{ fontSize: 10 }} />
-                    <YAxis tick={{ fontSize: 10 }} tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}K`} />
-                    <Tooltip formatter={(v) => `$${Number(v).toLocaleString()}`} />
-                    <Bar dataKey="median" fill="#8b5cf6" radius={[3, 3, 0, 0]} name="Median Premium" />
+                  <BarChart data={biasData.premium_by_size} barCategoryGap="20%" maxBarSize={40}>
+                    <CartesianGrid stroke="#f1f5f9" vertical={false} />
+                    <XAxis dataKey="size" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#94a3b8' }} />
+                    <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#94a3b8' }} tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}K`} />
+                    <Tooltip
+                      content={({ active, payload, label }) => {
+                        if (!active || !payload?.length) return null;
+                        return (
+                          <div className="rounded-lg border border-slate-200/60 bg-white/95 px-3 py-2 shadow-lg backdrop-blur-sm">
+                            <p className="text-[11px] font-medium text-slate-400">{label}</p>
+                            <p className="text-sm font-bold text-slate-800">${Number(payload[0].value).toLocaleString()}</p>
+                          </div>
+                        );
+                      }}
+                    />
+                    <Bar dataKey="median" fill="#8b5cf6" radius={[6, 6, 0, 0]} name="Median Premium" />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
 
               {/* Disparate Impact Ratios */}
               <div>
-                <h3 className="mb-2 text-xs font-semibold text-slate-600">Disparate Impact Ratios</h3>
+                <h3 className="mb-2 text-xs font-semibold text-slate-800">Disparate Impact Ratios</h3>
                 <div className="space-y-2">
                   {biasData.disparate_impact.map((di, i) => (
                     <div key={i} className="flex items-center gap-3">
@@ -298,7 +327,9 @@ const ComplianceWorkbench: React.FC = () => {
           )}
 
           {biasReportLoading && (
-            <p className="text-xs text-slate-400 text-center py-8">Loading bias report…</p>
+            <div className="py-4">
+              <ChartSkeleton height={180} />
+            </div>
           )}
 
           {!biasReportLoading && !biasReport && !biasData && (
@@ -311,8 +342,8 @@ const ComplianceWorkbench: React.FC = () => {
         </div>
 
         {/* ── Panel 4: Override Log ── */}
-        <div className="rounded-lg border border-slate-200 bg-white p-5">
-          <h2 className="mb-4 text-sm font-semibold text-slate-700">Override Log</h2>
+        <div className="rounded-xl border border-slate-200/60 bg-white p-5 shadow-[var(--shadow-xs)]">
+          <h2 className="mb-4 text-sm font-semibold text-slate-800">Override Log</h2>
           <div className="space-y-3 max-h-[400px] overflow-y-auto">
             {overrides.length === 0 ? (
               <EmptyState
@@ -321,7 +352,7 @@ const ComplianceWorkbench: React.FC = () => {
                 description="Override entries appear when a human overrides an AI agent recommendation."
               />
             ) : overrides.map((ov) => (
-              <div key={ov.id} className="rounded-lg border border-slate-200 p-3">
+              <div key={ov.id} className="rounded-xl border border-slate-200/60 p-3">
                 <div className="flex items-center justify-between mb-1">
                   <span className="text-sm font-medium text-slate-900">{ov.who}</span>
                   <span className="text-xs text-slate-400">{new Date(ov.timestamp).toLocaleString()}</span>

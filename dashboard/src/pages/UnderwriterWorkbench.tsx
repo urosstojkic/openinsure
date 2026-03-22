@@ -5,6 +5,7 @@ import TrafficLight from '../components/TrafficLight';
 import ConfidenceBar from '../components/ConfidenceBar';
 import TimelineEvent from '../components/TimelineEvent';
 import { getUnderwriterQueue } from '../api/workbench';
+import { TableSkeleton } from '../components/Skeleton';
 import { formatDate } from '../utils/formatDate';
 import type { UnderwriterQueueItem, LOB } from '../types';
 
@@ -75,35 +76,35 @@ const UnderwriterWorkbench: React.FC = () => {
   const authorityLimit = 500_000; // Example: underwriter's authority limit for premium
   const needsEscalation = selected ? selected.recommended_terms.premium > authorityLimit : false;
 
-  if (isLoading) return <div className="flex h-64 items-center justify-center text-slate-400">Loading…</div>;
+  if (isLoading) return <div className="space-y-4"><TableSkeleton rows={6} columns={8} /></div>;
 
   return (
     <div className="flex h-[calc(100vh-7rem)] gap-4">
       {/* ── Left Panel: Queue ── */}
-      <div className="w-[40%] shrink-0 overflow-hidden rounded-lg border border-slate-200 bg-white">
+      <div className="w-[40%] shrink-0 overflow-hidden rounded-xl border border-slate-200/60 bg-white shadow-[var(--shadow-xs)]">
         <div className="border-b border-slate-200 px-4 py-3">
-          <h1 className="text-lg font-bold text-slate-900">Underwriter Workbench</h1>
-          <p className="text-xs text-slate-500">{queue.length} submissions assigned</p>
+          <h1 className="text-lg font-bold tracking-tight text-slate-900">Underwriter Workbench</h1>
+          <p className="text-xs text-slate-500 mt-0.5">{queue.length} submissions assigned</p>
         </div>
         <div className="overflow-y-auto" style={{ maxHeight: 'calc(100% - 56px)' }}>
           <table className="min-w-full divide-y divide-slate-100">
-            <thead className="sticky top-0 bg-slate-50">
+            <thead className="sticky top-0 z-10 bg-slate-50/80 backdrop-blur-sm">
               <tr>
-                <th className="px-3 py-2 text-left text-xs font-semibold text-slate-600">Pri</th>
-                <th className="px-3 py-2 text-left text-xs font-semibold text-slate-600">ID</th>
-                <th className="px-3 py-2 text-left text-xs font-semibold text-slate-600">Applicant</th>
-                <th className="px-3 py-2 text-left text-xs font-semibold text-slate-600">LOB</th>
-                <th className="px-3 py-2 text-left text-xs font-semibold text-slate-600">Risk</th>
-                <th className="px-3 py-2 text-left text-xs font-semibold text-slate-600">Conf</th>
-                <th className="px-3 py-2 text-left text-xs font-semibold text-slate-600">Recommendation</th>
-                <th className="px-3 py-2 text-left text-xs font-semibold text-slate-600">Due</th>
+                <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">Pri</th>
+                <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">ID</th>
+                <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">Applicant</th>
+                <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">LOB</th>
+                <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">Risk</th>
+                <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">Conf</th>
+                <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">Recommendation</th>
+                <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">Due</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
               {queue.map((item) => (
                 <tr
                   key={item.id}
-                  className={`cursor-pointer transition-colors ${selectedId === item.id ? 'bg-blue-50' : 'hover:bg-slate-50'}`}
+                  className={`cursor-pointer transition-colors ${selectedId === item.id ? 'bg-indigo-50/60' : 'hover:bg-slate-50/50'}`}
                   onClick={() => handleSelect(item)}
                 >
                   <td className="px-3 py-2"><StatusBadge label={item.priority} variant={priorityVariant[item.priority] ?? 'yellow'} /></td>
@@ -126,7 +127,7 @@ const UnderwriterWorkbench: React.FC = () => {
       </div>
 
       {/* ── Right Panel: Detail ── */}
-      <div className="flex-1 overflow-hidden rounded-lg border border-slate-200 bg-white">
+      <div className="flex-1 overflow-hidden rounded-xl border border-slate-200/60 bg-white shadow-[var(--shadow-xs)]">
         {!selected ? (
           <div className="flex h-full items-center justify-center text-slate-400">
             Select a submission from the queue
@@ -150,7 +151,7 @@ const UnderwriterWorkbench: React.FC = () => {
                 <button
                   key={key}
                   onClick={() => setTab(key)}
-                  className={`border-b-2 px-4 py-2.5 text-sm font-medium transition-colors ${tab === key ? 'border-blue-600 text-blue-700' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+                  className={`border-b-2 px-4 py-2.5 text-sm font-medium transition-colors ${tab === key ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
                 >
                   {label}
                 </button>
@@ -163,7 +164,7 @@ const UnderwriterWorkbench: React.FC = () => {
                 <div className="space-y-5">
                   {/* Risk Score Breakdown */}
                   <div>
-                    <h3 className="mb-3 text-sm font-semibold text-slate-700">Risk Score Breakdown</h3>
+                    <h3 className="mb-3 text-sm font-semibold text-slate-800">Risk Score Breakdown</h3>
                     {selected.risk_factors.length > 0 ? (
                       <div className="space-y-2">
                         {selected.risk_factors.map((rf, i) => (
@@ -183,16 +184,16 @@ const UnderwriterWorkbench: React.FC = () => {
                   {/* Comparable Accounts */}
                   {selected.comparable_accounts.length > 0 && (
                     <div>
-                      <h3 className="mb-3 text-sm font-semibold text-slate-700">Comparable Accounts</h3>
-                      <div className="overflow-x-auto rounded border border-slate-100">
+                      <h3 className="mb-3 text-sm font-semibold text-slate-800">Comparable Accounts</h3>
+                      <div className="overflow-x-auto rounded-xl border border-slate-200/60">
                         <table className="min-w-full text-sm">
-                          <thead className="bg-slate-50">
+                          <thead className="sticky top-0 z-10 bg-slate-50/80 backdrop-blur-sm">
                             <tr>
-                              <th className="px-3 py-2 text-left text-xs font-semibold text-slate-600">Company</th>
-                              <th className="px-3 py-2 text-left text-xs font-semibold text-slate-600">Industry</th>
-                              <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600">Premium</th>
-                              <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600">Limit</th>
-                              <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600">Loss Ratio</th>
+                              <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">Company</th>
+                              <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">Industry</th>
+                              <th className="px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-wider text-slate-400">Premium</th>
+                              <th className="px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-wider text-slate-400">Limit</th>
+                              <th className="px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-wider text-slate-400">Loss Ratio</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-slate-50">
@@ -214,18 +215,18 @@ const UnderwriterWorkbench: React.FC = () => {
                   {/* Recommended Terms */}
                   {selected.recommended_terms.premium > 0 && (
                     <div>
-                      <h3 className="mb-3 text-sm font-semibold text-slate-700">Recommended Terms</h3>
+                      <h3 className="mb-3 text-sm font-semibold text-slate-800">Recommended Terms</h3>
                       <div className="grid grid-cols-3 gap-4">
-                        <div className="rounded-lg border border-slate-200 p-3">
-                          <p className="text-xs text-slate-500">Limit</p>
+                        <div className="rounded-xl border border-slate-200/60 p-3 shadow-[var(--shadow-xs)]">
+                          <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Limit</p>
                           <p className="text-lg font-bold text-slate-900">{money(selected.recommended_terms.limit)}</p>
                         </div>
-                        <div className="rounded-lg border border-slate-200 p-3">
-                          <p className="text-xs text-slate-500">Deductible</p>
+                        <div className="rounded-xl border border-slate-200/60 p-3 shadow-[var(--shadow-xs)]">
+                          <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Deductible</p>
                           <p className="text-lg font-bold text-slate-900">{money(selected.recommended_terms.deductible)}</p>
                         </div>
-                        <div className="rounded-lg border border-slate-200 p-3">
-                          <p className="text-xs text-slate-500">Premium</p>
+                        <div className="rounded-xl border border-slate-200/60 p-3 shadow-[var(--shadow-xs)]">
+                          <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Premium</p>
                           <p className="text-lg font-bold text-slate-900">{money(selected.recommended_terms.premium)}</p>
                         </div>
                       </div>
@@ -239,7 +240,7 @@ const UnderwriterWorkbench: React.FC = () => {
 
                   {/* Reasoning Chain */}
                   <div>
-                    <h3 className="mb-3 text-sm font-semibold text-slate-700">Reasoning Chain</h3>
+                    <h3 className="mb-3 text-sm font-semibold text-slate-800">Reasoning Chain</h3>
                     {selected.reasoning_chain.length > 0 ? (
                       <ol className="space-y-1">
                         {selected.reasoning_chain.map((step, i) => (
@@ -258,7 +259,7 @@ const UnderwriterWorkbench: React.FC = () => {
 
               {tab === 'documents' && (
                 <div className="space-y-3">
-                  <h3 className="text-sm font-semibold text-slate-700">Extracted Documents</h3>
+                  <h3 className="text-sm font-semibold text-slate-800">Extracted Documents</h3>
                   {selected.documents.length === 0 ? (
                     <p className="text-sm text-slate-400">No documents uploaded</p>
                   ) : (
@@ -269,7 +270,7 @@ const UnderwriterWorkbench: React.FC = () => {
                             <p className="text-sm font-medium text-slate-900">{doc.name}</p>
                             <p className="text-xs text-slate-400">{doc.type} · {(doc.size / 1000).toFixed(0)} KB · Uploaded {new Date(doc.uploaded_at).toLocaleDateString()}</p>
                           </div>
-                          <button className="text-xs text-blue-600 hover:text-blue-800">View</button>
+                           <button className="text-xs text-indigo-600 hover:text-indigo-800">View</button>
                         </div>
                       ))}
                     </div>
@@ -279,28 +280,28 @@ const UnderwriterWorkbench: React.FC = () => {
 
               {tab === 'risk' && (
                 <div className="space-y-5">
-                  <h3 className="text-sm font-semibold text-slate-700">Cyber Risk Profile</h3>
+                  <h3 className="text-sm font-semibold text-slate-800">Cyber Risk Profile</h3>
                   <div className="grid grid-cols-2 gap-4">
-                    <div className="rounded-lg border border-slate-200 p-3">
-                      <p className="text-xs text-slate-500">Annual Revenue</p>
+                    <div className="rounded-xl border border-slate-200/60 p-3 shadow-[var(--shadow-xs)]">
+                      <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Annual Revenue</p>
                       <p className="text-lg font-bold text-slate-900">{money(selected.annual_revenue)}</p>
                     </div>
-                    <div className="rounded-lg border border-slate-200 p-3">
-                      <p className="text-xs text-slate-500">Employees</p>
+                    <div className="rounded-xl border border-slate-200/60 p-3 shadow-[var(--shadow-xs)]">
+                      <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Employees</p>
                       <p className="text-lg font-bold text-slate-900">{selected.employee_count.toLocaleString()}</p>
                     </div>
-                    <div className="rounded-lg border border-slate-200 p-3">
-                      <p className="text-xs text-slate-500">Industry</p>
+                    <div className="rounded-xl border border-slate-200/60 p-3 shadow-[var(--shadow-xs)]">
+                      <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Industry</p>
                       <p className="text-lg font-bold text-slate-900">{selected.industry}</p>
                     </div>
-                    <div className="rounded-lg border border-slate-200 p-3">
-                      <p className="text-xs text-slate-500">Requested Coverage</p>
+                    <div className="rounded-xl border border-slate-200/60 p-3 shadow-[var(--shadow-xs)]">
+                      <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Requested Coverage</p>
                       <p className="text-lg font-bold text-slate-900">{money(selected.requested_coverage)}</p>
                     </div>
                   </div>
                   {selected.cyber_risk_data ? (
                     <>
-                      <h3 className="text-sm font-semibold text-slate-700">Security Controls</h3>
+                      <h3 className="text-sm font-semibold text-slate-800">Security Controls</h3>
                       <div className="grid grid-cols-2 gap-3">
                         {[
                           ['Security Rating', `${selected.cyber_risk_data.security_rating}/100`],
@@ -327,7 +328,7 @@ const UnderwriterWorkbench: React.FC = () => {
 
               {tab === 'history' && (
                 <div>
-                  <h3 className="mb-3 text-sm font-semibold text-slate-700">Decision Timeline</h3>
+                  <h3 className="mb-3 text-sm font-semibold text-slate-800">Decision Timeline</h3>
                   {selected.decision_history.length > 0 ? (
                     selected.decision_history.map((ev, i) => (
                       <TimelineEvent
@@ -359,7 +360,7 @@ const UnderwriterWorkbench: React.FC = () => {
                 <div className="mb-3 rounded-lg border border-blue-200 bg-blue-50 p-3">
                   <p className="text-sm font-medium text-slate-900">Confirm: {confirmAction}</p>
                   <textarea
-                    className="mt-2 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                    className="mt-2 w-full rounded-lg border border-slate-200/60 px-3 py-2 text-sm focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400 outline-none transition"
                     placeholder="Reason (required for audit trail)…"
                     rows={2}
                     value={actionReason}
@@ -369,11 +370,11 @@ const UnderwriterWorkbench: React.FC = () => {
                     <button
                       onClick={handleConfirmAction}
                       disabled={!actionReason.trim()}
-                      className="rounded bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+                      className="rounded bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white shadow-sm shadow-indigo-500/20 hover:bg-indigo-700 active:scale-[0.98] disabled:opacity-50 transition-all"
                     >
                       Confirm
                     </button>
-                    <button onClick={resetActions} className="rounded border border-slate-300 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-100">
+                    <button onClick={resetActions} className="rounded border border-slate-200/60 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50 transition-all">
                       Cancel
                     </button>
                   </div>
@@ -381,38 +382,38 @@ const UnderwriterWorkbench: React.FC = () => {
               )}
 
               {showModify && !confirmAction && (
-                <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 p-3">
+                <div className="mb-3 rounded-xl border border-amber-200 bg-amber-50 p-3">
                   <p className="mb-2 text-sm font-semibold text-slate-900">Modify Terms</p>
                   <div className="grid grid-cols-3 gap-3">
                     <div>
-                      <label className="text-xs text-slate-500">Limit</label>
-                      <input type="number" className="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm" value={modLimit} onChange={(e) => setModLimit(Number(e.target.value))} />
+                      <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Limit</label>
+                      <input type="number" className="mt-1 w-full rounded-lg border border-slate-200/60 px-2 py-1 text-sm focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400 outline-none transition" value={modLimit} onChange={(e) => setModLimit(Number(e.target.value))} />
                     </div>
                     <div>
-                      <label className="text-xs text-slate-500">Deductible</label>
-                      <input type="number" className="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm" value={modDeductible} onChange={(e) => setModDeductible(Number(e.target.value))} />
+                      <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Deductible</label>
+                      <input type="number" className="mt-1 w-full rounded-lg border border-slate-200/60 px-2 py-1 text-sm focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400 outline-none transition" value={modDeductible} onChange={(e) => setModDeductible(Number(e.target.value))} />
                     </div>
                     <div>
-                      <label className="text-xs text-slate-500">Premium</label>
-                      <input type="number" className="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm" value={modPremium} onChange={(e) => setModPremium(Number(e.target.value))} />
+                      <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Premium</label>
+                      <input type="number" className="mt-1 w-full rounded-lg border border-slate-200/60 px-2 py-1 text-sm focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400 outline-none transition" value={modPremium} onChange={(e) => setModPremium(Number(e.target.value))} />
                     </div>
                   </div>
                   <div className="mt-2">
-                    <label className="text-xs text-slate-500">Additional Conditions</label>
-                    <input type="text" className="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm" placeholder="Add conditions…" value={modConditions} onChange={(e) => setModConditions(e.target.value)} />
+                    <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Additional Conditions</label>
+                    <input type="text" className="mt-1 w-full rounded-lg border border-slate-200/60 px-2 py-1 text-sm focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400 outline-none transition" placeholder="Add conditions…" value={modConditions} onChange={(e) => setModConditions(e.target.value)} />
                   </div>
                   <div className="mt-2 flex gap-2">
-                    <button onClick={() => setConfirmAction('Modify Terms')} className="rounded bg-amber-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-amber-700">Submit Modified Terms</button>
-                    <button onClick={resetActions} className="rounded border border-slate-300 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-100">Cancel</button>
+                    <button onClick={() => setConfirmAction('Modify Terms')} className="rounded bg-amber-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-amber-700 transition-all">Submit Modified Terms</button>
+                    <button onClick={resetActions} className="rounded border border-slate-200/60 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50 transition-all">Cancel</button>
                   </div>
                 </div>
               )}
 
               {showDecline && !confirmAction && (
-                <div className="mb-3 rounded-lg border border-red-200 bg-red-50 p-3">
+                <div className="mb-3 rounded-xl border border-red-200 bg-red-50 p-3">
                   <p className="mb-2 text-sm font-semibold text-slate-900">Decline Reason</p>
                   <textarea
-                    className="w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                    className="w-full rounded-lg border border-slate-200/60 px-3 py-2 text-sm focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400 outline-none transition"
                     placeholder="Provide decline reason (required)…"
                     rows={2}
                     value={actionReason}
@@ -422,11 +423,11 @@ const UnderwriterWorkbench: React.FC = () => {
                     <button
                       onClick={() => setConfirmAction('Decline')}
                       disabled={!actionReason.trim()}
-                      className="rounded bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
+                      className="rounded bg-red-600 px-3 py-1.5 text-sm font-medium text-white shadow-sm shadow-red-500/20 hover:bg-red-700 active:scale-[0.98] disabled:opacity-50 transition-all"
                     >
                       Confirm Decline
                     </button>
-                    <button onClick={resetActions} className="rounded border border-slate-300 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-100">Cancel</button>
+                    <button onClick={resetActions} className="rounded border border-slate-200/60 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50 transition-all">Cancel</button>
                   </div>
                 </div>
               )}
@@ -447,7 +448,7 @@ const UnderwriterWorkbench: React.FC = () => {
                   </button>
                   <button
                     onClick={() => setShowDecline(true)}
-                    className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
+                    className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white shadow-sm shadow-red-500/20 hover:bg-red-700 active:scale-[0.98] transition-all"
                   >
                     Decline
                   </button>

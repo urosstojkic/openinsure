@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Plus, Play, Eye, Loader2, DollarSign, XCircle, Search, ChevronLeft, ChevronRight, Download } from 'lucide-react';
 import DataTable, { type Column } from '../components/DataTable';
 import StatusBadge from '../components/StatusBadge';
+import { TableSkeleton } from '../components/Skeleton';
 import { ToastContainer } from '../components/Toast';
 import { useToast } from '../components/useToast';
 import { getClaims } from '../api/claims';
@@ -124,9 +125,9 @@ const Claims: React.FC = () => {
 
   const columns: Column<Claim>[] = [
     { key: 'select', header: (
-        <input type="checkbox" checked={allPageSelected} onChange={toggleSelectAll} className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
+        <input type="checkbox" checked={allPageSelected} onChange={toggleSelectAll} className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" />
       ), render: (r) => (
-        <input type="checkbox" checked={selectedIds.has(r.id)} onChange={() => toggleSelect(r.id)} onClick={(e) => e.stopPropagation()} className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
+        <input type="checkbox" checked={selectedIds.has(r.id)} onChange={() => toggleSelect(r.id)} onClick={(e) => e.stopPropagation()} className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" />
       ),
     },
     { key: 'number', header: 'Claim Number',render: (r) => <span className="font-mono text-xs">{r.claim_number}</span>, sortable: true, sortValue: (r) => r.claim_number },
@@ -194,7 +195,7 @@ const Claims: React.FC = () => {
           )}
           <button
             onClick={(e) => { e.stopPropagation(); navigate(`/claims/${r.id}`); }}
-            className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50 transition-all"
+            className="inline-flex items-center gap-1 rounded-md border border-slate-200/60 bg-white px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50 transition-all"
           >
             <Eye size={11} />
             View
@@ -204,14 +205,14 @@ const Claims: React.FC = () => {
     }},
   ];
 
-  if (isLoading) return <div className="flex h-64 items-center justify-center text-slate-400">Loading…</div>;
+  if (isLoading) return <div className="space-y-4"><TableSkeleton rows={8} columns={10} /></div>;
 
   return (
     <div className="space-y-4">
       <ToastContainer toasts={toasts} onDismiss={dismissToast} />
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-slate-900">Claims</h1>
-        <Link to="/claims/new" className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
+        <h1 className="text-2xl font-bold tracking-tight text-slate-900">Claims</h1>
+        <Link to="/claims/new" className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm shadow-indigo-500/20 hover:bg-indigo-700 active:scale-[0.98] transition-all">
           <Plus size={16} /> File Claim
         </Link>
       </div>
@@ -224,11 +225,11 @@ const Claims: React.FC = () => {
             placeholder="Search claim #, policy #…"
             value={searchQuery}
             onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
-            className="rounded-lg border border-slate-300 pl-9 pr-3 py-1.5 text-sm text-slate-700 placeholder:text-slate-400 w-64"
+            className="rounded-lg border border-slate-200/60 bg-white pl-9 pr-3 py-2 text-sm text-slate-600 placeholder:text-slate-400 focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400 outline-none transition w-64"
           />
         </div>
         <select
-          className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-700"
+          className="rounded-lg border border-slate-200/60 bg-white px-3 py-2 text-sm text-slate-600 focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400 outline-none transition"
           value={statusFilter}
           onChange={(e) => { setStatusFilter(e.target.value); setCurrentPage(1); }}
         >
@@ -238,7 +239,7 @@ const Claims: React.FC = () => {
           ))}
         </select>
         <select
-          className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-700"
+          className="rounded-lg border border-slate-200/60 bg-white px-3 py-2 text-sm text-slate-600 focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400 outline-none transition"
           value={severityFilter}
           onChange={(e) => { setSeverityFilter(e.target.value); setCurrentPage(1); }}
         >
@@ -249,12 +250,12 @@ const Claims: React.FC = () => {
         </select>
         <span className="text-xs text-slate-400">{filtered.length} claims</span>
         {selectedIds.size > 0 && (
-          <div className="ml-auto flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5">
-            <span className="text-sm font-medium text-blue-700">Selected ({selectedIds.size})</span>
-            <button onClick={handleExportSelected} className="inline-flex items-center gap-1 rounded-md bg-blue-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-blue-700">
+          <div className="ml-auto flex items-center gap-2 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-1.5">
+            <span className="text-sm font-medium text-indigo-700">Selected ({selectedIds.size})</span>
+            <button onClick={handleExportSelected} className="inline-flex items-center gap-1 rounded-md bg-indigo-600 px-2.5 py-1 text-xs font-medium text-white shadow-sm shadow-indigo-500/20 hover:bg-indigo-700 active:scale-[0.98] transition-all">
               <Download size={12} /> Export
             </button>
-            <button onClick={() => setSelectedIds(new Set())} className="text-xs text-blue-600 hover:text-blue-800">Clear</button>
+            <button onClick={() => setSelectedIds(new Set())} className="text-xs text-indigo-600 hover:text-indigo-800">Clear</button>
           </div>
         )}
       </div>
@@ -266,7 +267,7 @@ const Claims: React.FC = () => {
       />
 
       {totalPages > 1 && (
-        <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-4 py-3">
+        <div className="flex items-center justify-between rounded-xl border border-slate-200/60 bg-white px-4 py-3 shadow-[var(--shadow-xs)]">
           <span className="text-xs text-slate-500">
             Showing {(currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, filtered.length)} of {filtered.length}
           </span>
@@ -274,7 +275,7 @@ const Claims: React.FC = () => {
             <button
               disabled={currentPage <= 1}
               onClick={() => setCurrentPage((p) => p - 1)}
-              className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="inline-flex items-center gap-1 rounded-md border border-slate-200/60 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
             >
               <ChevronLeft size={14} /> Previous
             </button>
@@ -282,7 +283,7 @@ const Claims: React.FC = () => {
             <button
               disabled={currentPage >= totalPages}
               onClick={() => setCurrentPage((p) => p + 1)}
-              className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="inline-flex items-center gap-1 rounded-md border border-slate-200/60 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
             >
               Next <ChevronRight size={14} />
             </button>

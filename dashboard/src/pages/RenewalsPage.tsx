@@ -4,6 +4,7 @@ import {
   RefreshCw, Clock, AlertCircle, CheckCircle2,
 } from 'lucide-react';
 import StatCard from '../components/StatCard';
+import { StatCardSkeleton } from '../components/Skeleton';
 import {
   getUpcomingRenewals,
   processRenewal,
@@ -37,7 +38,7 @@ const RenewalsPage: React.FC = () => {
   });
 
   if (isLoading || !data) {
-    return <div className="flex h-64 items-center justify-center text-slate-400">Loading…</div>;
+    return <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4"><StatCardSkeleton /><StatCardSkeleton /><StatCardSkeleton /><StatCardSkeleton /></div>;
   }
 
   const renewals = data.renewals;
@@ -53,8 +54,8 @@ const RenewalsPage: React.FC = () => {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-slate-900">Renewal Workflow</h1>
-        <p className="text-sm text-slate-500">Policies approaching renewal — identify, quote, and process</p>
+        <h1 className="text-2xl font-bold tracking-tight text-slate-900">Renewal Workflow</h1>
+        <p className="text-sm text-slate-500 mt-0.5">Policies approaching renewal — identify, quote, and process</p>
       </div>
 
       {/* KPI Cards */}
@@ -81,9 +82,9 @@ const RenewalsPage: React.FC = () => {
       </div>
 
       {/* Renewals Table */}
-      <div className="rounded-lg border border-slate-200 bg-white overflow-hidden">
+      <div className="rounded-xl border border-slate-200/60 bg-white overflow-hidden shadow-[var(--shadow-xs)]">
         <table className="w-full text-sm">
-          <thead className="bg-slate-50 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
+          <thead className="sticky top-0 z-10 bg-slate-50/80 backdrop-blur-sm text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">
             <tr>
               <th className="px-4 py-3">Policy #</th>
               <th className="px-4 py-3">Policyholder</th>
@@ -96,13 +97,13 @@ const RenewalsPage: React.FC = () => {
           </thead>
           <tbody className="divide-y divide-slate-100">
             {filtered.map((r: RenewalCandidate) => (
-              <tr key={r.id} className="hover:bg-slate-50 transition">
+              <tr key={r.id} className="hover:bg-slate-50/50 transition-colors">
                 <td className="px-4 py-3 font-mono text-xs font-medium text-slate-900">{r.policy_number}</td>
                 <td className="px-4 py-3 font-medium text-slate-900">{r.policyholder_name}</td>
                 <td className="px-4 py-3 text-slate-600">{r.expiration_date}</td>
                 <td className="px-4 py-3">{urgencyBadge(r.days_to_expiry)}</td>
                 <td className="px-4 py-3 font-mono text-xs">{money(r.premium)}</td>
-                <td className="px-4 py-3 font-mono text-xs text-blue-600">{money(Math.round(r.premium * 1.05))}</td>
+                <td className="px-4 py-3 font-mono text-xs text-indigo-600">{money(Math.round(r.premium * 1.05))}</td>
                 <td className="px-4 py-3">
                   <button
                     onClick={() => renewMutation.mutate(r.id)}

@@ -13,6 +13,7 @@ import {
   type MGAPerformance,
   type MGABordereau,
 } from '../api/mga';
+import { StatCardSkeleton, ChartSkeleton } from '../components/Skeleton';
 
 const money = (n: number) =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n);
@@ -63,7 +64,21 @@ const MGAOversightDashboard: React.FC = () => {
   });
 
   if (perfLoading || bxLoading || !perfData) {
-    return <div className="flex h-64 items-center justify-center text-slate-400">Loading…</div>;
+    return (
+      <div className="space-y-6">
+        <div>
+          <div className="h-7 w-44 rounded-lg bg-slate-200 animate-pulse" />
+          <div className="mt-2 h-4 w-72 rounded bg-slate-100 animate-pulse" />
+        </div>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <StatCardSkeleton />
+          <StatCardSkeleton />
+          <StatCardSkeleton />
+          <StatCardSkeleton />
+        </div>
+        <ChartSkeleton />
+      </div>
+    );
   }
 
   const mgaAuthorities = perfData.authorities;
@@ -84,8 +99,8 @@ const MGAOversightDashboard: React.FC = () => {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-slate-900">MGA Oversight</h1>
-        <p className="text-sm text-slate-500">Delegated authority monitoring — Carrier view</p>
+        <h1 className="text-2xl font-bold tracking-tight text-slate-900">MGA Oversight</h1>
+        <p className="text-sm text-slate-500 mt-0.5">Delegated authority monitoring — Carrier view</p>
       </div>
 
       {/* KPI Cards */}
@@ -97,15 +112,25 @@ const MGAOversightDashboard: React.FC = () => {
       </div>
 
       {/* Authority Utilization Chart */}
-      <div className="rounded-lg border border-slate-200 bg-white p-5">
-        <h2 className="mb-4 text-sm font-semibold text-slate-700">Authority Utilization</h2>
+      <div className="rounded-xl border border-slate-200/60 bg-white p-5 shadow-[var(--shadow-xs)]">
+        <h2 className="mb-4 text-sm font-semibold text-slate-800">Authority Utilization</h2>
         <ResponsiveContainer width="100%" height={200}>
-          <BarChart data={utilizationData}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-            <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-            <YAxis domain={[0, 100]} tick={{ fontSize: 10 }} tickFormatter={(v: number) => `${v}%`} />
-            <Tooltip formatter={(v) => `${v}%`} />
-            <Bar dataKey="utilization" radius={[4, 4, 0, 0]}>
+          <BarChart data={utilizationData} barCategoryGap="20%" maxBarSize={40}>
+            <CartesianGrid stroke="#f1f5f9" vertical={false} />
+            <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+            <YAxis domain={[0, 100]} tick={{ fontSize: 10, fill: '#94a3b8' }} tickFormatter={(v: number) => `${v}%`} axisLine={false} tickLine={false} />
+            <Tooltip
+              content={({ active, payload, label }) => {
+                if (!active || !payload?.length) return null;
+                return (
+                  <div className="rounded-lg border border-slate-200/60 bg-white/95 px-3 py-2 shadow-lg backdrop-blur-sm">
+                    <p className="text-[11px] font-medium text-slate-400">{label}</p>
+                    <p className="text-sm font-bold text-slate-800">{payload[0].value}%</p>
+                  </div>
+                );
+              }}
+            />
+            <Bar dataKey="utilization" radius={[6, 6, 0, 0]}>
               {utilizationData.map((entry, i) => (
                 <Cell key={i} fill={entry.utilization > 90 ? '#ef4444' : entry.utilization > 70 ? '#f59e0b' : '#22c55e'} />
               ))}
@@ -131,9 +156,9 @@ const MGAOversightDashboard: React.FC = () => {
 
       {/* Tab Content */}
       {tab === 'scorecard' && (
-        <div className="rounded-lg border border-slate-200 bg-white overflow-hidden">
+        <div className="rounded-xl border border-slate-200/60 bg-white overflow-hidden shadow-[var(--shadow-xs)]">
           <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
+            <thead className="sticky top-0 z-10 bg-slate-50/80 backdrop-blur-sm text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">
               <tr>
                 <th className="px-4 py-3">MGA Name</th>
                 <th className="px-4 py-3">Status</th>
@@ -146,7 +171,7 @@ const MGAOversightDashboard: React.FC = () => {
             </thead>
             <tbody className="divide-y divide-slate-100">
               {mgaAuthorities.map(a => (
-                <tr key={a.mga_id} className="hover:bg-slate-50 transition">
+                <tr key={a.mga_id} className="hover:bg-slate-50/50 transition-colors">
                   <td className="px-4 py-3 font-medium text-slate-900">{a.mga_name}</td>
                   <td className="px-4 py-3">{statusBadge(a.status)}</td>
                   <td className="px-4 py-3 font-mono text-xs">
@@ -178,9 +203,9 @@ const MGAOversightDashboard: React.FC = () => {
       )}
 
       {tab === 'bordereaux' && (
-        <div className="rounded-lg border border-slate-200 bg-white overflow-hidden">
+        <div className="rounded-xl border border-slate-200/60 bg-white overflow-hidden shadow-[var(--shadow-xs)]">
           <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
+            <thead className="sticky top-0 z-10 bg-slate-50/80 backdrop-blur-sm text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">
               <tr>
                 <th className="px-4 py-3">MGA</th>
                 <th className="px-4 py-3">Period</th>
@@ -194,7 +219,7 @@ const MGAOversightDashboard: React.FC = () => {
             </thead>
             <tbody className="divide-y divide-slate-100">
               {bordereaux.map(b => (
-                <tr key={b.id} className="hover:bg-slate-50 transition">
+                <tr key={b.id} className="hover:bg-slate-50/50 transition-colors">
                   <td className="px-4 py-3 font-medium text-slate-900">{mgaAuthorities.find(a => a.mga_id === b.mga_id)?.mga_name ?? b.mga_id}</td>
                   <td className="px-4 py-3 text-slate-600">{b.period}</td>
                   <td className="px-4 py-3 font-mono text-xs">{money(b.premium_reported)}</td>
@@ -217,9 +242,9 @@ const MGAOversightDashboard: React.FC = () => {
       )}
 
       {tab === 'audit' && (
-        <div className="rounded-lg border border-slate-200 bg-white overflow-hidden">
+        <div className="rounded-xl border border-slate-200/60 bg-white overflow-hidden shadow-[var(--shadow-xs)]">
           <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
+            <thead className="sticky top-0 z-10 bg-slate-50/80 backdrop-blur-sm text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">
               <tr>
                 <th className="px-4 py-3">MGA</th>
                 <th className="px-4 py-3">Date</th>
@@ -230,7 +255,7 @@ const MGAOversightDashboard: React.FC = () => {
             </thead>
             <tbody className="divide-y divide-slate-100">
               {auditFindings.map(f => (
-                <tr key={f.id} className="hover:bg-slate-50 transition">
+                <tr key={f.id} className="hover:bg-slate-50/50 transition-colors">
                   <td className="px-4 py-3 font-medium text-slate-900">{f.mga}</td>
                   <td className="px-4 py-3 text-slate-600">{f.date}</td>
                   <td className="px-4 py-3">{statusBadge(f.severity)}</td>

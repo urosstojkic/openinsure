@@ -66,7 +66,7 @@ const BrokerPortal: React.FC = () => {
       <div className="flex items-center justify-between border-b border-slate-200 bg-white px-6 py-3">
         <div className="flex items-center gap-6">
           <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600 text-sm font-bold text-white">OI</div>
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600 text-sm font-bold text-white">OI</div>
             <span className="text-lg font-bold text-slate-900">OpenInsure</span>
             <StatusBadge label="Broker Portal" variant="blue" />
           </div>
@@ -75,7 +75,7 @@ const BrokerPortal: React.FC = () => {
               <button
                 key={key}
                 onClick={() => { setActiveTab(key); setSelectedSubmission(null); }}
-                className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${activeTab === key ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}`}
+                className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${activeTab === key ? 'bg-indigo-50 text-indigo-600' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}`}
               >
                 {label}
               </button>
@@ -95,25 +95,25 @@ const BrokerPortal: React.FC = () => {
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="text-xl font-bold text-slate-900">My Submissions</h2>
-              <button className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
+              <button className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm shadow-indigo-500/20 hover:bg-indigo-700 active:scale-[0.98] transition-all">
                 New Submission
               </button>
             </div>
-            <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+            <div className="overflow-x-auto rounded-xl border border-slate-200/60 bg-white shadow-[var(--shadow-xs)]">
               <table className="min-w-full divide-y divide-slate-200">
-                <thead className="bg-slate-50">
+                <thead className="sticky top-0 z-10 bg-slate-50/80 backdrop-blur-sm">
                   <tr>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-600">ID</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-600">Applicant</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-600">LOB</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-600">Status</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-600">Submitted</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-600">Last Update</th>
+                    <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">ID</th>
+                    <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">Applicant</th>
+                    <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">LOB</th>
+                    <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">Status</th>
+                    <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">Submitted</th>
+                    <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">Last Update</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {submissions.map((sub) => (
-                    <tr key={sub.id} className="cursor-pointer hover:bg-slate-50 transition-colors" onClick={() => setSelectedSubmission(sub)}>
+                    <tr key={sub.id} className="cursor-pointer hover:bg-slate-50/50 transition-colors" onClick={() => setSelectedSubmission(sub)}>
                       <td className="px-4 py-3 font-mono text-xs text-slate-700">{formatSubId(sub)}</td>
                       <td className="px-4 py-3 text-sm text-slate-900">{sub.applicant_name}</td>
                       <td className="px-4 py-3 text-sm text-slate-600">{lobLabels[sub.lob] ?? sub.lob}</td>
@@ -131,15 +131,15 @@ const BrokerPortal: React.FC = () => {
         {/* ── Submission Detail (simplified — no internal data) ── */}
         {activeTab === 'submissions' && selectedSubmission && (
           <div className="space-y-4">
-            <button onClick={() => setSelectedSubmission(null)} className="text-sm text-blue-600 hover:text-blue-800">← Back to submissions</button>
-            <div className="rounded-lg border border-slate-200 bg-white p-5">
+            <button onClick={() => setSelectedSubmission(null)} className="text-sm text-indigo-600 hover:text-indigo-800">← Back to submissions</button>
+            <div className="rounded-xl border border-slate-200/60 bg-white p-5 shadow-[var(--shadow-xs)]">
               <h2 className="text-xl font-bold text-slate-900">{selectedSubmission.applicant_name}</h2>
               <p className="text-sm text-slate-500">{formatSubId(selectedSubmission)} · {lobLabels[selectedSubmission.lob] ?? selectedSubmission.lob}</p>
               <div className="mt-2">
                 <StatusBadge label={selectedSubmission.status} variant={statusVariant[selectedSubmission.status]} />
               </div>
 
-              <h3 className="mt-6 mb-3 text-sm font-semibold text-slate-700">Status Timeline</h3>
+              <h3 className="mt-6 mb-3 text-sm font-semibold text-slate-800">Status Timeline</h3>
               {selectedSubmission.status_timeline.length > 0 ? (
                 <div className="space-y-3">
                   {selectedSubmission.status_timeline.map((ev, i) => (
@@ -147,8 +147,8 @@ const BrokerPortal: React.FC = () => {
                       {i < selectedSubmission.status_timeline.length - 1 && (
                         <div className="absolute left-[11px] top-7 bottom-0 w-px bg-slate-200" />
                       )}
-                      <div className="relative z-10 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-blue-100">
-                        <span className="h-2.5 w-2.5 rounded-full bg-blue-500" />
+                      <div className="relative z-10 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-indigo-100">
+                        <span className="h-2.5 w-2.5 rounded-full bg-indigo-500" />
                       </div>
                       <div>
                         <p className="text-sm font-medium text-slate-900">{ev.status}</p>
@@ -159,7 +159,7 @@ const BrokerPortal: React.FC = () => {
                   ))}
                 </div>
               ) : (
-                <div className="rounded-lg border border-slate-200 p-4 text-center text-sm text-slate-400">
+                <div className="rounded-xl border border-slate-200/60 p-4 text-center text-sm text-slate-400 shadow-[var(--shadow-xs)]">
                   <p>Current status: <StatusBadge label={selectedSubmission.status} variant={statusVariant[selectedSubmission.status]} /></p>
                   <p className="mt-1 text-xs">Submitted {formatDate(selectedSubmission.submitted_date)}</p>
                 </div>
@@ -172,22 +172,22 @@ const BrokerPortal: React.FC = () => {
         {activeTab === 'policies' && (
           <div className="space-y-4">
             <h2 className="text-xl font-bold text-slate-900">My Policies</h2>
-            <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+            <div className="overflow-x-auto rounded-xl border border-slate-200/60 bg-white shadow-[var(--shadow-xs)]">
               <table className="min-w-full divide-y divide-slate-200">
-                <thead className="bg-slate-50">
+                <thead className="sticky top-0 z-10 bg-slate-50/80 backdrop-blur-sm">
                   <tr>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-600">Policy #</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-600">Insured</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-600">LOB</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-600">Effective</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-600">Expiry</th>
-                    <th className="px-4 py-3 text-right text-xs font-semibold uppercase text-slate-600">Premium</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-600">Actions</th>
+                    <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">Policy #</th>
+                    <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">Insured</th>
+                    <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">LOB</th>
+                    <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">Effective</th>
+                    <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">Expiry</th>
+                    <th className="px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-wider text-slate-400">Premium</th>
+                    <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {policies.map((pol) => (
-                    <tr key={pol.id}>
+                    <tr key={pol.id} className="hover:bg-slate-50/50 transition-colors">
                       <td className="px-4 py-3 font-mono text-xs text-slate-700">{pol.policy_number}</td>
                       <td className="px-4 py-3 text-sm text-slate-900">{pol.insured_name}</td>
                       <td className="px-4 py-3 text-sm text-slate-600">{lobLabels[pol.lob] ?? pol.lob}</td>
@@ -196,9 +196,9 @@ const BrokerPortal: React.FC = () => {
                       <td className="px-4 py-3 text-right font-mono text-sm text-slate-700">{money(pol.premium)}</td>
                       <td className="px-4 py-3">
                         <div className="flex gap-2">
-                          <button className="text-xs text-blue-600 hover:text-blue-800">Download</button>
-                          <button className="text-xs text-blue-600 hover:text-blue-800">Certificate</button>
-                          <button className="text-xs text-blue-600 hover:text-blue-800">Endorsement</button>
+                          <button className="text-xs text-indigo-600 hover:text-indigo-800">Download</button>
+                          <button className="text-xs text-indigo-600 hover:text-indigo-800">Certificate</button>
+                          <button className="text-xs text-indigo-600 hover:text-indigo-800">Endorsement</button>
                         </div>
                       </td>
                     </tr>
@@ -214,23 +214,23 @@ const BrokerPortal: React.FC = () => {
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="text-xl font-bold text-slate-900">My Claims</h2>
-              <button className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
+              <button className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm shadow-indigo-500/20 hover:bg-indigo-700 active:scale-[0.98] transition-all">
                 File FNOL
               </button>
             </div>
-            <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+            <div className="overflow-x-auto rounded-xl border border-slate-200/60 bg-white shadow-[var(--shadow-xs)]">
               <table className="min-w-full divide-y divide-slate-200">
-                <thead className="bg-slate-50">
+                <thead className="sticky top-0 z-10 bg-slate-50/80 backdrop-blur-sm">
                   <tr>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-600">Claim #</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-600">Policy</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-600">Status</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-600">Loss Date</th>
+                    <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">Claim #</th>
+                    <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">Policy</th>
+                    <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">Status</th>
+                    <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">Loss Date</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {claims.map((clm) => (
-                    <tr key={clm.id}>
+                    <tr key={clm.id} className="hover:bg-slate-50/50 transition-colors">
                       <td className="px-4 py-3 font-mono text-xs text-slate-700">{clm.claim_number}</td>
                       <td className="px-4 py-3 font-mono text-xs text-slate-500">{clm.policy_number}</td>
                       <td className="px-4 py-3"><StatusBadge label={clm.status} variant={claimStatusVariant[clm.status]} /></td>
@@ -247,7 +247,7 @@ const BrokerPortal: React.FC = () => {
         {activeTab === 'documents' && (
           <div className="space-y-4">
             <h2 className="text-xl font-bold text-slate-900">Documents</h2>
-            <div className="rounded-lg border border-slate-200 bg-white p-8 text-center text-slate-400">
+            <div className="rounded-xl border border-slate-200/60 bg-white p-8 text-center text-slate-400 shadow-[var(--shadow-xs)]">
               <p className="text-lg font-medium">Document Center</p>
               <p className="text-sm">Access policy documents, certificates, and endorsements from your policies above.</p>
             </div>

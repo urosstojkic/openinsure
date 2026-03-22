@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Plus, Play, Sparkles, Eye, Loader2, Search, ChevronLeft, ChevronRight, Download } from 'lucide-react';
 import DataTable, { type Column } from '../components/DataTable';
 import StatusBadge from '../components/StatusBadge';
+import { TableSkeleton } from '../components/Skeleton';
 import { ToastContainer } from '../components/Toast';
 import { useToast } from '../components/useToast';
 import { getSubmissions } from '../api/submissions';
@@ -158,7 +159,7 @@ const Submissions: React.FC = () => {
             <button
               onClick={(e) => handleAction(r.id, 'triage', e)}
               disabled={!!loading}
-              className="inline-flex items-center gap-1 rounded-md bg-blue-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50 transition-all"
+              className="inline-flex items-center gap-1 rounded-md bg-blue-600 px-2.5 py-1 text-xs font-medium text-white shadow-sm hover:bg-blue-700 active:scale-[0.97] disabled:opacity-50 transition-all"
             >
               {actionLoading === `${r.id}-triage` ? <Loader2 size={11} className="animate-spin" /> : <Sparkles size={11} />}
               Triage
@@ -168,7 +169,7 @@ const Submissions: React.FC = () => {
             <button
               onClick={(e) => handleAction(r.id, 'quote', e)}
               disabled={!!loading}
-              className="inline-flex items-center gap-1 rounded-md bg-green-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-green-700 disabled:opacity-50 transition-all"
+              className="inline-flex items-center gap-1 rounded-md bg-green-600 px-2.5 py-1 text-xs font-medium text-white shadow-sm hover:bg-green-700 active:scale-[0.97] disabled:opacity-50 transition-all"
             >
               {actionLoading === `${r.id}-quote` ? <Loader2 size={11} className="animate-spin" /> : <Play size={11} />}
               Quote
@@ -178,7 +179,7 @@ const Submissions: React.FC = () => {
             <button
               onClick={(e) => handleAction(r.id, 'bind', e)}
               disabled={!!loading}
-              className="inline-flex items-center gap-1 rounded-md bg-purple-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-purple-700 disabled:opacity-50 transition-all"
+              className="inline-flex items-center gap-1 rounded-md bg-purple-600 px-2.5 py-1 text-xs font-medium text-white shadow-sm hover:bg-purple-700 active:scale-[0.97] disabled:opacity-50 transition-all"
             >
               {actionLoading === `${r.id}-bind` ? <Loader2 size={11} className="animate-spin" /> : null}
               Bind
@@ -186,7 +187,7 @@ const Submissions: React.FC = () => {
           )}
           <button
             onClick={(e) => { e.stopPropagation(); navigate(`/submissions/${r.id}`); }}
-            className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50 transition-all"
+            className="inline-flex items-center gap-1 rounded-md border border-slate-200/60 bg-white px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50 transition-all"
           >
             <Eye size={11} />
             View
@@ -196,14 +197,25 @@ const Submissions: React.FC = () => {
     }},
   ];
 
-  if (isLoading) return <div className="flex h-64 items-center justify-center text-slate-400">Loading…</div>;
+  if (isLoading) return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div className="skeleton-text" style={{ width: '160px', height: '28px' }} />
+        <div className="skeleton" style={{ width: '140px', height: '36px', borderRadius: '0.5rem' }} />
+      </div>
+      <TableSkeleton rows={8} columns={8} />
+    </div>
+  );
 
   return (
     <div className="space-y-4">
       <ToastContainer toasts={toasts} onDismiss={dismissToast} />
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-slate-900">Submissions</h1>
-        <Link to="/submissions/new" className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900">Submissions</h1>
+          <p className="text-sm text-slate-500 mt-0.5">Manage and track insurance submissions</p>
+        </div>
+        <Link to="/submissions/new" className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm shadow-indigo-500/20 hover:bg-indigo-700 active:scale-[0.98] transition-all">
           <Plus size={16} /> New Submission
         </Link>
       </div>
@@ -217,11 +229,11 @@ const Submissions: React.FC = () => {
             placeholder="Search applicant, submission #…"
             value={searchQuery}
             onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
-            className="rounded-lg border border-slate-300 pl-9 pr-3 py-1.5 text-sm text-slate-700 placeholder:text-slate-400 w-64"
+            className="rounded-lg border border-slate-200/60 bg-white pl-9 pr-3 py-2 text-sm text-slate-600 placeholder:text-slate-400 focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400 outline-none transition w-64"
           />
         </div>
         <select
-          className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-700"
+          className="rounded-lg border border-slate-200/60 bg-white px-3 py-2 text-sm text-slate-600"
           value={statusFilter}
           onChange={(e) => { setStatusFilter(e.target.value); setCurrentPage(1); }}
         >
@@ -231,7 +243,7 @@ const Submissions: React.FC = () => {
           ))}
         </select>
         <select
-          className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-700"
+          className="rounded-lg border border-slate-200/60 bg-white px-3 py-2 text-sm text-slate-600"
           value={lobFilter}
           onChange={(e) => { setLobFilter(e.target.value); setCurrentPage(1); }}
         >
@@ -240,14 +252,14 @@ const Submissions: React.FC = () => {
             <option key={k} value={k}>{v}</option>
           ))}
         </select>
-        <span className="text-xs text-slate-400">{filtered.length} results</span>
+        <span className="text-[11px] font-medium text-slate-400">{filtered.length} results</span>
         {selectedIds.size > 0 && (
-          <div className="ml-auto flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5">
-            <span className="text-sm font-medium text-blue-700">Selected ({selectedIds.size})</span>
-            <button onClick={handleExportSelected} className="inline-flex items-center gap-1 rounded-md bg-blue-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-blue-700">
+          <div className="ml-auto flex items-center gap-2 rounded-lg border border-indigo-200/60 bg-indigo-50/50 px-3 py-1.5">
+            <span className="text-sm font-medium text-indigo-700">Selected ({selectedIds.size})</span>
+            <button onClick={handleExportSelected} className="inline-flex items-center gap-1 rounded-md bg-indigo-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-indigo-700">
               <Download size={12} /> Export
             </button>
-            <button onClick={() => setSelectedIds(new Set())} className="text-xs text-blue-600 hover:text-blue-800">Clear</button>
+            <button onClick={() => setSelectedIds(new Set())} className="text-xs text-indigo-600 hover:text-indigo-800">Clear</button>
           </div>
         )}
       </div>
@@ -260,7 +272,7 @@ const Submissions: React.FC = () => {
       />
 
       {totalPages > 1 && (
-        <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-4 py-3">
+        <div className="flex items-center justify-between rounded-xl border border-slate-200/60 bg-white px-4 py-3">
           <span className="text-xs text-slate-500">
             Showing {(currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, filtered.length)} of {filtered.length}
           </span>
@@ -268,7 +280,7 @@ const Submissions: React.FC = () => {
             <button
               disabled={currentPage <= 1}
               onClick={() => setCurrentPage((p) => p - 1)}
-              className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="inline-flex items-center gap-1 rounded-md border border-slate-200/60 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <ChevronLeft size={14} /> Previous
             </button>
@@ -276,7 +288,7 @@ const Submissions: React.FC = () => {
             <button
               disabled={currentPage >= totalPages}
               onClick={() => setCurrentPage((p) => p + 1)}
-              className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="inline-flex items-center gap-1 rounded-md border border-slate-200/60 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Next <ChevronRight size={14} />
             </button>

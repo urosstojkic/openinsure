@@ -147,10 +147,10 @@ const NewSubmission: React.FC = () => {
     <div className="mx-auto max-w-3xl space-y-6">
       {/* Header */}
       <div className="flex items-center gap-3">
-        <button onClick={() => navigate('/submissions')} className="rounded-lg p-1 hover:bg-slate-200">
-          <ArrowLeft size={20} />
+        <button onClick={() => navigate('/submissions')} className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition-all hover:bg-slate-50 hover:text-slate-700 hover:border-slate-300">
+          <ArrowLeft size={18} />
         </button>
-        <h1 className="text-2xl font-bold text-slate-900">New Submission</h1>
+        <h1 className="text-2xl font-bold tracking-tight text-slate-900">New Submission</h1>
       </div>
 
       {/* Toast */}
@@ -169,8 +169,8 @@ const NewSubmission: React.FC = () => {
 
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Applicant Information */}
-        <section className="rounded-lg border border-slate-200 bg-white p-5">
-          <h2 className="mb-4 text-sm font-semibold text-slate-700">Applicant Information</h2>
+        <section className="rounded-xl border border-slate-200/60 bg-white p-5 shadow-[var(--shadow-xs)]">
+          <h2 className="mb-4 text-sm font-semibold text-slate-800">Applicant Information</h2>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <FormField type="text" label="Company Name" name="companyName" value={form.companyName} onChange={(v) => set('companyName', v)} error={errors.companyName} required />
             <FormField type="text" label="Contact Name" name="contactName" value={form.contactName} onChange={(v) => set('contactName', v)} error={errors.contactName} required />
@@ -186,8 +186,8 @@ const NewSubmission: React.FC = () => {
         </section>
 
         {/* Submission Details */}
-        <section className="rounded-lg border border-slate-200 bg-white p-5">
-          <h2 className="mb-4 text-sm font-semibold text-slate-700">Submission Details</h2>
+        <section className="rounded-xl border border-slate-200/60 bg-white p-5 shadow-[var(--shadow-xs)]">
+          <h2 className="mb-4 text-sm font-semibold text-slate-800">Submission Details</h2>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <FormField type="select" label="Line of Business" name="lob" value={form.lob} onChange={(v) => set('lob', v)} options={LOB_OPTIONS} placeholder="Select LOB…" error={errors.lob} required />
             <FormField type="select" label="Channel" name="channel" value={form.channel} onChange={(v) => set('channel', v)} options={CHANNEL_OPTIONS} placeholder="Select channel…" />
@@ -198,8 +198,8 @@ const NewSubmission: React.FC = () => {
 
         {/* Cyber Risk Data */}
         {isCyber && (
-          <section className="rounded-lg border border-slate-200 bg-white p-5">
-            <h2 className="mb-4 text-sm font-semibold text-slate-700">Cyber Risk Data</h2>
+          <section className="rounded-xl border border-slate-200/60 bg-white p-5 shadow-[var(--shadow-xs)]">
+            <h2 className="mb-4 text-sm font-semibold text-slate-800">Cyber Risk Data</h2>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <FormField type="currency" label="Annual Revenue" name="annualRevenue" value={form.annualRevenue} onChange={(v) => set('annualRevenue', v)} placeholder="0" />
               <FormField type="number" label="Employee Count" name="employeeCount" value={form.employeeCount} onChange={(v) => set('employeeCount', v)} min={0} />
@@ -220,13 +220,13 @@ const NewSubmission: React.FC = () => {
 
         {/* Actions */}
         <div className="flex items-center justify-end gap-3">
-          <button type="button" onClick={() => navigate('/submissions')} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
+          <button type="button" onClick={() => navigate('/submissions')} className="rounded-lg border border-slate-200/60 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-all">
             Cancel
           </button>
           <button
             type="submit"
             disabled={submitting}
-            className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-5 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+            className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-5 py-2 text-sm font-medium text-white shadow-sm shadow-indigo-500/20 hover:bg-indigo-700 active:scale-[0.98] disabled:opacity-50 transition-all"
           >
             {submitting && <Loader2 size={16} className="animate-spin" />}
             {submitting ? 'Submitting…' : 'Submit'}

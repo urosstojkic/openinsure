@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getEscalations, approveEscalation, rejectEscalation, type Escalation } from '../api/escalations';
 import { useAuth } from '../context/AuthContext';
 import EmptyState from '../components/EmptyState';
+import { TableSkeleton } from '../components/Skeleton';
 import { AlertTriangle } from 'lucide-react';
 
 const ACTION_LABELS: Record<string, string> = {
@@ -64,8 +65,8 @@ const Escalations: React.FC = () => {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Escalation Queue</h1>
-          <p className="text-sm text-slate-500 mt-1">Actions awaiting authority approval</p>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900">Escalation Queue</h1>
+          <p className="text-sm text-slate-500 mt-0.5">Actions awaiting authority approval</p>
         </div>
         <div className="flex gap-2">
           {['pending', 'approved', 'rejected', ''].map((s) => (
@@ -85,24 +86,26 @@ const Escalations: React.FC = () => {
       </div>
 
       {/* Table */}
-      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+      <div className="overflow-hidden rounded-xl border border-slate-200/60 bg-white shadow-[var(--shadow-xs)]">
         <table className="w-full text-sm">
-          <thead className="border-b border-slate-100 bg-slate-50/60">
+          <thead className="sticky top-0 z-10 border-b border-slate-100 bg-slate-50/80 backdrop-blur-sm">
             <tr>
-              <th className="px-4 py-3 text-left font-semibold text-slate-600">Action</th>
-              <th className="px-4 py-3 text-left font-semibold text-slate-600">Entity</th>
-              <th className="px-4 py-3 text-right font-semibold text-slate-600">Amount</th>
-              <th className="px-4 py-3 text-left font-semibold text-slate-600">Requested By</th>
-              <th className="px-4 py-3 text-left font-semibold text-slate-600">Required Role</th>
-              <th className="px-4 py-3 text-left font-semibold text-slate-600">Status</th>
-              <th className="px-4 py-3 text-left font-semibold text-slate-600">Created</th>
-              <th className="px-4 py-3 text-center font-semibold text-slate-600">Actions</th>
+              <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">Action</th>
+              <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">Entity</th>
+              <th className="px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-wider text-slate-400">Amount</th>
+              <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">Requested By</th>
+              <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">Required Role</th>
+              <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">Status</th>
+              <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">Created</th>
+              <th className="px-4 py-3 text-center text-[11px] font-semibold uppercase tracking-wider text-slate-400">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {isLoading ? (
               <tr>
-                <td colSpan={8} className="px-4 py-12 text-center text-slate-400">Loading…</td>
+                <td colSpan={8} className="px-4 py-6">
+                  <TableSkeleton rows={4} columns={8} />
+                </td>
               </tr>
             ) : items.length === 0 ? (
               <tr>
@@ -184,7 +187,7 @@ const Escalations: React.FC = () => {
               {ACTION_LABELS[modalItem.action] ?? modalItem.action} — {fmt(modalItem.amount)}
             </p>
             <textarea
-              className="mt-4 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+              className="mt-4 w-full rounded-lg border border-slate-200/60 px-3 py-2 text-sm focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400 outline-none transition"
               rows={3}
               placeholder="Reason for decision…"
               value={reason}

@@ -6,6 +6,7 @@ import ConfidenceBar from '../components/ConfidenceBar';
 import ReasoningPanel from '../components/ReasoningPanel';
 import StatusBadge from '../components/StatusBadge';
 import EmptyState from '../components/EmptyState';
+import { TableSkeleton } from '../components/Skeleton';
 import { getDecisions } from '../api/compliance';
 import { formatTimestamp } from '../utils/formatDate';
 import type { AgentDecision, AgentName, OversightLevel } from '../types';
@@ -93,18 +94,18 @@ const AgentDecisions: React.FC = () => {
     },
   ];
 
-  if (isLoading) return <div className="flex h-64 items-center justify-center text-slate-400">Loading…</div>;
+  if (isLoading) return <div className="space-y-4"><TableSkeleton rows={6} columns={8} /></div>;
 
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-2xl font-bold text-slate-900">Agent Decisions</h1>
-        <p className="text-sm text-slate-500">EU AI Act compliance view — human oversight of automated decisions</p>
+        <h1 className="text-2xl font-bold tracking-tight text-slate-900">Agent Decisions</h1>
+        <p className="text-sm text-slate-500 mt-0.5">EU AI Act compliance view — human oversight of automated decisions</p>
       </div>
 
       {/* Legend */}
-      <div className="flex items-center gap-6 rounded-lg border border-slate-200 bg-white px-4 py-2.5">
-        <span className="text-xs font-semibold text-slate-500 uppercase">Traffic Light</span>
+      <div className="flex items-center gap-6 rounded-xl border border-slate-200/60 bg-white px-4 py-2.5 shadow-[var(--shadow-xs)]">
+        <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Traffic Light</span>
         <span className="inline-flex items-center gap-1.5 text-xs text-slate-600">
           <span className="h-3 w-3 rounded-full bg-green-500" /> Confidence ≥ 80%, no oversight needed
         </span>
@@ -119,7 +120,7 @@ const AgentDecisions: React.FC = () => {
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-3">
         <select
-          className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-700"
+          className="rounded-lg border border-slate-200/60 bg-white px-3 py-2 text-sm text-slate-600 focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400 outline-none transition"
           value={agentFilter}
           onChange={(e) => setAgentFilter(e.target.value)}
         >
@@ -129,7 +130,7 @@ const AgentDecisions: React.FC = () => {
           ))}
         </select>
         <select
-          className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-700"
+          className="rounded-lg border border-slate-200/60 bg-white px-3 py-2 text-sm text-slate-600 focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400 outline-none transition"
           value={typeFilter}
           onChange={(e) => setTypeFilter(e.target.value)}
         >
@@ -139,7 +140,7 @@ const AgentDecisions: React.FC = () => {
           ))}
         </select>
         <select
-          className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-700"
+          className="rounded-lg border border-slate-200/60 bg-white px-3 py-2 text-sm text-slate-600 focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400 outline-none transition"
           value={oversightFilter}
           onChange={(e) => setOversightFilter(e.target.value)}
         >
@@ -172,7 +173,7 @@ const AgentDecisions: React.FC = () => {
         const dec = decisions.find((d) => d.id === expandedId);
         if (!dec) return null;
         return (
-          <div className="rounded-lg border-2 border-blue-200 bg-blue-50/30 p-4">
+          <div className="rounded-xl border-2 border-indigo-200 bg-indigo-50/30 p-4">
             <div className="mb-3 flex items-center justify-between">
               <h3 className="text-sm font-semibold text-slate-900">Decision Detail — {dec.id}</h3>
               <button

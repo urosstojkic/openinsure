@@ -7,6 +7,7 @@ import ConfidenceBar from '../components/ConfidenceBar';
 import TimelineEvent from '../components/TimelineEvent';
 import { getComplianceSummary } from '../api/compliance';
 import { ShieldCheck, Brain, AlertTriangle, Eye } from 'lucide-react';
+import { StatCardSkeleton, ChartSkeleton } from '../components/Skeleton';
 
 const COLORS = ['#3b82f6', '#8b5cf6', '#f59e0b', '#10b981', '#ef4444'];
 
@@ -14,7 +15,24 @@ const Compliance: React.FC = () => {
   const { data: comp, isLoading } = useQuery({ queryKey: ['compliance'], queryFn: getComplianceSummary });
 
   if (isLoading || !comp) {
-    return <div className="flex h-64 items-center justify-center text-slate-400">Loading…</div>;
+    return (
+      <div className="space-y-6">
+        <div>
+          <div className="h-7 w-56 rounded-lg bg-slate-200 animate-pulse" />
+          <div className="mt-2 h-4 w-80 rounded bg-slate-100 animate-pulse" />
+        </div>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <StatCardSkeleton />
+          <StatCardSkeleton />
+          <StatCardSkeleton />
+          <StatCardSkeleton />
+        </div>
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <ChartSkeleton />
+          <ChartSkeleton />
+        </div>
+      </div>
+    );
   }
 
   const agentChartData = Object.entries(comp.decisions_by_agent).map(([k, v]) => ({
@@ -30,8 +48,8 @@ const Compliance: React.FC = () => {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-slate-900">Compliance Dashboard</h1>
-        <p className="text-sm text-slate-500">EU AI Act compliance monitoring and audit trail</p>
+        <h1 className="text-2xl font-bold tracking-tight text-slate-900">Compliance Dashboard</h1>
+        <p className="text-sm text-slate-500 mt-0.5">EU AI Act compliance monitoring and audit trail</p>
       </div>
 
       {/* ── Summary cards ── */}
@@ -61,8 +79,8 @@ const Compliance: React.FC = () => {
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         {/* ── AI System Inventory ── */}
-        <div className="rounded-lg border border-slate-200 bg-white p-5">
-          <h2 className="mb-4 text-sm font-semibold text-slate-700">AI System Inventory</h2>
+        <div className="rounded-xl border border-slate-200/60 bg-white p-5 shadow-[var(--shadow-xs)]">
+          <h2 className="mb-4 text-sm font-semibold text-slate-800">AI System Inventory</h2>
           <div className="space-y-3">
             {comp.ai_systems.map((sys) => (
               <div key={sys.id} className="flex items-center justify-between rounded-lg border border-slate-100 p-3">
@@ -86,8 +104,8 @@ const Compliance: React.FC = () => {
         </div>
 
         {/* ── Decisions by Agent (pie) ── */}
-        <div className="rounded-lg border border-slate-200 bg-white p-5">
-          <h2 className="mb-4 text-sm font-semibold text-slate-700">Decisions by Agent</h2>
+        <div className="rounded-xl border border-slate-200/60 bg-white p-5 shadow-[var(--shadow-xs)]">
+          <h2 className="mb-4 text-sm font-semibold text-slate-800">Decisions by Agent</h2>
           <ResponsiveContainer width="100%" height={220}>
             <PieChart>
               <Pie data={agentChartData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label={({ name, percent }) => `${name} ${((percent ?? 0) * 100).toFixed(0)}%`}>
@@ -95,7 +113,17 @@ const Compliance: React.FC = () => {
                   <Cell key={i} fill={COLORS[i % COLORS.length]} />
                 ))}
               </Pie>
-              <Tooltip />
+              <Tooltip
+                content={({ active, payload }) => {
+                  if (!active || !payload?.length) return null;
+                  return (
+                    <div className="rounded-lg border border-slate-200/60 bg-white/95 px-3 py-2 shadow-lg backdrop-blur-sm">
+                      <p className="text-[11px] font-medium text-slate-400">{payload[0].name}</p>
+                      <p className="text-sm font-bold text-slate-800">{payload[0].value}</p>
+                    </div>
+                  );
+                }}
+              />
             </PieChart>
           </ResponsiveContainer>
         </div>
@@ -103,8 +131,8 @@ const Compliance: React.FC = () => {
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         {/* ── Decisions by Type (pie) ── */}
-        <div className="rounded-lg border border-slate-200 bg-white p-5">
-          <h2 className="mb-4 text-sm font-semibold text-slate-700">Decisions by Type</h2>
+        <div className="rounded-xl border border-slate-200/60 bg-white p-5 shadow-[var(--shadow-xs)]">
+          <h2 className="mb-4 text-sm font-semibold text-slate-800">Decisions by Type</h2>
           <ResponsiveContainer width="100%" height={220}>
             <PieChart>
               <Pie data={typeChartData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label={({ name, percent }) => `${name} ${((percent ?? 0) * 100).toFixed(0)}%`}>
@@ -112,14 +140,24 @@ const Compliance: React.FC = () => {
                   <Cell key={i} fill={COLORS[i % COLORS.length]} />
                 ))}
               </Pie>
-              <Tooltip />
+              <Tooltip
+                content={({ active, payload }) => {
+                  if (!active || !payload?.length) return null;
+                  return (
+                    <div className="rounded-lg border border-slate-200/60 bg-white/95 px-3 py-2 shadow-lg backdrop-blur-sm">
+                      <p className="text-[11px] font-medium text-slate-400">{payload[0].name}</p>
+                      <p className="text-sm font-bold text-slate-800">{payload[0].value}</p>
+                    </div>
+                  );
+                }}
+              />
             </PieChart>
           </ResponsiveContainer>
         </div>
 
         {/* ── Bias Monitoring ── */}
-        <div className="rounded-lg border border-slate-200 bg-white p-5">
-          <h2 className="mb-4 text-sm font-semibold text-slate-700">Bias Monitoring</h2>
+        <div className="rounded-xl border border-slate-200/60 bg-white p-5 shadow-[var(--shadow-xs)]">
+          <h2 className="mb-4 text-sm font-semibold text-slate-800">Bias Monitoring</h2>
           <div className="space-y-3">
             {comp.bias_metrics.map((m, i) => (
               <div key={i} className="space-y-1">
@@ -142,8 +180,8 @@ const Compliance: React.FC = () => {
       </div>
 
       {/* ── EU AI Act compliance indicators ── */}
-      <div className="rounded-lg border border-slate-200 bg-white p-5">
-        <h2 className="mb-4 text-sm font-semibold text-slate-700">EU AI Act Compliance Status</h2>
+      <div className="rounded-xl border border-slate-200/60 bg-white p-5 shadow-[var(--shadow-xs)]">
+        <h2 className="mb-4 text-sm font-semibold text-slate-800">EU AI Act Compliance Status</h2>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {[
             { label: 'AI System Registration', met: true, detail: 'All high-risk systems registered in EU database' },
@@ -155,7 +193,7 @@ const Compliance: React.FC = () => {
           ].map((item, i) => (
             <div
               key={i}
-              className={`rounded-lg border p-4 ${
+              className={`rounded-xl border p-4 ${
                 item.met ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50'
               }`}
             >
@@ -170,8 +208,8 @@ const Compliance: React.FC = () => {
       </div>
 
       {/* ── Audit Trail ── */}
-      <div className="rounded-lg border border-slate-200 bg-white p-5">
-        <h2 className="mb-4 text-sm font-semibold text-slate-700">Audit Trail</h2>
+      <div className="rounded-xl border border-slate-200/60 bg-white p-5 shadow-[var(--shadow-xs)]">
+        <h2 className="mb-4 text-sm font-semibold text-slate-800">Audit Trail</h2>
         {comp.audit_trail.map((entry, i) => (
           <TimelineEvent
             key={entry.id}

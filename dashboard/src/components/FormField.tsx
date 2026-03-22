@@ -91,7 +91,7 @@ type FormFieldProps =
   | SliderFieldProps;
 
 const inputBase =
-  'block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition';
+  'block w-full rounded-lg border border-slate-200/60 bg-white px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400 outline-none transition';
 const inputError =
   'border-red-400 focus:border-red-500 focus:ring-red-500';
 
@@ -108,7 +108,7 @@ const FormField: React.FC<FormFieldProps> = (props) => {
           type="checkbox"
           checked={props.checked}
           onChange={(e) => props.onChange(e.target.checked)}
-          className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+          className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
         />
         <label htmlFor={name} className="text-sm text-slate-700">
           {label}
@@ -234,7 +234,7 @@ const FormField: React.FC<FormFieldProps> = (props) => {
             min={props.min}
             max={props.max}
             step={props.step ?? 1}
-            className="h-2 w-full cursor-pointer appearance-none rounded-lg bg-slate-200 accent-blue-600"
+            className="h-2 w-full cursor-pointer appearance-none rounded-lg bg-slate-200 accent-indigo-600"
           />
           <span className="min-w-[2rem] text-center text-sm font-semibold text-slate-700">
             {props.value}

@@ -2,6 +2,7 @@ import React, { useState, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import StatusBadge from '../components/StatusBadge';
 import ConfidenceBar from '../components/ConfidenceBar';
+import { StatCardSkeleton } from '../components/Skeleton';
 import TimelineEvent from '../components/TimelineEvent';
 import { getClaimsQueue } from '../api/workbench';
 import { formatDate } from '../utils/formatDate';
@@ -95,34 +96,34 @@ const ClaimsWorkbench: React.FC = () => {
     }
   }, [selected, activeAction, actionAmount, actionReason, actionPayee, closeReason, refetch]);
 
-  if (isLoading) return <div className="flex h-64 items-center justify-center text-slate-400">Loading…</div>;
+  if (isLoading) return <div className="flex h-64 items-center justify-center"><StatCardSkeleton /></div>;
 
   return (
     <div className="flex h-[calc(100vh-7rem)] gap-4">
       {/* ── Left Panel: Claims Queue ── */}
-      <div className="w-[40%] shrink-0 overflow-hidden rounded-lg border border-slate-200 bg-white">
-        <div className="border-b border-slate-200 px-4 py-3">
-          <h1 className="text-lg font-bold text-slate-900">Claims Workbench</h1>
-          <p className="text-xs text-slate-500">{queue.length} assigned claims</p>
+      <div className="w-[40%] shrink-0 overflow-hidden rounded-xl border border-slate-200/60 bg-white shadow-[var(--shadow-xs)]">
+        <div className="border-b border-slate-200/60 px-4 py-3">
+          <h1 className="text-lg font-semibold text-slate-800">Claims Workbench</h1>
+          <p className="text-[11px] text-slate-500">{queue.length} assigned claims</p>
         </div>
-        <div className="overflow-y-auto" style={{ maxHeight: 'calc(100% - 56px)' }}>
+        <div className="overflow-y-auto custom-scrollbar" style={{ maxHeight: 'calc(100% - 56px)' }}>
           <table className="min-w-full divide-y divide-slate-100">
-            <thead className="sticky top-0 bg-slate-50">
+            <thead className="sticky top-0 bg-slate-50/80 backdrop-blur-sm">
               <tr>
-                <th className="px-3 py-2 text-left text-xs font-semibold text-slate-600">Claim #</th>
-                <th className="px-3 py-2 text-left text-xs font-semibold text-slate-600">Policy</th>
-                <th className="px-3 py-2 text-left text-xs font-semibold text-slate-600">Status</th>
-                <th className="px-3 py-2 text-left text-xs font-semibold text-slate-600">Severity</th>
-                <th className="px-3 py-2 text-left text-xs font-semibold text-slate-600">Loss Date</th>
-                <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600">Reserve</th>
-                <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600">Days</th>
+                <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">Claim #</th>
+                <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">Policy</th>
+                <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">Status</th>
+                <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">Severity</th>
+                <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">Loss Date</th>
+                <th className="px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-wider text-slate-400">Reserve</th>
+                <th className="px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-wider text-slate-400">Days</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
               {queue.map((item) => (
                 <tr
                   key={item.id}
-                  className={`cursor-pointer transition-colors ${selectedId === item.id ? 'bg-blue-50' : 'hover:bg-slate-50'}`}
+                  className={`cursor-pointer transition-colors ${selectedId === item.id ? 'bg-indigo-50/60' : 'hover:bg-slate-50'}`}
                   onClick={() => handleSelect(item)}
                 >
                   <td className="px-3 py-2 font-mono text-xs text-slate-700">{item.claim_number}</td>
@@ -140,7 +141,7 @@ const ClaimsWorkbench: React.FC = () => {
       </div>
 
       {/* ── Right Panel: Detail ── */}
-      <div className="flex-1 overflow-hidden rounded-lg border border-slate-200 bg-white">
+      <div className="flex-1 overflow-hidden rounded-xl border border-slate-200/60 bg-white shadow-[var(--shadow-xs)]">
         {!selected ? (
           <div className="flex h-full items-center justify-center text-slate-400">
             Select a claim from the queue
@@ -148,19 +149,19 @@ const ClaimsWorkbench: React.FC = () => {
         ) : (
           <div className="flex h-full flex-col">
             {/* Header */}
-            <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3">
+            <div className="flex items-center justify-between border-b border-slate-200/60 px-5 py-3">
               <div>
                 <div className="flex items-center gap-3">
-                  <h2 className="text-lg font-bold text-slate-900">{selected.claim_number}</h2>
+                  <h2 className="text-lg font-semibold text-slate-800">{selected.claim_number}</h2>
                   <StatusBadge label={selected.severity} variant={severityVariant[selected.severity]} />
                 </div>
-                <p className="text-xs text-slate-500">
+                <p className="text-[11px] text-slate-500">
                   {selected.insured_name} · {selected.policy_number}
                 </p>
               </div>
               <div className="flex items-center gap-3">
                 <div className="text-right">
-                  <p className="text-xs text-slate-500">Fraud Score</p>
+                  <p className="text-[11px] text-slate-500">Fraud Score</p>
                   <p className={`text-sm font-bold ${selected.fraud_score > 0.5 ? 'text-red-600' : selected.fraud_score > 0.2 ? 'text-amber-600' : 'text-green-600'}`}>
                     {Math.round(selected.fraud_score * 100)}%
                   </p>
@@ -169,12 +170,12 @@ const ClaimsWorkbench: React.FC = () => {
             </div>
 
             {/* Tabs */}
-            <div className="flex border-b border-slate-200 px-5">
+            <div className="flex border-b border-slate-200/60 px-5">
               {([['assessment', 'Agent Assessment'], ['timeline', 'Timeline'], ['documents', 'Documents'], ['financials', 'Financials']] as const).map(([key, label]) => (
                 <button
                   key={key}
                   onClick={() => setTab(key)}
-                  className={`border-b-2 px-4 py-2.5 text-sm font-medium transition-colors ${tab === key ? 'border-blue-600 text-blue-700' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+                  className={`border-b-2 px-4 py-2.5 text-sm font-medium transition-colors ${tab === key ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
                 >
                   {label}
                 </button>
@@ -182,24 +183,24 @@ const ClaimsWorkbench: React.FC = () => {
             </div>
 
             {/* Tab Content */}
-            <div className="flex-1 overflow-y-auto p-5">
+            <div className="flex-1 overflow-y-auto custom-scrollbar p-5">
               {tab === 'assessment' && (
                 <div className="space-y-5">
                   {/* Coverage Verification */}
                   <div>
-                    <h3 className="mb-3 text-sm font-semibold text-slate-700">Coverage Verification</h3>
-                    <div className={`rounded-lg border p-4 ${selected.coverage_verification.status === 'verified' ? 'border-green-200 bg-green-50' : selected.coverage_verification.status === 'pending' ? 'border-amber-200 bg-amber-50' : 'border-red-200 bg-red-50'}`}>
+                    <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-400">Coverage Verification</h3>
+                    <div className={`rounded-xl border p-4 ${selected.coverage_verification.status === 'verified' ? 'border-green-200 bg-green-50' : selected.coverage_verification.status === 'pending' ? 'border-amber-200 bg-amber-50' : 'border-red-200 bg-red-50'}`}>
                       <div className="flex items-center gap-2 mb-2">
                         <StatusBadge label={selected.coverage_verification.status} variant={selected.coverage_verification.status === 'verified' ? 'green' : selected.coverage_verification.status === 'pending' ? 'yellow' : 'red'} />
-                        <span className="text-sm text-slate-700">
+                        <span className="text-[13px] text-slate-700">
                           Policy {selected.coverage_verification.policy_active ? 'Active' : 'Inactive'} ·
                           {selected.coverage_verification.within_coverage ? ' Within coverage' : ' Coverage question'}
                         </span>
                       </div>
-                      <p className="text-xs text-slate-600">{selected.coverage_verification.notes}</p>
+                      <p className="text-[11px] text-slate-600">{selected.coverage_verification.notes}</p>
                       <div className="mt-2 flex flex-wrap gap-1">
                         {selected.coverage_verification.exclusions_checked.map((ex, i) => (
-                          <span key={i} className="rounded bg-white px-2 py-0.5 text-xs text-slate-500 border border-slate-200">{ex} ✓</span>
+                          <span key={i} className="rounded bg-white px-2 py-0.5 text-[11px] text-slate-500 border border-slate-200/60">{ex} ✓</span>
                         ))}
                       </div>
                     </div>
@@ -207,35 +208,35 @@ const ClaimsWorkbench: React.FC = () => {
 
                   {/* Reserve Recommendation */}
                   <div>
-                    <h3 className="mb-3 text-sm font-semibold text-slate-700">Initial Reserve Recommendation</h3>
+                    <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-400">Initial Reserve Recommendation</h3>
                     <div className="grid grid-cols-2 gap-4">
-                      <div className="rounded-lg border border-slate-200 p-3">
-                        <p className="text-xs text-slate-500">Indemnity</p>
-                        <p className="text-lg font-bold text-slate-900">{money(selected.reserve_recommendation.recommended_indemnity)}</p>
+                      <div className="rounded-xl border border-slate-200/60 p-3">
+                        <p className="text-[11px] text-slate-500">Indemnity</p>
+                        <p className="text-lg font-semibold text-slate-800">{money(selected.reserve_recommendation.recommended_indemnity)}</p>
                       </div>
-                      <div className="rounded-lg border border-slate-200 p-3">
-                        <p className="text-xs text-slate-500">Expense</p>
-                        <p className="text-lg font-bold text-slate-900">{money(selected.reserve_recommendation.recommended_expense)}</p>
+                      <div className="rounded-xl border border-slate-200/60 p-3">
+                        <p className="text-[11px] text-slate-500">Expense</p>
+                        <p className="text-lg font-semibold text-slate-800">{money(selected.reserve_recommendation.recommended_expense)}</p>
                       </div>
                     </div>
                     <div className="mt-2 flex items-center gap-2">
-                      <span className="text-xs text-slate-500">Confidence:</span>
+                      <span className="text-[11px] text-slate-500">Confidence:</span>
                       <div className="w-32"><ConfidenceBar value={selected.reserve_recommendation.confidence} /></div>
                     </div>
-                    <p className="mt-1 text-xs text-slate-500">{selected.reserve_recommendation.basis}</p>
+                    <p className="mt-1 text-[11px] text-slate-500">{selected.reserve_recommendation.basis}</p>
                   </div>
 
                   {/* Comparable Claims */}
                   <div>
-                    <h3 className="mb-3 text-sm font-semibold text-slate-700">Comparable Claims</h3>
-                    <div className="overflow-x-auto rounded border border-slate-100">
-                      <table className="min-w-full text-sm">
-                        <thead className="bg-slate-50">
+                    <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-400">Comparable Claims</h3>
+                    <div className="overflow-x-auto rounded-xl border border-slate-200/60">
+                      <table className="min-w-full text-[13px]">
+                        <thead className="bg-slate-50/80 backdrop-blur-sm">
                           <tr>
-                            <th className="px-3 py-2 text-left text-xs font-semibold text-slate-600">Claim #</th>
-                            <th className="px-3 py-2 text-left text-xs font-semibold text-slate-600">Type</th>
-                            <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600">Settled</th>
-                            <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600">Duration</th>
+                            <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">Claim #</th>
+                            <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">Type</th>
+                            <th className="px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-wider text-slate-400">Settled</th>
+                            <th className="px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-wider text-slate-400">Duration</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-50">
@@ -255,14 +256,14 @@ const ClaimsWorkbench: React.FC = () => {
                   {/* Fraud Indicators */}
                   {selected.fraud_indicators.length > 0 && (
                     <div>
-                      <h3 className="mb-3 text-sm font-semibold text-slate-700">Fraud Indicators</h3>
+                      <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-400">Fraud Indicators</h3>
                       <div className="space-y-2">
                         {selected.fraud_indicators.map((fi, i) => (
-                          <div key={i} className="flex items-center gap-3 rounded border border-slate-100 px-3 py-2">
+                          <div key={i} className="flex items-center gap-3 rounded-xl border border-slate-200/60 px-3 py-2">
                             <StatusBadge label={fi.severity} variant={fi.severity === 'high' ? 'red' : fi.severity === 'medium' ? 'yellow' : 'green'} />
                             <div>
-                              <p className="text-sm font-medium text-slate-700">{fi.indicator}</p>
-                              <p className="text-xs text-slate-500">{fi.description}</p>
+                              <p className="text-[13px] font-medium text-slate-700">{fi.indicator}</p>
+                              <p className="text-[11px] text-slate-500">{fi.description}</p>
                             </div>
                           </div>
                         ))}
@@ -274,7 +275,7 @@ const ClaimsWorkbench: React.FC = () => {
 
               {tab === 'timeline' && (
                 <div>
-                  <h3 className="mb-3 text-sm font-semibold text-slate-700">Claim Timeline</h3>
+                  <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-400">Claim Timeline</h3>
                   {selected.timeline.map((ev, i) => (
                     <TimelineEvent
                       key={i}
@@ -291,17 +292,17 @@ const ClaimsWorkbench: React.FC = () => {
 
               {tab === 'documents' && (
                 <div className="space-y-3">
-                  <h3 className="text-sm font-semibold text-slate-700">Claim Documents</h3>
+                  <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400">Claim Documents</h3>
                   {selected.claim_documents.map((doc) => (
-                    <div key={doc.id} className="flex items-center justify-between rounded-lg border border-slate-200 p-3">
+                    <div key={doc.id} className="flex items-center justify-between rounded-xl border border-slate-200/60 p-3">
                       <div>
-                        <p className="text-sm font-medium text-slate-900">{doc.name}</p>
-                        <p className="text-xs text-slate-400">
+                        <p className="text-[13px] font-medium text-slate-800">{doc.name}</p>
+                        <p className="text-[11px] text-slate-400">
                           <StatusBadge label={doc.category.replace(/_/g, ' ')} variant="gray" className="mr-2" />
                           {new Date(doc.uploaded_at).toLocaleDateString()}
                         </p>
                       </div>
-                      <button className="text-xs text-blue-600 hover:text-blue-800">View</button>
+                      <button className="text-[11px] text-indigo-600 hover:text-indigo-800">View</button>
                     </div>
                   ))}
                 </div>
@@ -309,49 +310,49 @@ const ClaimsWorkbench: React.FC = () => {
 
               {tab === 'financials' && (
                 <div className="space-y-5">
-                  <h3 className="text-sm font-semibold text-slate-700">Financial Summary</h3>
+                  <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400">Financial Summary</h3>
                   <div className="grid grid-cols-3 gap-4">
-                    <div className="rounded-lg border border-slate-200 p-4">
-                      <p className="text-xs text-slate-500">Indemnity Reserve</p>
-                      <p className="text-xl font-bold text-slate-900">{money(selected.financials.indemnity_reserve)}</p>
+                    <div className="rounded-xl border border-slate-200/60 p-4">
+                      <p className="text-[11px] text-slate-500">Indemnity Reserve</p>
+                      <p className="text-xl font-semibold text-slate-800">{money(selected.financials.indemnity_reserve)}</p>
                     </div>
-                    <div className="rounded-lg border border-slate-200 p-4">
-                      <p className="text-xs text-slate-500">Expense Reserve</p>
-                      <p className="text-xl font-bold text-slate-900">{money(selected.financials.expense_reserve)}</p>
+                    <div className="rounded-xl border border-slate-200/60 p-4">
+                      <p className="text-[11px] text-slate-500">Expense Reserve</p>
+                      <p className="text-xl font-semibold text-slate-800">{money(selected.financials.expense_reserve)}</p>
                     </div>
-                    <div className="rounded-lg border border-blue-200 bg-blue-50 p-4">
-                      <p className="text-xs text-blue-600">Total Incurred</p>
+                    <div className="rounded-xl border border-blue-200 bg-blue-50 p-4">
+                      <p className="text-[11px] text-blue-600">Total Incurred</p>
                       <p className="text-xl font-bold text-blue-900">{money(selected.financials.total_incurred)}</p>
                     </div>
                   </div>
                   <div className="grid grid-cols-3 gap-4">
-                    <div className="rounded-lg border border-slate-200 p-4">
-                      <p className="text-xs text-slate-500">Indemnity Paid</p>
-                      <p className="text-xl font-bold text-slate-900">{money(selected.financials.indemnity_paid)}</p>
+                    <div className="rounded-xl border border-slate-200/60 p-4">
+                      <p className="text-[11px] text-slate-500">Indemnity Paid</p>
+                      <p className="text-xl font-semibold text-slate-800">{money(selected.financials.indemnity_paid)}</p>
                     </div>
-                    <div className="rounded-lg border border-slate-200 p-4">
-                      <p className="text-xs text-slate-500">Expense Paid</p>
-                      <p className="text-xl font-bold text-slate-900">{money(selected.financials.expense_paid)}</p>
+                    <div className="rounded-xl border border-slate-200/60 p-4">
+                      <p className="text-[11px] text-slate-500">Expense Paid</p>
+                      <p className="text-xl font-semibold text-slate-800">{money(selected.financials.expense_paid)}</p>
                     </div>
-                    <div className="rounded-lg border border-slate-200 p-4">
-                      <p className="text-xs text-slate-500">Recovery</p>
-                      <p className="text-xl font-bold text-slate-900">{money(selected.financials.recovery)}</p>
+                    <div className="rounded-xl border border-slate-200/60 p-4">
+                      <p className="text-[11px] text-slate-500">Recovery</p>
+                      <p className="text-xl font-semibold text-slate-800">{money(selected.financials.recovery)}</p>
                     </div>
                   </div>
 
                   {/* Summary bar */}
-                  <div className="rounded-lg border border-slate-200 p-4">
-                    <h4 className="mb-2 text-xs font-semibold text-slate-600">Reserve Utilization</h4>
+                  <div className="rounded-xl border border-slate-200/60 p-4">
+                    <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">Reserve Utilization</h4>
                     <div className="flex items-center gap-3">
                       <div className="flex-1">
                         <div className="h-3 w-full overflow-hidden rounded-full bg-slate-200">
                           <div
-                            className="h-3 rounded-full bg-blue-500"
+                            className="h-3 rounded-full bg-indigo-500"
                             style={{ width: `${selected.financials.total_incurred > 0 ? ((selected.financials.indemnity_paid + selected.financials.expense_paid) / selected.financials.total_incurred) * 100 : 0}%` }}
                           />
                         </div>
                       </div>
-                      <span className="text-xs text-slate-600">
+                      <span className="text-[11px] text-slate-600">
                         {money(selected.financials.indemnity_paid + selected.financials.expense_paid)} paid of {money(selected.financials.total_incurred)}
                       </span>
                     </div>
@@ -361,28 +362,28 @@ const ClaimsWorkbench: React.FC = () => {
             </div>
 
             {/* ── Action Panel ── */}
-            <div className="border-t border-slate-200 bg-slate-50 px-5 py-3">
+            <div className="border-t border-slate-100 bg-slate-50/50 px-5 py-3">
               {activeAction && (
-                <div className="mb-3 rounded-lg border border-blue-200 bg-blue-50 p-3">
-                  <p className="mb-2 text-sm font-semibold text-slate-900">{activeAction}</p>
+                <div className="mb-3 rounded-xl border border-indigo-200/60 bg-indigo-50/50 p-4">
+                  <p className="mb-2 text-[13px] font-semibold text-slate-800">{activeAction}</p>
                   {(activeAction === 'Update Reserve' || activeAction === 'Approve Settlement') && (
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <label className="text-xs text-slate-500">Amount</label>
-                        <input type="number" className="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm" placeholder="$0" value={actionAmount} onChange={(e) => setActionAmount(e.target.value)} />
+                        <label className="text-[11px] text-slate-500">Amount</label>
+                        <input type="number" className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400 outline-none transition" placeholder="$0" value={actionAmount} onChange={(e) => setActionAmount(e.target.value)} />
                       </div>
                       {activeAction === 'Approve Settlement' && (
                         <div>
-                          <label className="text-xs text-slate-500">Payee</label>
-                          <input type="text" className="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm" value={actionPayee} onChange={(e) => setActionPayee(e.target.value)} />
+                          <label className="text-[11px] text-slate-500">Payee</label>
+                          <input type="text" className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400 outline-none transition" value={actionPayee} onChange={(e) => setActionPayee(e.target.value)} />
                         </div>
                       )}
                     </div>
                   )}
                   {activeAction === 'Close Claim' && (
                     <div>
-                      <label className="text-xs text-slate-500">Close Reason</label>
-                      <select className="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm" value={closeReason} onChange={(e) => setCloseReason(e.target.value)}>
+                      <label className="text-[11px] text-slate-500">Close Reason</label>
+                      <select className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400 outline-none transition" value={closeReason} onChange={(e) => setCloseReason(e.target.value)}>
                         <option value="settled">Settled</option>
                         <option value="withdrawn">Withdrawn</option>
                         <option value="denied">Denied</option>
@@ -391,8 +392,8 @@ const ClaimsWorkbench: React.FC = () => {
                     </div>
                   )}
                   <div className="mt-2">
-                    <label className="text-xs text-slate-500">Reason / Notes</label>
-                    <textarea className="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm" rows={2} placeholder="Required for audit trail…" value={actionReason} onChange={(e) => setActionReason(e.target.value)} />
+                    <label className="text-[11px] text-slate-500">Reason / Notes</label>
+                    <textarea className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400 outline-none transition" rows={2} placeholder="Required for audit trail…" value={actionReason} onChange={(e) => setActionReason(e.target.value)} />
                   </div>
                   {needsEscalation && activeAction === 'Approve Settlement' && (
                     <div className="mt-2 rounded bg-amber-50 border border-amber-200 px-3 py-1.5 text-xs text-amber-800">
@@ -400,26 +401,26 @@ const ClaimsWorkbench: React.FC = () => {
                     </div>
                   )}
                   <div className="mt-2 flex gap-2">
-                    <button onClick={handleSubmitAction} disabled={!actionReason.trim()} className="rounded bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
+                    <button onClick={handleSubmitAction} disabled={!actionReason.trim()} className="rounded-lg bg-indigo-600 px-3 py-1.5 text-[13px] font-medium text-white hover:bg-indigo-700 shadow-sm shadow-indigo-500/20 active:scale-[0.98] disabled:opacity-50 transition">
                       Submit
                     </button>
-                    <button onClick={() => setActiveAction(null)} className="rounded border border-slate-300 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-100">Cancel</button>
+                    <button onClick={() => setActiveAction(null)} className="rounded-lg border border-slate-200 px-3 py-1.5 text-[13px] text-slate-600 hover:bg-slate-100 transition">Cancel</button>
                   </div>
                 </div>
               )}
 
               {!activeAction && (
                 <div className="flex items-center gap-3">
-                  <button onClick={() => setActiveAction('Update Reserve')} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
+                  <button onClick={() => setActiveAction('Update Reserve')} className="rounded-lg bg-indigo-600 px-4 py-2 text-[13px] font-medium text-white hover:bg-indigo-700 shadow-sm shadow-indigo-500/20 active:scale-[0.98] transition">
                     Update Reserve
                   </button>
-                  <button onClick={() => setActiveAction('Approve Settlement')} className="rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700">
+                  <button onClick={() => setActiveAction('Approve Settlement')} className="rounded-lg bg-green-600 px-4 py-2 text-[13px] font-medium text-white hover:bg-green-700 shadow-sm shadow-green-500/20 active:scale-[0.98] transition">
                     Approve Settlement
                   </button>
-                  <button onClick={() => setActiveAction('Escalate to CCO')} className="rounded-lg bg-amber-500 px-4 py-2 text-sm font-medium text-white hover:bg-amber-600">
+                  <button onClick={() => setActiveAction('Escalate to CCO')} className="rounded-lg bg-amber-500 px-4 py-2 text-[13px] font-medium text-white hover:bg-amber-600 shadow-sm shadow-amber-500/20 active:scale-[0.98] transition">
                     Escalate to CCO
                   </button>
-                  <button onClick={() => setActiveAction('Close Claim')} className="rounded-lg bg-slate-600 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700">
+                  <button onClick={() => setActiveAction('Close Claim')} className="rounded-lg bg-slate-600 px-4 py-2 text-[13px] font-medium text-white hover:bg-slate-700 shadow-sm shadow-slate-500/20 active:scale-[0.98] transition">
                     Close Claim
                   </button>
                 </div>

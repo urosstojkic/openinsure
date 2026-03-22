@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
-import { ChevronUp, ChevronDown } from 'lucide-react';
+import { ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
+import { TableSkeleton } from './Skeleton';
 
 export interface Column<T> {
   key: string;
@@ -7,6 +8,7 @@ export interface Column<T> {
   render: (row: T) => React.ReactNode;
   sortable?: boolean;
   sortValue?: (row: T) => string | number;
+  align?: 'left' | 'center' | 'right';
 }
 
 interface Props<T> {
@@ -15,9 +17,10 @@ interface Props<T> {
   onRowClick?: (row: T) => void;
   keyExtractor: (row: T) => string;
   emptyMessage?: string;
+  isLoading?: boolean;
 }
 
-function DataTable<T>({ columns, data, onRowClick, keyExtractor, emptyMessage = 'No data available' }: Props<T>) {
+function DataTable<T>({ columns, data, onRowClick, keyExtractor, emptyMessage = 'No data available', isLoading }: Props<T>) {
   const [sortKey, setSortKey] = useState<string | null>(null);
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
 
@@ -44,46 +47,62 @@ function DataTable<T>({ columns, data, onRowClick, keyExtractor, emptyMessage = 
     }
   };
 
+  if (isLoading) {
+    return <TableSkeleton rows={5} columns={columns.length || 6} />;
+  }
+
   if (data.length === 0) {
     return (
-      <div className="rounded-lg border border-slate-200 bg-white p-8 text-center text-slate-500">
-        {emptyMessage}
+      <div className="rounded-xl border border-slate-200/60 bg-white p-12 text-center">
+        <p className="text-sm text-slate-400">{emptyMessage}</p>
       </div>
     );
   }
 
+  const alignClass = (align?: string) =>
+    align === 'right' ? 'text-right' : align === 'center' ? 'text-center' : 'text-left';
+
   return (
-    <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
-      <table className="min-w-full divide-y divide-slate-200">
-        <thead className="bg-slate-50">
-          <tr>
+    <div className="overflow-x-auto rounded-xl border border-slate-200/60 bg-white shadow-[var(--shadow-xs)]">
+      <table className="min-w-full">
+        <thead>
+          <tr className="border-b border-slate-100">
             {columns.map((col) => (
               <th
                 key={col.key}
-                className={`px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-600 ${
-                  col.sortable ? 'cursor-pointer select-none hover:text-slate-900' : ''
+                className={`sticky top-0 z-10 bg-slate-50/80 backdrop-blur-sm px-4 py-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400 ${alignClass(col.align)} ${
+                  col.sortable ? 'cursor-pointer select-none transition-colors hover:text-slate-600' : ''
                 }`}
                 onClick={col.sortable ? () => handleSort(col.key) : undefined}
               >
                 <span className="inline-flex items-center gap-1">
                   {col.header}
-                  {col.sortable && sortKey === col.key && (
-                    sortDir === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />
+                  {col.sortable && (
+                    sortKey === col.key
+                      ? (sortDir === 'asc' ? <ChevronUp size={12} className="text-indigo-500" /> : <ChevronDown size={12} className="text-indigo-500" />)
+                      : <ChevronsUpDown size={12} className="text-slate-300" />
                   )}
                 </span>
               </th>
             ))}
           </tr>
         </thead>
-        <tbody className="divide-y divide-slate-100">
+        <tbody className="divide-y divide-slate-50">
           {sorted.map((row) => (
             <tr
               key={keyExtractor(row)}
-              className={onRowClick ? 'cursor-pointer hover:bg-slate-50 transition-colors' : ''}
+              className={`transition-colors duration-100 ${
+                onRowClick
+                  ? 'cursor-pointer hover:bg-indigo-50/40 active:bg-indigo-50/60'
+                  : 'hover:bg-slate-50/50'
+              }`}
               onClick={onRowClick ? () => onRowClick(row) : undefined}
             >
               {columns.map((col) => (
-                <td key={col.key} className="whitespace-nowrap px-4 py-3 text-sm text-slate-700">
+                <td
+                  key={col.key}
+                  className={`whitespace-nowrap px-4 py-3 text-sm text-slate-600 ${alignClass(col.align)}`}
+                >
                   {col.render(row)}
                 </td>
               ))}

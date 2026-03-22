@@ -2,10 +2,11 @@ import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
-  LineChart, Line, Legend,
+  AreaChart, Area, Legend,
 } from 'recharts';
 import { DollarSign, Calculator, AlertTriangle } from 'lucide-react';
 import StatCard from '../components/StatCard';
+import { StatCardSkeleton, ChartSkeleton } from '../components/Skeleton';
 import {
   getActuarialReserves,
   getTriangleData,
@@ -64,7 +65,25 @@ const ActuarialWorkbench: React.FC = () => {
   const loading = loadingR || loadingT || loadingI || loadingRA;
 
   if (loading || !reserves || !triangle || !ibnr || !rateAdequacy) {
-    return <div className="flex h-64 items-center justify-center text-slate-400">Loading…</div>;
+    return (
+      <div className="space-y-6">
+        <div>
+          <div className="h-7 w-52 rounded-lg bg-slate-200 animate-pulse" />
+          <div className="mt-2 h-4 w-96 rounded bg-slate-100 animate-pulse" />
+        </div>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <StatCardSkeleton />
+          <StatCardSkeleton />
+          <StatCardSkeleton />
+          <StatCardSkeleton />
+        </div>
+        <ChartSkeleton />
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <ChartSkeleton />
+          <ChartSkeleton />
+        </div>
+      </div>
+    );
   }
 
   const summary = buildReserveSummary(reserves);
@@ -88,8 +107,8 @@ const ActuarialWorkbench: React.FC = () => {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-slate-900">Actuarial Workbench</h1>
-        <p className="text-sm text-slate-500">Reserves, loss triangles, IBNR & rate adequacy — Carrier only</p>
+        <h1 className="text-2xl font-bold tracking-tight text-slate-900">Actuarial Workbench</h1>
+        <p className="text-sm text-slate-500 mt-0.5">Reserves, loss triangles, IBNR & rate adequacy — Carrier only</p>
       </div>
 
       {/* ── KPI Cards ── */}
@@ -101,12 +120,12 @@ const ActuarialWorkbench: React.FC = () => {
       </div>
 
       {/* ── Reserve Summary Table ── */}
-      <div className="rounded-lg border border-slate-200 bg-white p-5">
-        <h2 className="mb-4 text-sm font-semibold text-slate-700">Reserve Summary</h2>
+      <div className="rounded-xl border border-slate-200/60 bg-white p-5 shadow-[var(--shadow-xs)]">
+        <h2 className="mb-4 text-sm font-semibold text-slate-800">Reserve Summary</h2>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-slate-200 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
+              <tr className="border-b border-slate-200 sticky top-0 z-10 bg-slate-50/80 backdrop-blur-sm text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">
                 <th className="py-2 pr-4">LOB</th>
                 <th className="py-2 pr-4">Accident Year</th>
                 <th className="py-2 pr-4 text-right">Case</th>
@@ -120,7 +139,7 @@ const ActuarialWorkbench: React.FC = () => {
               {summary.map((row, i) => {
                 const adequacy = row.indicated > 0 ? row.total / row.indicated : 0;
                 return (
-                  <tr key={i} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
+                  <tr key={i} className="border-b border-slate-100 hover:bg-slate-50/50 transition-colors">
                     <td className="py-2 pr-4 font-medium text-slate-700">{row.lob.replace(/_/g, ' ')}</td>
                     <td className="py-2 pr-4 text-slate-600">{row.ay}</td>
                     <td className="py-2 pr-4 text-right font-mono text-slate-700">{money(row.case_)}</td>
@@ -139,14 +158,14 @@ const ActuarialWorkbench: React.FC = () => {
       </div>
 
       {/* ── Loss Triangle ── */}
-      <div className="rounded-lg border border-slate-200 bg-white p-5">
-        <h2 className="mb-4 text-sm font-semibold text-slate-700">
+      <div className="rounded-xl border border-slate-200/60 bg-white p-5 shadow-[var(--shadow-xs)]">
+        <h2 className="mb-4 text-sm font-semibold text-slate-800">
           Loss Development Triangle — {triangle.line_of_business.replace(/_/g, ' ')}
         </h2>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-slate-200 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
+              <tr className="border-b border-slate-200 sticky top-0 z-10 bg-slate-50/80 backdrop-blur-sm text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">
                 <th className="py-2 pr-4">AY</th>
                 {triangle.development_months.map((dm: number) => (
                   <th key={dm} className="py-2 pr-4 text-right">{dm}m</th>
@@ -155,7 +174,7 @@ const ActuarialWorkbench: React.FC = () => {
             </thead>
             <tbody>
               {triangleGrid.map((row, i) => (
-                <tr key={i} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
+                <tr key={i} className="border-b border-slate-100 hover:bg-slate-50/50 transition-colors">
                   <td className="py-2 pr-4 font-medium text-slate-700">{row.accident_year}</td>
                   {triangle.development_months.map((dm: number) => {
                     const val = (row as Record<string, unknown>)[`m${dm}`] as number | null;
@@ -175,42 +194,70 @@ const ActuarialWorkbench: React.FC = () => {
       {/* ── Charts Row ── */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         {/* Rate Adequacy Chart */}
-        <div className="rounded-lg border border-slate-200 bg-white p-5">
-          <h2 className="mb-4 text-sm font-semibold text-slate-700">Rate Adequacy — Current vs Indicated</h2>
+        <div className="rounded-xl border border-slate-200/60 bg-white p-5 shadow-[var(--shadow-xs)]">
+          <h2 className="mb-4 text-sm font-semibold text-slate-800">Rate Adequacy — Current vs Indicated</h2>
           <ResponsiveContainer width="100%" height={260}>
-            <BarChart data={rateChartData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-              <XAxis dataKey="segment" tick={{ fontSize: 9 }} angle={-30} textAnchor="end" height={60} />
-              <YAxis tick={{ fontSize: 10 }} />
-              <Tooltip />
+            <BarChart data={rateChartData} barCategoryGap="20%" maxBarSize={40}>
+              <CartesianGrid stroke="#f1f5f9" vertical={false} />
+              <XAxis dataKey="segment" tick={{ fontSize: 9, fill: '#94a3b8' }} angle={-30} textAnchor="end" height={60} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+              <Tooltip
+                content={({ active, payload, label }) => {
+                  if (!active || !payload?.length) return null;
+                  return (
+                    <div className="rounded-lg border border-slate-200/60 bg-white/95 px-3 py-2 shadow-lg backdrop-blur-sm">
+                      <p className="text-[11px] font-medium text-slate-400">{label}</p>
+                      {payload.map((p: any) => (
+                        <p key={p.dataKey} className="text-sm font-bold text-slate-800">{p.name}: {p.value}</p>
+                      ))}
+                    </div>
+                  );
+                }}
+              />
               <Legend />
-              <Bar dataKey="current" name="Current Rate" fill="#94a3b8" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="indicated" name="Indicated Rate" fill="#6366f1" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="current" name="Current Rate" fill="#94a3b8" radius={[6, 6, 0, 0]} />
+              <Bar dataKey="indicated" name="Indicated Rate" fill="#6366f1" radius={[6, 6, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
 
         {/* IBNR Trending */}
-        <div className="rounded-lg border border-slate-200 bg-white p-5">
-          <h2 className="mb-4 text-sm font-semibold text-slate-700">IBNR by Accident Year — Cyber</h2>
+        <div className="rounded-xl border border-slate-200/60 bg-white p-5 shadow-[var(--shadow-xs)]">
+          <h2 className="mb-4 text-sm font-semibold text-slate-800">IBNR by Accident Year — Cyber</h2>
           <ResponsiveContainer width="100%" height={260}>
-            <LineChart data={ibnrTrend}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-              <XAxis dataKey="year" tick={{ fontSize: 10 }} />
-              <YAxis tick={{ fontSize: 10 }} tickFormatter={(v: number) => `$${v.toLocaleString()}`} />
-              <Tooltip formatter={(v) => money(Number(v))} />
-              <Line type="monotone" dataKey="ibnr" name="IBNR" stroke="#ef4444" strokeWidth={2} dot={{ fill: '#ef4444', r: 4 }} />
-            </LineChart>
+            <AreaChart data={ibnrTrend}>
+              <defs>
+                <linearGradient id="gradIBNR" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#ef4444" stopOpacity={0.15} />
+                  <stop offset="100%" stopColor="#ef4444" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid stroke="#f1f5f9" vertical={false} />
+              <XAxis dataKey="year" tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} tickFormatter={(v: number) => `$${v.toLocaleString()}`} axisLine={false} tickLine={false} />
+              <Tooltip
+                content={({ active, payload, label }) => {
+                  if (!active || !payload?.length) return null;
+                  return (
+                    <div className="rounded-lg border border-slate-200/60 bg-white/95 px-3 py-2 shadow-lg backdrop-blur-sm">
+                      <p className="text-[11px] font-medium text-slate-400">{label}</p>
+                      <p className="text-sm font-bold text-slate-800">{money(Number(payload[0].value))}</p>
+                    </div>
+                  );
+                }}
+              />
+              <Area type="monotone" dataKey="ibnr" name="IBNR" stroke="#ef4444" strokeWidth={2} fill="url(#gradIBNR)" />
+            </AreaChart>
           </ResponsiveContainer>
         </div>
       </div>
 
       {/* ── Development Factors ── */}
-      <div className="rounded-lg border border-slate-200 bg-white p-5">
-        <h2 className="mb-4 text-sm font-semibold text-slate-700">Age-to-Age Development Factors (Chain Ladder)</h2>
+      <div className="rounded-xl border border-slate-200/60 bg-white p-5 shadow-[var(--shadow-xs)]">
+        <h2 className="mb-4 text-sm font-semibold text-slate-800">Age-to-Age Development Factors (Chain Ladder)</h2>
         <div className="flex flex-wrap gap-4">
           {Object.entries(ibnr.factors).map(([period, factor]) => (
-            <div key={period} className="flex flex-col items-center rounded-lg border border-slate-200 px-4 py-3">
+            <div key={period} className="flex flex-col items-center rounded-xl border border-slate-200/60 px-4 py-3">
               <span className="text-xs text-slate-500">{period}m → next</span>
               <span className="mt-1 text-lg font-bold text-indigo-700">{String(factor)}</span>
             </div>

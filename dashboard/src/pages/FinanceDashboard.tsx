@@ -1,12 +1,13 @@
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
-  LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
+  AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
 } from 'recharts';
 import {
   DollarSign, TrendingDown, TrendingUp, CreditCard, PiggyBank, Receipt,
 } from 'lucide-react';
 import StatCard from '../components/StatCard';
+import { StatCardSkeleton, ChartSkeleton } from '../components/Skeleton';
 import {
   getFinancialSummary,
   getCashFlow,
@@ -61,7 +62,20 @@ const FinanceDashboard: React.FC = () => {
   const isLoading = summaryLoading || cashFlowLoading || commissionsLoading || reconLoading;
 
   if (isLoading) {
-    return <div className="flex h-64 items-center justify-center text-slate-400">Loading…</div>;
+    return (
+      <div className="space-y-6">
+        <div>
+          <div className="h-7 w-48 rounded-lg bg-slate-200 animate-pulse" />
+          <div className="mt-2 h-4 w-96 rounded bg-slate-100 animate-pulse" />
+        </div>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <StatCardSkeleton />
+          <StatCardSkeleton />
+          <StatCardSkeleton />
+        </div>
+        <ChartSkeleton />
+      </div>
+    );
   }
 
   const premiumCards = [
@@ -88,8 +102,8 @@ const FinanceDashboard: React.FC = () => {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-slate-900">Finance Dashboard</h1>
-        <p className="text-sm text-slate-500">
+        <h1 className="text-2xl font-bold tracking-tight text-slate-900">Finance Dashboard</h1>
+        <p className="text-sm text-slate-500 mt-0.5">
           Financial overview — premium, claims, cash flow & commissions
           {summary ? ` · Loss ratio ${pct(summary.loss_ratio)} · Combined ratio ${pct(summary.combined_ratio)}` : ''}
         </p>
@@ -97,7 +111,7 @@ const FinanceDashboard: React.FC = () => {
 
       {/* Premium Cards */}
       <div>
-        <h2 className="mb-3 text-sm font-semibold text-slate-700">Premium</h2>
+        <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-400">Premium</h2>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           {premiumCards.map(c => (
             <StatCard key={c.title} title={c.title} value={money(c.value)} icon={c.icon} />
@@ -107,7 +121,7 @@ const FinanceDashboard: React.FC = () => {
 
       {/* Claims Cards */}
       <div>
-        <h2 className="mb-3 text-sm font-semibold text-slate-700">Claims</h2>
+        <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-400">Claims</h2>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           {claimsCards.map(c => (
             <StatCard key={c.title} title={c.title} value={money(c.value)} icon={c.icon} />
@@ -116,33 +130,55 @@ const FinanceDashboard: React.FC = () => {
       </div>
 
       {/* Cash Flow Chart */}
-      <div className="rounded-lg border border-slate-200 bg-white p-5">
-        <h2 className="mb-4 text-sm font-semibold text-slate-700">
+      <div className="rounded-xl border border-slate-200/60 bg-white p-5 shadow-[var(--shadow-xs)]">
+        <h2 className="mb-4 text-sm font-semibold text-slate-800">
           Cash Flow (12 Months)
           {cashFlow ? ` · Net ${money(cashFlow.net_cash_flow)}` : ''}
         </h2>
         <ResponsiveContainer width="100%" height={260}>
-          <LineChart data={cashFlowChartData}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-            <XAxis dataKey="month" tick={{ fontSize: 11 }} />
-            <YAxis tick={{ fontSize: 10 }} tickFormatter={(v: number) => `$${(v / 1_000_000).toFixed(1)}M`} />
-            <Tooltip formatter={(v) => money(Number(v))} />
-            <Line type="monotone" dataKey="collections" stroke="#22c55e" strokeWidth={2} name="Collections" dot={{ r: 3 }} />
-            <Line type="monotone" dataKey="disbursements" stroke="#ef4444" strokeWidth={2} name="Disbursements" dot={{ r: 3 }} />
-          </LineChart>
+          <AreaChart data={cashFlowChartData}>
+            <defs>
+              <linearGradient id="gradCollections" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#22c55e" stopOpacity={0.15} />
+                <stop offset="100%" stopColor="#22c55e" stopOpacity={0} />
+              </linearGradient>
+              <linearGradient id="gradDisbursements" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#ef4444" stopOpacity={0.15} />
+                <stop offset="100%" stopColor="#ef4444" stopOpacity={0} />
+              </linearGradient>
+            </defs>
+            <CartesianGrid stroke="#f1f5f9" vertical={false} />
+            <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+            <YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} tickFormatter={(v: number) => `$${(v / 1_000_000).toFixed(1)}M`} axisLine={false} tickLine={false} />
+            <Tooltip
+              content={({ active, payload, label }) => {
+                if (!active || !payload?.length) return null;
+                return (
+                  <div className="rounded-lg border border-slate-200/60 bg-white/95 px-3 py-2 shadow-lg backdrop-blur-sm">
+                    <p className="text-[11px] font-medium text-slate-400">{label}</p>
+                    {payload.map((p: any) => (
+                      <p key={p.dataKey} className="text-sm font-bold text-slate-800">{p.name}: {money(Number(p.value))}</p>
+                    ))}
+                  </div>
+                );
+              }}
+            />
+            <Area type="monotone" dataKey="collections" stroke="#22c55e" strokeWidth={2} fill="url(#gradCollections)" name="Collections" />
+            <Area type="monotone" dataKey="disbursements" stroke="#ef4444" strokeWidth={2} fill="url(#gradDisbursements)" name="Disbursements" />
+          </AreaChart>
         </ResponsiveContainer>
       </div>
 
       {/* Commission Table */}
-      <div className="rounded-lg border border-slate-200 bg-white overflow-hidden">
+      <div className="rounded-xl border border-slate-200/60 bg-white overflow-hidden shadow-[var(--shadow-xs)]">
         <div className="px-5 py-4 border-b border-slate-100">
-          <h2 className="text-sm font-semibold text-slate-700">
+          <h2 className="text-sm font-semibold text-slate-800">
             Commissions
             {commissionData ? ` · Total ${money(commissionData.total_commissions)}` : ''}
           </h2>
         </div>
         <table className="w-full text-sm">
-          <thead className="bg-slate-50 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
+          <thead className="sticky top-0 z-10 bg-slate-50/80 backdrop-blur-sm text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">
             <tr>
               <th className="px-4 py-3">Broker</th>
               <th className="px-4 py-3">Policies</th>
@@ -154,7 +190,7 @@ const FinanceDashboard: React.FC = () => {
           </thead>
           <tbody className="divide-y divide-slate-100">
             {commissions.map(c => (
-              <tr key={c.broker} className="hover:bg-slate-50 transition">
+              <tr key={c.broker} className="hover:bg-slate-50/50 transition-colors">
                 <td className="px-4 py-3 font-medium text-slate-900">{c.broker}</td>
                 <td className="px-4 py-3 text-slate-600">{c.policies}</td>
                 <td className="px-4 py-3 font-mono text-xs">{money(c.premium)}</td>
@@ -168,12 +204,12 @@ const FinanceDashboard: React.FC = () => {
       </div>
 
       {/* Reconciliation Table */}
-      <div className="rounded-lg border border-slate-200 bg-white overflow-hidden">
+      <div className="rounded-xl border border-slate-200/60 bg-white overflow-hidden shadow-[var(--shadow-xs)]">
         <div className="px-5 py-4 border-b border-slate-100">
-          <h2 className="text-sm font-semibold text-slate-700">Reconciliation Status</h2>
+          <h2 className="text-sm font-semibold text-slate-800">Reconciliation Status</h2>
         </div>
         <table className="w-full text-sm">
-          <thead className="bg-slate-50 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
+          <thead className="sticky top-0 z-10 bg-slate-50/80 backdrop-blur-sm text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">
             <tr>
               <th className="px-4 py-3">Item</th>
               <th className="px-4 py-3">Expected</th>
@@ -184,7 +220,7 @@ const FinanceDashboard: React.FC = () => {
           </thead>
           <tbody className="divide-y divide-slate-100">
             {reconciliation.map(r => (
-              <tr key={r.item} className="hover:bg-slate-50 transition">
+              <tr key={r.item} className="hover:bg-slate-50/50 transition-colors">
                 <td className="px-4 py-3 font-medium text-slate-900">{r.item}</td>
                 <td className="px-4 py-3 font-mono text-xs">{money(r.expected)}</td>
                 <td className="px-4 py-3 font-mono text-xs">{money(r.actual)}</td>

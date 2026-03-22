@@ -109,10 +109,10 @@ const NewPolicy: React.FC = () => {
     <div className="mx-auto max-w-3xl space-y-6">
       {/* Header */}
       <div className="flex items-center gap-3">
-        <button onClick={() => navigate('/policies')} className="rounded-lg p-1 hover:bg-slate-200">
-          <ArrowLeft size={20} />
+        <button onClick={() => navigate('/policies')} className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition-all hover:bg-slate-50 hover:text-slate-700 hover:border-slate-300">
+          <ArrowLeft size={18} />
         </button>
-        <h1 className="text-2xl font-bold text-slate-900">New Policy</h1>
+        <h1 className="text-2xl font-bold tracking-tight text-slate-900">New Policy</h1>
       </div>
 
       {/* Toast */}
@@ -131,8 +131,8 @@ const NewPolicy: React.FC = () => {
 
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Policy Details */}
-        <section className="rounded-lg border border-slate-200 bg-white p-5">
-          <h2 className="mb-4 text-sm font-semibold text-slate-700">Policy Details</h2>
+        <section className="rounded-xl border border-slate-200/60 bg-white p-5 shadow-[var(--shadow-xs)]">
+          <h2 className="mb-4 text-sm font-semibold text-slate-800">Policy Details</h2>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <FormField type="text" label="Policy Number" name="policyNumber" value={form.policyNumber} onChange={(v) => set('policyNumber', v)} placeholder="Auto-generated if blank" />
             <FormField type="select" label="Product" name="product" value={form.product} onChange={(v) => set('product', v)} options={productOptions} placeholder="Select product…" />
@@ -144,10 +144,10 @@ const NewPolicy: React.FC = () => {
         </section>
 
         {/* Coverages */}
-        <section className="rounded-lg border border-slate-200 bg-white p-5">
+        <section className="rounded-xl border border-slate-200/60 bg-white p-5 shadow-[var(--shadow-xs)]">
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-slate-700">Coverages</h2>
-            <button type="button" onClick={addCoverage} className="inline-flex items-center gap-1 rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50">
+            <h2 className="text-sm font-semibold text-slate-800">Coverages</h2>
+            <button type="button" onClick={addCoverage} className="inline-flex items-center gap-1 rounded-lg border border-slate-200/60 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 transition-all">
               <Plus size={14} /> Add Coverage
             </button>
           </div>
@@ -176,13 +176,13 @@ const NewPolicy: React.FC = () => {
 
         {/* Actions */}
         <div className="flex items-center justify-end gap-3">
-          <button type="button" onClick={() => navigate('/policies')} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
+          <button type="button" onClick={() => navigate('/policies')} className="rounded-lg border border-slate-200/60 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-all">
             Cancel
           </button>
           <button
             type="submit"
             disabled={submitting}
-            className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-5 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+            className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-5 py-2 text-sm font-medium text-white shadow-sm shadow-indigo-500/20 hover:bg-indigo-700 active:scale-[0.98] disabled:opacity-50 transition-all"
           >
             {submitting && <Loader2 size={16} className="animate-spin" />}
             {submitting ? 'Creating…' : 'Create Policy'}

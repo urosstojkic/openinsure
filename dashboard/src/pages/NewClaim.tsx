@@ -107,10 +107,10 @@ const NewClaim: React.FC = () => {
     <div className="mx-auto max-w-3xl space-y-6">
       {/* Header */}
       <div className="flex items-center gap-3">
-        <button onClick={() => navigate('/claims')} className="rounded-lg p-1 hover:bg-slate-200">
-          <ArrowLeft size={20} />
+        <button onClick={() => navigate('/claims')} className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition-all hover:bg-slate-50 hover:text-slate-700 hover:border-slate-300">
+          <ArrowLeft size={18} />
         </button>
-        <h1 className="text-2xl font-bold text-slate-900">File a Claim</h1>
+        <h1 className="text-2xl font-bold tracking-tight text-slate-900">File a Claim</h1>
       </div>
 
       {/* Toast */}
@@ -129,8 +129,8 @@ const NewClaim: React.FC = () => {
 
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Claim Details */}
-        <section className="rounded-lg border border-slate-200 bg-white p-5">
-          <h2 className="mb-4 text-sm font-semibold text-slate-700">Claim Details</h2>
+        <section className="rounded-xl border border-slate-200/60 bg-white p-5 shadow-[var(--shadow-xs)]">
+          <h2 className="mb-4 text-sm font-semibold text-slate-800">Claim Details</h2>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <FormField type="select" label="Policy Number" name="policyNumber" value={form.policyNumber} onChange={(v) => set('policyNumber', v)} options={policyOptions} placeholder="Select policy…" error={errors.policyNumber} required />
             <FormField type="date" label="Loss Date" name="lossDate" value={form.lossDate} onChange={(v) => set('lossDate', v)} error={errors.lossDate} required />
@@ -143,8 +143,8 @@ const NewClaim: React.FC = () => {
         </section>
 
         {/* Claimant Information */}
-        <section className="rounded-lg border border-slate-200 bg-white p-5">
-          <h2 className="mb-4 text-sm font-semibold text-slate-700">Claimant Information</h2>
+        <section className="rounded-xl border border-slate-200/60 bg-white p-5 shadow-[var(--shadow-xs)]">
+          <h2 className="mb-4 text-sm font-semibold text-slate-800">Claimant Information</h2>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <FormField type="text" label="Claimant Name" name="claimantName" value={form.claimantName} onChange={(v) => set('claimantName', v)} error={errors.claimantName} required />
             <FormField type="email" label="Claimant Email" name="claimantEmail" value={form.claimantEmail} onChange={(v) => set('claimantEmail', v)} />
@@ -154,13 +154,13 @@ const NewClaim: React.FC = () => {
 
         {/* Actions */}
         <div className="flex items-center justify-end gap-3">
-          <button type="button" onClick={() => navigate('/claims')} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
+          <button type="button" onClick={() => navigate('/claims')} className="rounded-lg border border-slate-200/60 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-all">
             Cancel
           </button>
           <button
             type="submit"
             disabled={submitting}
-            className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-5 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+            className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-5 py-2 text-sm font-medium text-white shadow-sm shadow-indigo-500/20 hover:bg-indigo-700 active:scale-[0.98] disabled:opacity-50 transition-all"
           >
             {submitting && <Loader2 size={16} className="animate-spin" />}
             {submitting ? 'Filing…' : 'File Claim'}
