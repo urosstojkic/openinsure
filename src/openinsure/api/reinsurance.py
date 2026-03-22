@@ -294,6 +294,29 @@ async def get_treaty_utilization(treaty_id: str) -> UtilizationResponse:
     )
 
 
+@router.get("/treaties/{treaty_id}/capacity", response_model=UtilizationResponse)
+async def get_treaty_capacity(treaty_id: str) -> UtilizationResponse:
+    """Get capacity utilization for a treaty — placed vs remaining."""
+    treaty = await _get_treaty(treaty_id)
+    treaty_cessions = await _cession_repo.list_all(filters={"treaty_id": treaty_id})
+
+    # Recalculate capacity_used from actual cessions
+    capacity_used = sum(c.get("ceded_limit", 0) for c in treaty_cessions)
+    capacity_total = treaty.get("capacity_total", 0)
+    capacity_remaining = max(0, capacity_total - capacity_used)
+    utilization_pct = (capacity_used / capacity_total * 100) if capacity_total > 0 else 0
+
+    return UtilizationResponse(
+        treaty_id=treaty_id,
+        treaty_number=treaty["treaty_number"],
+        capacity_total=capacity_total,
+        capacity_used=capacity_used,
+        capacity_remaining=capacity_remaining,
+        utilization_pct=round(utilization_pct, 2),
+        cession_count=len(treaty_cessions),
+    )
+
+
 # ---------------------------------------------------------------------------
 # Cession endpoints
 # ---------------------------------------------------------------------------

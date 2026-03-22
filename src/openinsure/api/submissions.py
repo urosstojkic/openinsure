@@ -877,6 +877,62 @@ async def bind_submission(submission_id: str, user: CurrentUser = Depends(get_cu
     }
     await billing_repo.create(billing_data)
 
+    # Auto-calculate cessions based on active treaties
+    try:
+        from openinsure.domain.reinsurance import ReinsuranceContract
+        from openinsure.infrastructure.factory import get_cession_repository, get_reinsurance_repository
+        from openinsure.services.reinsurance import calculate_cession
+
+        treaty_repo = get_reinsurance_repository()
+        cession_repo = get_cession_repository()
+        raw_treaties = await treaty_repo.list_all(filters={"status": "active"})
+
+        if raw_treaties:
+            treaties = []
+            for t in raw_treaties:
+                try:
+                    treaties.append(
+                        ReinsuranceContract(
+                            id=t["id"],
+                            treaty_number=t["treaty_number"],
+                            treaty_type=t["treaty_type"],
+                            reinsurer_name=t["reinsurer_name"],
+                            status=t.get("status", "active"),
+                            effective_date=t["effective_date"],
+                            expiration_date=t["expiration_date"],
+                            lines_of_business=t.get("lines_of_business", []),
+                            retention=t.get("retention", 0),
+                            limit=t.get("limit", 0),
+                            rate=t.get("rate", 0),
+                            capacity_total=t.get("capacity_total", 0),
+                            capacity_used=t.get("capacity_used", 0),
+                        )
+                    )
+                except Exception:  # noqa: S112
+                    continue
+
+            cessions = calculate_cession(policy_data, treaties)
+            for cession in cessions:
+                cession_record = {
+                    "id": str(uuid.uuid4()),
+                    "treaty_id": str(cession.treaty_id),
+                    "policy_id": policy_id,
+                    "policy_number": policy_number,
+                    "ceded_premium": float(cession.ceded_premium),
+                    "ceded_limit": float(cession.ceded_limit),
+                    "cession_date": _now()[:10],
+                    "created_at": _now(),
+                }
+                await cession_repo.create(cession_record)
+
+                # Update treaty capacity
+                for raw_t in raw_treaties:
+                    if str(raw_t.get("id")) == str(cession.treaty_id):
+                        raw_t["capacity_used"] = raw_t.get("capacity_used", 0) + float(cession.ceded_limit)
+                        break
+    except Exception:
+        _logger.warning("submissions.auto_cession_failed", submission_id=submission_id, exc_info=True)
+
     # Update submission status
     record["status"] = SubmissionStatus.BOUND
     record["updated_at"] = now
@@ -1238,6 +1294,62 @@ async def process_submission(submission_id: str, user: CurrentUser = Depends(get
                 "updated_at": now,
             }
         )
+
+        # Auto-calculate cessions based on active treaties
+        try:
+            from openinsure.domain.reinsurance import ReinsuranceContract
+            from openinsure.infrastructure.factory import get_cession_repository, get_reinsurance_repository
+            from openinsure.services.reinsurance import calculate_cession
+
+            treaty_repo = get_reinsurance_repository()
+            cession_repo = get_cession_repository()
+            raw_treaties = await treaty_repo.list_all(filters={"status": "active"})
+
+            if raw_treaties:
+                treaties = []
+                for t in raw_treaties:
+                    try:
+                        treaties.append(
+                            ReinsuranceContract(
+                                id=t["id"],
+                                treaty_number=t["treaty_number"],
+                                treaty_type=t["treaty_type"],
+                                reinsurer_name=t["reinsurer_name"],
+                                status=t.get("status", "active"),
+                                effective_date=t["effective_date"],
+                                expiration_date=t["expiration_date"],
+                                lines_of_business=t.get("lines_of_business", []),
+                                retention=t.get("retention", 0),
+                                limit=t.get("limit", 0),
+                                rate=t.get("rate", 0),
+                                capacity_total=t.get("capacity_total", 0),
+                                capacity_used=t.get("capacity_used", 0),
+                            )
+                        )
+                    except Exception:  # noqa: S112
+                        continue
+
+                cessions = calculate_cession(policy_data, treaties)
+                for cession in cessions:
+                    cession_record = {
+                        "id": str(uuid.uuid4()),
+                        "treaty_id": str(cession.treaty_id),
+                        "policy_id": policy_id,
+                        "policy_number": policy_number,
+                        "ceded_premium": float(cession.ceded_premium),
+                        "ceded_limit": float(cession.ceded_limit),
+                        "cession_date": _now()[:10],
+                        "created_at": _now(),
+                    }
+                    await cession_repo.create(cession_record)
+
+                    # Update treaty capacity
+                    for raw_t in raw_treaties:
+                        if str(raw_t.get("id")) == str(cession.treaty_id):
+                            raw_t["capacity_used"] = raw_t.get("capacity_used", 0) + float(cession.ceded_limit)
+                            break
+        except Exception:
+            _logger.warning("submissions.auto_cession_failed", submission_id=submission_id, exc_info=True)
 
         await _repo.update(submission_id, {"status": "bound", "updated_at": now})
         await publish_domain_event(
