@@ -84,9 +84,14 @@ const AgentDecisions: React.FC = () => {
     {
       key: 'timestamp',
       header: 'Timestamp',
-      render: (r) => new Date(r.timestamp).toLocaleString(),
+      render: (r) => {
+        const raw = r.timestamp || r.created_at;
+        if (!raw) return '—';
+        const d = new Date(raw);
+        return isNaN(d.getTime()) ? '—' : d.toLocaleString();
+      },
       sortable: true,
-      sortValue: (r) => r.timestamp,
+      sortValue: (r) => r.timestamp || r.created_at || '',
     },
   ];
 
@@ -175,10 +180,14 @@ const AgentDecisions: React.FC = () => {
               decision={dec.outcome}
               confidence={dec.confidence}
               reasoning={dec.reasoning}
-              timestamp={dec.timestamp}
+              timestamp={dec.timestamp || dec.created_at || ''}
               defaultOpen
             />
             <div className="mt-3 grid grid-cols-3 gap-4 text-sm">
+              <div>
+                <span className="text-slate-400">Decision Type:</span>{' '}
+                <span className="capitalize">{dec.decision_type.replace(/_/g, ' ')}</span>
+              </div>
               <div>
                 <span className="text-slate-400">Oversight Level:</span>{' '}
                 <StatusBadge label={dec.human_oversight} variant={oversightVariant[dec.human_oversight]} />

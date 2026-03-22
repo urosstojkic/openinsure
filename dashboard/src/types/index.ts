@@ -144,6 +144,7 @@ export interface AgentDecision {
   confidence: number;
   human_oversight: OversightLevel;
   timestamp: string;
+  created_at?: string;
   submission_id?: string;
   claim_id?: string;
   policy_id?: string;

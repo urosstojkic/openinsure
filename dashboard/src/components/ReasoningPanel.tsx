@@ -42,7 +42,9 @@ const ReasoningPanel: React.FC<Props> = ({
       {open && (
         <div className="border-t border-slate-100 px-4 py-3">
           <p className="mb-2 text-xs text-slate-400">
-            {new Date(timestamp).toLocaleString()}
+            {timestamp && !isNaN(new Date(timestamp).getTime())
+              ? new Date(timestamp).toLocaleString()
+              : '—'}
           </p>
           <h4 className="mb-1 text-xs font-semibold uppercase text-slate-500">Reasoning Chain</h4>
           <ol className="list-inside list-decimal space-y-1">

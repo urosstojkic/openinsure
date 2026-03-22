@@ -26,15 +26,20 @@ def api(method: str, path: str, body: dict | None = None, timeout: int = 120) ->
 
 
 def log_step(process: int, step: str, detail: str) -> None:
-    entry = {"process": process, "step": step, "detail": detail, "time": datetime.now(tz=datetime.now().astimezone().tzinfo).strftime("%H:%M:%S")}
+    entry = {
+        "process": process,
+        "step": step,
+        "detail": detail,
+        "time": datetime.now(tz=datetime.now().astimezone().tzinfo).strftime("%H:%M:%S"),
+    }
     LOG.append(entry)
     print(f"  [{process:02d}] {step}: {detail}")
 
 
 def run_new_business(num: int, company: str, payload: dict, file_claim: dict | None = None) -> None:
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"Process {num}: {company}")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
 
     # Create submission
     r = api("POST", "/submissions", payload)
@@ -93,12 +98,16 @@ def run_new_business(num: int, company: str, payload: dict, file_claim: dict | N
 
             # Set reserve
             reserve_amt = file_claim.get("_reserve", 50000)
-            r2 = api("POST", f"/claims/{cid}/reserve", {
-                "category": "indemnity",
-                "amount": reserve_amt,
-                "currency": "USD",
-                "notes": file_claim["description"][:100],
-            })
+            r2 = api(
+                "POST",
+                f"/claims/{cid}/reserve",
+                {
+                    "category": "indemnity",
+                    "amount": reserve_amt,
+                    "currency": "USD",
+                    "notes": file_claim["description"][:100],
+                },
+            )
             if r2["status"] in (200, 201):
                 log_step(num, "RESERVE", f"Set ${reserve_amt:,.0f} on {cnum}")
             else:
@@ -107,7 +116,9 @@ def run_new_business(num: int, company: str, payload: dict, file_claim: dict | N
             log_step(num, "CLAIM", f"FAILED ({r['status']}): {str(r['data'])[:150]}")
 
 
-def make_submission(name: str, revenue: int, employees: int, industry: str, sic: str, security: int, incidents: int, **extra: object) -> dict:
+def make_submission(
+    name: str, revenue: int, employees: int, industry: str, sic: str, security: int, incidents: int, **extra: object
+) -> dict:
     cyber = {
         "annual_revenue": revenue,
         "employee_count": employees,
@@ -132,7 +143,9 @@ def make_submission(name: str, revenue: int, employees: int, industry: str, sic:
 def write_log() -> None:
     with open("test-screenshots/PROCESS_LOG.md", "w") as f:
         f.write("# OpenInsure Process Execution Log\n\n")
-        f.write(f"**Generated**: {datetime.now(tz=datetime.now().astimezone().tzinfo).strftime('%Y-%m-%d %H:%M:%S UTC')}\n\n")
+        f.write(
+            f"**Generated**: {datetime.now(tz=datetime.now().astimezone().tzinfo).strftime('%Y-%m-%d %H:%M:%S UTC')}\n\n"
+        )
         f.write("## Summary\n\n")
         f.write("| # | Company | Outcome | Key Detail |\n")
         f.write("|---|---------|---------|------------|\n")
@@ -160,10 +173,14 @@ def write_log() -> None:
             f.write("\n")
 
         f.write("## How to Verify in Portal\n\n")
-        f.write("**Dashboard**: https://openinsure-dashboard.proudplant-9550e5a5.swedencentral.azurecontainerapps.io\n\n")
+        f.write(
+            "**Dashboard**: https://openinsure-dashboard.proudplant-9550e5a5.swedencentral.azurecontainerapps.io\n\n"
+        )
         f.write("| Role | What to Check |\n")
         f.write("|------|---------------|\n")
-        f.write("| **Sarah Chen (Underwriter)** | Submissions page — filter by 'received' to see new submissions, 'bound' to see completed |\n")
+        f.write(
+            "| **Sarah Chen (Underwriter)** | Submissions page — filter by 'received' to see new submissions, 'bound' to see completed |\n"
+        )
         f.write("| **David Park (Claims Adjuster)** | Claims page — new claims with reserves set |\n")
         f.write("| **Alexandra Reed (CEO)** | Executive Dashboard — updated GWP, loss ratio |\n")
         f.write("| **Anna Kowalski (Compliance)** | Agent Decisions — real Foundry agent decision records |\n")
@@ -179,18 +196,28 @@ def main() -> None:
     print("=" * 60)
 
     # 1. Standard tech company — clean profile, should be approved
-    run_new_business(1, "Vertex Cloud Solutions",
-        make_submission("Vertex Cloud Solutions", 12_000_000, 95, "Cloud Computing", "7372", 8, 0))
+    run_new_business(
+        1,
+        "Vertex Cloud Solutions",
+        make_submission("Vertex Cloud Solutions", 12_000_000, 95, "Cloud Computing", "7372", 8, 0),
+    )
 
     # 2. Financial services — high revenue, moderate risk
-    run_new_business(2, "Sterling Capital Advisors",
-        make_submission("Sterling Capital Advisors", 35_000_000, 180, "Investment Advisory", "6282", 7, 1,
-                       pci_compliant=True))
+    run_new_business(
+        2,
+        "Sterling Capital Advisors",
+        make_submission(
+            "Sterling Capital Advisors", 35_000_000, 180, "Investment Advisory", "6282", 7, 1, pci_compliant=True
+        ),
+    )
 
     # 3. Healthcare — outside typical appetite, higher risk
-    run_new_business(3, "Midwest Regional Medical Center",
-        make_submission("Midwest Regional Medical Center", 60_000_000, 1500, "Hospital", "8062", 5, 3,
-                       hipaa_compliant=True),
+    run_new_business(
+        3,
+        "Midwest Regional Medical Center",
+        make_submission(
+            "Midwest Regional Medical Center", 60_000_000, 1500, "Hospital", "8062", 5, 3, hipaa_compliant=True
+        ),
         file_claim={
             "claim_type": "data_breach",
             "date_of_loss": "2026-08-10",
@@ -198,16 +225,21 @@ def main() -> None:
             "description": "Unauthorized access to 50,000 patient records via compromised vendor portal. PHI exposure includes SSN, medical records, and insurance details.",
             "metadata": {"records_exposed": 50000, "severity": "critical", "regulatory_notification": True},
             "_reserve": 450_000,
-        })
+        },
+    )
 
     # 4. Small law firm — professional services, low revenue
-    run_new_business(4, "Morrison & Associates LLP",
-        make_submission("Morrison & Associates LLP", 3_000_000, 25, "Legal Services", "8111", 6, 0))
+    run_new_business(
+        4,
+        "Morrison & Associates LLP",
+        make_submission("Morrison & Associates LLP", 3_000_000, 25, "Legal Services", "8111", 6, 0),
+    )
 
     # 5. E-commerce retailer — PCI scope, ransomware history
-    run_new_business(5, "ShopDirect Global",
-        make_submission("ShopDirect Global", 45_000_000, 400, "E-Commerce", "5961", 5, 2,
-                       pci_compliant=True),
+    run_new_business(
+        5,
+        "ShopDirect Global",
+        make_submission("ShopDirect Global", 45_000_000, 400, "E-Commerce", "5961", 5, 2, pci_compliant=True),
         file_claim={
             "claim_type": "ransomware",
             "date_of_loss": "2026-09-15",
@@ -215,14 +247,20 @@ def main() -> None:
             "description": "LockBit ransomware encrypted order management system and customer database. 72-hour business interruption across all fulfillment centers.",
             "metadata": {"ransom_demanded": "75 BTC", "systems_affected": 12, "downtime_hours": 72},
             "_reserve": 650_000,
-        })
+        },
+    )
 
     # 6. Cybersecurity startup — excellent security, should be easy approve
-    run_new_business(6, "CyberShield Technologies",
-        make_submission("CyberShield Technologies", 8_000_000, 45, "Cybersecurity", "7371", 10, 0))
+    run_new_business(
+        6,
+        "CyberShield Technologies",
+        make_submission("CyberShield Technologies", 8_000_000, 45, "Cybersecurity", "7371", 10, 0),
+    )
 
     # 7. Manufacturing — IoT/OT exposure, moderate security
-    run_new_business(7, "Precision Machining Corp",
+    run_new_business(
+        7,
+        "Precision Machining Corp",
         make_submission("Precision Machining Corp", 25_000_000, 350, "Industrial Manufacturing", "3599", 4, 1),
         file_claim={
             "claim_type": "business_interruption",
@@ -231,16 +269,21 @@ def main() -> None:
             "description": "Cyber attack on SCADA/OT systems halted production line for 5 days. Estimated lost revenue $2M. Industrial control systems required full rebuild.",
             "metadata": {"production_days_lost": 5, "estimated_revenue_loss": 2_000_000},
             "_reserve": 800_000,
-        })
+        },
+    )
 
     # 8. University — education sector, large attack surface
-    run_new_business(8, "Pacific State University",
-        make_submission("Pacific State University", 150_000_000, 5000, "Higher Education", "8221", 4, 2))
+    run_new_business(
+        8,
+        "Pacific State University",
+        make_submission("Pacific State University", 150_000_000, 5000, "Higher Education", "8221", 4, 2),
+    )
 
     # 9. Fintech startup — high security but regulatory complexity
-    run_new_business(9, "PayStream Digital",
-        make_submission("PayStream Digital", 18_000_000, 120, "Payment Processing", "6153", 9, 0,
-                       pci_compliant=True),
+    run_new_business(
+        9,
+        "PayStream Digital",
+        make_submission("PayStream Digital", 18_000_000, 120, "Payment Processing", "6153", 9, 0, pci_compliant=True),
         file_claim={
             "claim_type": "social_engineering",
             "date_of_loss": "2026-11-20",
@@ -248,11 +291,15 @@ def main() -> None:
             "description": "Business email compromise attack impersonating CEO resulted in $180,000 wire transfer to fraudulent account. Funds partially recovered ($45,000).",
             "metadata": {"amount_lost": 180_000, "amount_recovered": 45_000},
             "_reserve": 135_000,
-        })
+        },
+    )
 
     # 10. Large consulting firm — professional services, global ops
-    run_new_business(10, "Deloraine Consulting Group",
-        make_submission("Deloraine Consulting Group", 80_000_000, 2000, "Management Consulting", "7389", 6, 1))
+    run_new_business(
+        10,
+        "Deloraine Consulting Group",
+        make_submission("Deloraine Consulting Group", 80_000_000, 2000, "Management Consulting", "7389", 6, 1),
+    )
 
     write_log()
 

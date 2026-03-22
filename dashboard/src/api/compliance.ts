@@ -8,7 +8,11 @@ export async function getDecisions(): Promise<AgentDecision[]> {
   if (USE_MOCK) return mockDecisions;
   try {
     const { data } = await client.get('/compliance/decisions');
-    return Array.isArray(data) ? data : (data.items || []);
+    const items: Record<string, unknown>[] = Array.isArray(data) ? data : (data.items || []);
+    return items.map((d) => ({
+      ...d,
+      timestamp: (d.timestamp as string) || (d.created_at as string) || '',
+    })) as AgentDecision[];
   } catch (error) {
     console.warn('[API] Decisions fallback:', error);
     return mockDecisions;

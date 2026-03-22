@@ -775,9 +775,6 @@ async def seed_sample_data() -> None:
     Uses the same singleton repos that the API endpoints consume, so
     seeded data is immediately visible via the REST API.
     """
-    from openinsure.api.actuarial import _rate_adequacy_repo as rate_adequacy_repo
-    from openinsure.api.actuarial import _reserve_repo as reserve_repo
-    from openinsure.api.actuarial import _triangle_repo as triangle_repo
     from openinsure.api.billing import _repo as billing_repo
     from openinsure.api.claims import _repo as claims_repo
     from openinsure.api.compliance import _compliance_repo as compliance_repo
@@ -787,6 +784,15 @@ async def seed_sample_data() -> None:
     from openinsure.api.reinsurance import _recovery_repo as recovery_repo
     from openinsure.api.reinsurance import _treaty_repo as treaty_repo
     from openinsure.api.submissions import _repo as submissions_repo
+    from openinsure.infrastructure.factory import (
+        get_actuarial_reserve_repository,
+        get_rate_adequacy_repository,
+        get_triangle_repository,
+    )
+
+    reserve_repo = get_actuarial_reserve_repository()
+    triangle_repo = get_triangle_repository()
+    rate_adequacy_repo = get_rate_adequacy_repository()
 
     # Submissions
     for sub in _sample_submissions():

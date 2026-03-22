@@ -63,6 +63,8 @@ CLAIM_TRANSITIONS: dict[str, set[str]] = {
 
 def validate_submission_transition(current: str, target: str) -> None:
     """Validate a submission state transition."""
+    if current == target:
+        return  # idempotent — allow same-state "transition"
     allowed = SUBMISSION_TRANSITIONS.get(current, set())
     if target not in allowed:
         raise InvalidTransitionError("Submission", current, target)
@@ -70,6 +72,8 @@ def validate_submission_transition(current: str, target: str) -> None:
 
 def validate_policy_transition(current: str, target: str) -> None:
     """Validate a policy state transition."""
+    if current == target:
+        return
     allowed = POLICY_TRANSITIONS.get(current, set())
     if target not in allowed:
         raise InvalidTransitionError("Policy", current, target)
@@ -77,6 +81,8 @@ def validate_policy_transition(current: str, target: str) -> None:
 
 def validate_claim_transition(current: str, target: str) -> None:
     """Validate a claim state transition."""
+    if current == target:
+        return
     allowed = CLAIM_TRANSITIONS.get(current, set())
     if target not in allowed:
         raise InvalidTransitionError("Claim", current, target)
