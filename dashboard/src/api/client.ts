@@ -6,6 +6,14 @@ const client = axios.create({
   headers: { 'Content-Type': 'application/json' },
 });
 
+client.interceptors.request.use((config) => {
+  const role = localStorage.getItem('openinsure_role');
+  if (role) {
+    config.headers['X-User-Role'] = role;
+  }
+  return config;
+});
+
 client.interceptors.response.use(
   (res) => res,
   (error) => {

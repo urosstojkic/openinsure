@@ -27,8 +27,11 @@
 
 - `dev-key-change-me` API key maps to **CUO** role (`rbac/auth.py` line 119) — CUO never triggers ESCALATE, only REQUIRE_APPROVAL
 - ESCALATE decision only fires when user role is **below** the required role in the hierarchy
-- Remote backend runs with `require_auth=false` (dev mode) → all users get CUO regardless of JWT headers
-- To trigger real escalations: set `OPENINSURE_REQUIRE_AUTH=true` on the deployment, then use JWT tokens with low-authority roles (UW Analyst, Claims Adjuster)
+- **FIXED**: Dev mode now reads `X-User-Role` header to map portal personas to RBAC roles (`auth.py` role_mapping dict)
+- Frontend Axios client now sends `X-User-Role` header from `localStorage('openinsure_role')` on every request
+- Portal UserRole keys (AuthContext.tsx) map to backend Role enum: ceo→CEO, cuo→CUO, senior_uw→SENIOR_UNDERWRITER, uw_analyst→UW_ANALYST, claims_manager→CLAIMS_MANAGER, adjuster→CLAIMS_ADJUSTER, cfo→CFO, compliance→COMPLIANCE_OFFICER, product_mgr→PRODUCT_MANAGER, operations→OPERATIONS, broker→BROKER
+- Without the header, dev mode still defaults to CUO (backward compatible)
+- To trigger real escalations: select a low-authority persona (e.g. "Sarah Chen — Underwriter" → uw_analyst) in the portal
 - Added `POST /escalations` admin endpoint for manual escalation creation when natural flow cannot trigger them
 - UW hierarchy: UW_ANALYST → SENIOR_UNDERWRITER → LOB_HEAD → CUO → CEO
 - Claims hierarchy: CLAIMS_ADJUSTER → CLAIMS_MANAGER → CUO → CEO

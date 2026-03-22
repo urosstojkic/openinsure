@@ -99,8 +99,38 @@ async def get_current_user(
     """
     deployment_type = settings.deployment_type
 
-    # 1. Dev mode — no auth required
+    # 1. Dev mode — no auth required, but honour X-User-Role header
     if not settings.require_auth:
+        dev_role = request.headers.get("x-user-role")
+        if dev_role:
+            role_mapping: dict[str, str] = {
+                # Frontend UserRole values (AuthContext.tsx)
+                "ceo": Role.CEO,
+                "cuo": Role.CUO,
+                "senior_uw": Role.SENIOR_UNDERWRITER,
+                "uw_analyst": Role.UW_ANALYST,
+                "claims_manager": Role.CLAIMS_MANAGER,
+                "adjuster": Role.CLAIMS_ADJUSTER,
+                "cfo": Role.CFO,
+                "compliance": Role.COMPLIANCE_OFFICER,
+                "product_mgr": Role.PRODUCT_MANAGER,
+                "operations": Role.OPERATIONS,
+                "broker": Role.BROKER,
+                # Common aliases
+                "underwriter": Role.UW_ANALYST,
+                "claims_adjuster": Role.CLAIMS_ADJUSTER,
+                "actuary": Role.ACTUARY,
+                "reinsurance": Role.REINSURANCE_MANAGER,
+                "finance": Role.FINANCE,
+            }
+            mapped_role = role_mapping.get(dev_role, dev_role)
+            return CurrentUser(
+                user_id=f"dev-{dev_role}",
+                email=f"{dev_role}@openinsure.local",
+                display_name=f"Dev {dev_role.replace('_', ' ').title()}",
+                roles=[mapped_role],
+                deployment_type=deployment_type,
+            )
         return _dev_user(deployment_type)
 
     # 2. API key mode
