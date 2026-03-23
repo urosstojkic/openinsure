@@ -1,5 +1,13 @@
 {
   "mcpServers": {
+    "openinsure": {
+      "command": "python",
+      "args": ["-m", "openinsure.mcp"],
+      "env": {
+        "OPENINSURE_STORAGE_MODE": "memory",
+        "OPENINSURE_DEBUG": "true"
+      }
+    },
     "EXAMPLE-github": {
       "command": "npx",
       "args": [
