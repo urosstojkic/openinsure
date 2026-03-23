@@ -7,9 +7,14 @@ dashboard has content to display immediately.  Only runs when
 
 from __future__ import annotations
 
+import random
+import random
 import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Any
+
+# Deterministic RNG for reproducible seeds
+_rng = random.Random(42)  # noqa: S311 — seed data does not need crypto randomness
 
 
 def _now() -> str:
@@ -26,13 +31,14 @@ def _days_from_now(n: int) -> str:
 
 # Stable IDs so relationships work across entities
 PARTY_IDS = [str(uuid.uuid4()) for _ in range(3)]
-SUBMISSION_IDS = [str(uuid.uuid4()) for _ in range(5)]
+SUBMISSION_IDS = [str(uuid.uuid4()) for _ in range(20)]
 POLICY_IDS = [str(uuid.uuid4()) for _ in range(3)]
 CLAIM_IDS = [str(uuid.uuid4()) for _ in range(2)]
 PRODUCT_ID = str(uuid.uuid4())
 PRODUCT_IDS = [PRODUCT_ID] + [str(uuid.uuid4()) for _ in range(3)]
-DECISION_IDS = [str(uuid.uuid4()) for _ in range(5)]
-AUDIT_IDS = [str(uuid.uuid4()) for _ in range(4)]
+DECISION_IDS = [str(uuid.uuid4()) for _ in range(40)]
+AUDIT_IDS = [str(uuid.uuid4()) for _ in range(50)]
+ESCALATION_IDS = [str(uuid.uuid4()) for _ in range(10)]
 TREATY_IDS = [str(uuid.uuid4()) for _ in range(3)]
 CESSION_IDS = [str(uuid.uuid4()) for _ in range(4)]
 RECOVERY_IDS = [str(uuid.uuid4()) for _ in range(2)]
@@ -42,74 +48,139 @@ RATE_ADEQUACY_IDS = [str(uuid.uuid4()) for _ in range(7)]
 
 
 def _sample_submissions() -> list[dict[str, Any]]:
-    _now()
-    return [
-        {
-            "id": SUBMISSION_IDS[0],
-            "applicant_name": "Acme Cyber Corp",
-            "applicant_email": "underwriting@acmecyber.com",
-            "status": "received",
-            "channel": "portal",
-            "line_of_business": "cyber",
-            "risk_data": {"annual_revenue": 5_000_000, "employee_count": 50},
-            "metadata": {"broker": "MarshMcLennan"},
-            "documents": [],
-            "created_at": _days_ago(10),
-            "updated_at": _days_ago(10),
-        },
-        {
-            "id": SUBMISSION_IDS[1],
-            "applicant_name": "TechStart Inc",
-            "applicant_email": "cfo@techstart.io",
-            "status": "triaging",
-            "channel": "api",
-            "line_of_business": "cyber",
-            "risk_data": {"annual_revenue": 1_200_000, "employee_count": 15},
-            "metadata": {},
-            "documents": [],
-            "created_at": _days_ago(7),
-            "updated_at": _days_ago(6),
-        },
-        {
-            "id": SUBMISSION_IDS[2],
-            "applicant_name": "GlobalFinance Ltd",
-            "applicant_email": "risk@globalfinance.com",
-            "status": "quoted",
-            "channel": "broker",
-            "line_of_business": "cyber",
-            "risk_data": {"annual_revenue": 50_000_000, "employee_count": 500},
-            "metadata": {"broker": "Aon"},
-            "documents": ["doc-abc123"],
-            "created_at": _days_ago(14),
-            "updated_at": _days_ago(3),
-        },
-        {
-            "id": SUBMISSION_IDS[3],
-            "applicant_name": "SecureHealth Systems",
-            "applicant_email": "it@securehealth.org",
-            "status": "bound",
-            "channel": "email",
-            "line_of_business": "cyber",
-            "risk_data": {"annual_revenue": 8_000_000, "employee_count": 120},
-            "metadata": {},
-            "documents": [],
-            "created_at": _days_ago(30),
-            "updated_at": _days_ago(2),
-        },
-        {
-            "id": SUBMISSION_IDS[4],
-            "applicant_name": "CloudNine SaaS",
-            "applicant_email": "ops@cloudnine.dev",
-            "status": "underwriting",
-            "channel": "portal",
-            "line_of_business": "tech_eo",
-            "risk_data": {"annual_revenue": 3_000_000, "employee_count": 30},
-            "metadata": {},
-            "documents": [],
-            "created_at": _days_ago(5),
-            "updated_at": _days_ago(4),
-        },
+    """Generate 20 realistic submissions with varied statuses and risk profiles."""
+    _companies = [
+        # (name, email, industry, revenue, employees, security_score, channel, lob)
+        ("Acme Cyber Corp", "underwriting@acmecyber.com", "technology", 5_000_000, 50, 0.82, "portal", "cyber"),
+        ("TechStart Inc", "cfo@techstart.io", "technology", 1_200_000, 15, 0.55, "api", "cyber"),
+        ("GlobalFinance Ltd", "risk@globalfinance.com", "financial_services", 50_000_000, 500, 0.91, "broker", "cyber"),
+        ("SecureHealth Systems", "it@securehealth.org", "healthcare", 8_000_000, 120, 0.73, "email", "cyber"),
+        ("CloudNine SaaS", "ops@cloudnine.dev", "technology", 3_000_000, 30, 0.68, "portal", "tech_eo"),
+        ("RetailMax Holdings", "legal@retailmax.com", "retail", 120_000_000, 2500, 0.45, "broker", "general_liability"),
+        ("MedTech Dynamics", "compliance@medtech.io", "healthcare", 15_000_000, 200, 0.78, "portal", "cyber"),
+        ("FintechFlow AG", "risk@fintechflow.eu", "financial_services", 22_000_000, 180, 0.88, "api", "cyber"),
+        ("GreenEnergy Corp", "ops@greenenergy.co", "energy", 35_000_000, 450, 0.62, "broker", "general_liability"),
+        (
+            "EduPlatform Inc",
+            "admin@eduplatform.com",
+            "education",
+            2_500_000,
+            40,
+            0.71,
+            "portal",
+            "professional_liability",
+        ),
+        ("LogiChain Solutions", "it@logichain.com", "logistics", 18_000_000, 300, 0.53, "email", "cyber"),
+        ("MediaPulse Digital", "security@mediapulse.tv", "media", 7_000_000, 85, 0.64, "api", "tech_eo"),
+        (
+            "LegalEagle Partners",
+            "it@legaleagle.law",
+            "legal",
+            12_000_000,
+            150,
+            0.76,
+            "broker",
+            "professional_liability",
+        ),
+        (
+            "NanoManufacturing Co",
+            "ops@nanomfg.com",
+            "manufacturing",
+            45_000_000,
+            600,
+            0.41,
+            "email",
+            "general_liability",
+        ),
+        ("CyberShield Consulting", "admin@cybershield.io", "technology", 800_000, 12, 0.93, "portal", "cyber"),
+        ("HealthFirst Network", "risk@healthfirst.org", "healthcare", 95_000_000, 1200, 0.85, "broker", "cyber"),
+        ("QuickRetail Online", "ops@quickretail.com", "retail", 6_000_000, 75, 0.38, "portal", "cyber"),
+        ("DataVault Systems", "sec@datavault.io", "technology", 28_000_000, 220, 0.90, "api", "tech_eo"),
+        ("BrightEnergy Solar", "legal@brightenergy.com", "energy", 10_000_000, 130, 0.57, "email", "general_liability"),
+        (
+            "CapitalAdvisors Group",
+            "compliance@capadvisors.com",
+            "financial_services",
+            200_000_000,
+            3000,
+            0.72,
+            "broker",
+            "professional_liability",
+        ),
     ]
+
+    # Status distribution: 6 received/triaging, 5 underwriting, 4 quoted, 3 bound, 2 declined
+    _statuses = [
+        "received",
+        "triaging",
+        "received",
+        "bound",
+        "underwriting",  # 0-4 (idx 3 = bound for SecureHealth)
+        "triaging",
+        "underwriting",
+        "quoted",
+        "underwriting",
+        "quoted",  # 5-9
+        "received",
+        "underwriting",
+        "quoted",
+        "declined",
+        "triaging",  # 10-14
+        "bound",
+        "declined",
+        "bound",
+        "quoted",
+        "underwriting",  # 15-19
+    ]
+
+    # Risk scores based on industry + security posture
+    def _compute_risk_score(industry: str, revenue: float, security: float) -> float:
+        base = {
+            "technology": 0.3,
+            "healthcare": 0.5,
+            "financial_services": 0.4,
+            "retail": 0.55,
+            "manufacturing": 0.45,
+            "education": 0.35,
+            "energy": 0.5,
+            "media": 0.4,
+            "legal": 0.35,
+            "logistics": 0.5,
+        }
+        score = base.get(industry, 0.4)
+        if revenue > 50_000_000:
+            score += 0.15
+        elif revenue > 10_000_000:
+            score += 0.08
+        score -= (security - 0.5) * 0.3  # better security = lower risk
+        return round(max(0.05, min(0.95, score)), 2)
+
+    submissions = []
+    for i, (name, email, industry, revenue, employees, security, channel, lob) in enumerate(_companies):
+        risk_score = _compute_risk_score(industry, revenue, security)
+        days_back = _rng.randint(3, 45)
+        submissions.append(
+            {
+                "id": SUBMISSION_IDS[i],
+                "applicant_name": name,
+                "applicant_email": email,
+                "status": _statuses[i],
+                "channel": channel,
+                "line_of_business": lob,
+                "risk_data": {
+                    "annual_revenue": revenue,
+                    "employee_count": employees,
+                    "industry": industry,
+                    "security_score": security,
+                    "risk_score": risk_score,
+                },
+                "metadata": {"broker": "MarshMcLennan"} if channel == "broker" else {},
+                "documents": [],
+                "created_at": _days_ago(days_back),
+                "updated_at": _days_ago(max(1, days_back - _rng.randint(1, 5))),
+            }
+        )
+    return submissions
 
 
 def _sample_policies() -> list[dict[str, Any]]:
@@ -377,125 +448,216 @@ def _sample_products() -> list[dict[str, Any]]:
     ]
 
 
-def _sample_decisions() -> list[dict[str, Any]]:
-    return [
-        {
-            "id": DECISION_IDS[0],
-            "decision_type": "triage",
-            "entity_id": SUBMISSION_IDS[0],
-            "entity_type": "submission",
-            "model_id": "triage-agent-v1",
-            "model_version": "0.1.0",
-            "input_summary": {"applicant": "Acme Cyber Corp", "industry": "technology"},
-            "output_summary": {"risk_score": 0.35, "recommendation": "proceed_to_quote"},
-            "confidence": 0.92,
-            "explanation": "Low risk profile based on industry benchmarks and security posture.",
-            "human_override": False,
-            "override_reason": None,
-            "created_at": _days_ago(9),
-        },
-        {
-            "id": DECISION_IDS[1],
-            "decision_type": "underwriting",
-            "entity_id": SUBMISSION_IDS[2],
-            "entity_type": "submission",
-            "model_id": "underwriting-agent-v1",
-            "model_version": "0.1.0",
-            "input_summary": {"applicant": "GlobalFinance Ltd", "revenue": 50_000_000},
-            "output_summary": {"risk_score": 0.58, "recommendation": "refer_to_senior"},
-            "confidence": 0.78,
-            "explanation": "Higher revenue band triggers senior underwriter review.",
-            "human_override": True,
-            "override_reason": "Senior UW approved after additional documentation review.",
-            "created_at": _days_ago(5),
-        },
-        {
-            "id": DECISION_IDS[2],
-            "decision_type": "claims",
-            "entity_id": CLAIM_IDS[0],
-            "entity_type": "claim",
-            "model_id": "claims-triage-v1",
-            "model_version": "0.1.0",
-            "input_summary": {"claim_type": "data_breach", "severity": "high"},
-            "output_summary": {"recommended_reserve": 150_000, "priority": "urgent"},
-            "confidence": 0.85,
-            "explanation": "High-severity data breach with potential regulatory exposure.",
-            "human_override": False,
-            "override_reason": None,
-            "created_at": _days_ago(4),
-        },
-        {
-            "id": DECISION_IDS[3],
-            "decision_type": "pricing",
-            "entity_id": SUBMISSION_IDS[3],
-            "entity_type": "submission",
-            "model_id": "rating-engine-v1",
-            "model_version": "1.0.0",
-            "input_summary": {"revenue": 8_000_000, "employees": 120},
-            "output_summary": {"premium": 12_500, "currency": "USD"},
-            "confidence": 0.95,
-            "explanation": "Standard rating for mid-market healthcare vertical.",
-            "human_override": False,
-            "override_reason": None,
-            "created_at": _days_ago(30),
-        },
-        {
-            "id": DECISION_IDS[4],
-            "decision_type": "fraud_detection",
-            "entity_id": CLAIM_IDS[1],
-            "entity_type": "claim",
-            "model_id": "fraud-detection-v1",
-            "model_version": "0.2.0",
-            "input_summary": {"claim_type": "ransomware", "amount": 45_000},
-            "output_summary": {"fraud_score": 0.12, "flag": False},
-            "confidence": 0.91,
-            "explanation": "Low fraud indicators — claim consistent with incident pattern.",
-            "human_override": False,
-            "override_reason": None,
-            "created_at": _days_ago(88),
-        },
-    ]
+def _sample_decision_records() -> list[dict[str, Any]]:
+    """Generate triage + underwriting decision records for every submission.
+
+    Confidence distribution: ~70 % above 0.7, ~30 % below.
+    """
+    submissions = _sample_submissions()
+    decisions: list[dict[str, Any]] = []
+    decision_idx = 0
+
+    # Statuses that are past the triage stage
+    _past_triage = {"underwriting", "quoted", "bound", "declined"}
+
+    for sub in submissions:
+        rd = sub.get("risk_data") or {}
+        risk_score = rd.get("risk_score", 0.5)
+        industry = rd.get("industry", "unknown")
+        revenue = rd.get("annual_revenue", 0)
+        security = rd.get("security_score", 0.5)
+
+        # Triage confidence: 70 % high, 30 % low
+        triage_conf = round(_rng.uniform(0.72, 0.98), 2) if _rng.random() < 0.70 else round(_rng.uniform(0.35, 0.68), 2)
+
+        triage_rec = (
+            "decline" if risk_score > 0.75 else ("refer_to_senior" if risk_score > 0.55 else "proceed_to_quote")
+        )
+
+        decisions.append(
+            {
+                "id": DECISION_IDS[decision_idx],
+                "decision_type": "triage",
+                "entity_id": sub["id"],
+                "entity_type": "submission",
+                "model_id": "triage-agent-v1",
+                "model_version": "0.1.0",
+                "input_summary": {
+                    "applicant": sub["applicant_name"],
+                    "industry": industry,
+                    "revenue": revenue,
+                    "security_score": security,
+                },
+                "output_summary": {
+                    "risk_score": risk_score,
+                    "recommendation": triage_rec,
+                },
+                "confidence": triage_conf,
+                "explanation": (
+                    f"Risk score {risk_score} for {industry} sector. "
+                    f"Security posture "
+                    f"{'strong' if security > 0.7 else 'moderate' if security > 0.5 else 'weak'} "
+                    f"(score {security}). Revenue band "
+                    f"{'large' if revenue > 25_000_000 else 'mid-market' if revenue > 5_000_000 else 'SMB'}."
+                ),
+                "human_override": False,
+                "override_reason": None,
+                "created_at": sub["created_at"],
+            }
+        )
+        decision_idx += 1
+
+        # Underwriting decision for submissions past triage
+        if sub["status"] in _past_triage:
+            uw_conf = round(_rng.uniform(0.72, 0.97), 2) if _rng.random() < 0.70 else round(_rng.uniform(0.40, 0.68), 2)
+
+            base_premium = max(5_000, int(revenue * 0.0015))
+            premium = int(base_premium * (1 + risk_score * 0.5))
+            is_override = sub["status"] == "bound" and uw_conf < 0.65
+
+            uw_rec = (
+                "decline" if sub["status"] == "declined" else ("refer_to_senior" if premium > 50_000 else "approve")
+            )
+
+            decisions.append(
+                {
+                    "id": DECISION_IDS[decision_idx],
+                    "decision_type": "underwriting",
+                    "entity_id": sub["id"],
+                    "entity_type": "submission",
+                    "model_id": "underwriting-agent-v1",
+                    "model_version": "0.1.0",
+                    "input_summary": {
+                        "applicant": sub["applicant_name"],
+                        "revenue": revenue,
+                        "risk_score": risk_score,
+                    },
+                    "output_summary": {
+                        "risk_score": risk_score,
+                        "premium": premium,
+                        "recommendation": uw_rec,
+                    },
+                    "confidence": uw_conf,
+                    "explanation": (
+                        f"Underwriting assessment for {sub['applicant_name']}. "
+                        f"Indicated premium ${premium:,}. "
+                        f"{'Referred to senior underwriter.' if uw_rec == 'refer_to_senior' else ''}"
+                    ),
+                    "human_override": is_override,
+                    "override_reason": (
+                        "Senior UW approved after additional documentation review." if is_override else None
+                    ),
+                    "created_at": sub["updated_at"],
+                }
+            )
+            decision_idx += 1
+
+    return decisions
+
+
+def _sample_escalations() -> list[dict[str, Any]]:
+    """Generate escalation records for low-confidence or high-premium decisions."""
+    decisions = _sample_decision_records()
+    escalations: list[dict[str, Any]] = []
+    esc_idx = 0
+
+    for dec in decisions:
+        needs_escalation = False
+        reason = ""
+        premium = (dec.get("output_summary") or {}).get("premium", 0)
+
+        if dec["confidence"] < 0.65:
+            needs_escalation = True
+            reason = f"Low confidence score ({dec['confidence']})"
+        elif premium and premium > 50_000:
+            needs_escalation = True
+            reason = f"Premium ${premium:,} exceeds auto-bind authority"
+
+        if needs_escalation and esc_idx < len(ESCALATION_IDS):
+            is_resolved = _rng.random() < 0.5
+            created = dec["created_at"]
+            escalations.append(
+                {
+                    "id": ESCALATION_IDS[esc_idx],
+                    "action": "quote" if dec["decision_type"] == "underwriting" else "triage",
+                    "entity_type": "submission",
+                    "entity_id": dec["entity_id"],
+                    "requested_by": dec["model_id"],
+                    "requested_role": "uw_analyst",
+                    "amount": premium or 0,
+                    "required_role": "cuo" if premium and premium > 100_000 else "senior_uw",
+                    "escalation_chain": ["senior_uw", "cuo"],
+                    "reason": reason,
+                    "context": {"decision_id": dec["id"], "confidence": dec["confidence"]},
+                    "status": "approved" if is_resolved else "pending",
+                    "created_at": created,
+                    "resolved_by": "James Wright" if is_resolved else None,
+                    "resolved_at": _days_ago(1) if is_resolved else None,
+                    "resolution_reason": "Approved after review" if is_resolved else None,
+                }
+            )
+            esc_idx += 1
+
+    return escalations
 
 
 def _sample_audit_events() -> list[dict[str, Any]]:
-    return [
-        {
-            "id": AUDIT_IDS[0],
-            "timestamp": _days_ago(10),
-            "actor": "portal",
-            "action": "submission.created",
-            "entity_type": "submission",
-            "entity_id": SUBMISSION_IDS[0],
-            "details": {"applicant": "Acme Cyber Corp"},
-        },
-        {
-            "id": AUDIT_IDS[1],
-            "timestamp": _days_ago(9),
-            "actor": "triage-agent-v1",
-            "action": "decision.recorded",
-            "entity_type": "submission",
-            "entity_id": SUBMISSION_IDS[0],
-            "details": {"decision_id": DECISION_IDS[0]},
-        },
-        {
-            "id": AUDIT_IDS[2],
-            "timestamp": _days_ago(5),
-            "actor": "underwriting-agent-v1",
-            "action": "decision.recorded",
-            "entity_type": "submission",
-            "entity_id": SUBMISSION_IDS[2],
-            "details": {"decision_id": DECISION_IDS[1]},
-        },
-        {
-            "id": AUDIT_IDS[3],
-            "timestamp": _days_ago(4),
-            "actor": "claims-triage-v1",
-            "action": "decision.recorded",
-            "entity_type": "claim",
-            "entity_id": CLAIM_IDS[0],
-            "details": {"decision_id": DECISION_IDS[2]},
-        },
-    ]
+    """Generate audit trail entries for every decision and escalation."""
+    events: list[dict[str, Any]] = []
+    idx = 0
+
+    # Audit events for submissions being created
+    for sub in _sample_submissions():
+        if idx >= len(AUDIT_IDS):
+            break
+        events.append(
+            {
+                "id": AUDIT_IDS[idx],
+                "timestamp": sub["created_at"],
+                "actor": sub.get("channel", "portal"),
+                "action": "submission.created",
+                "entity_type": "submission",
+                "entity_id": sub["id"],
+                "details": {"applicant": sub["applicant_name"]},
+            }
+        )
+        idx += 1
+
+    # Audit events for each decision record
+    for dec in _sample_decision_records():
+        if idx >= len(AUDIT_IDS):
+            break
+        events.append(
+            {
+                "id": AUDIT_IDS[idx],
+                "timestamp": dec["created_at"],
+                "actor": dec["model_id"],
+                "action": "decision.recorded",
+                "entity_type": dec["entity_type"],
+                "entity_id": dec["entity_id"],
+                "details": {"decision_id": dec["id"], "decision_type": dec["decision_type"]},
+            }
+        )
+        idx += 1
+
+    # Audit events for escalations
+    for esc in _sample_escalations():
+        if idx >= len(AUDIT_IDS):
+            break
+        events.append(
+            {
+                "id": AUDIT_IDS[idx],
+                "timestamp": esc["created_at"],
+                "actor": esc["requested_by"],
+                "action": "escalation.created",
+                "entity_type": esc["entity_type"],
+                "entity_id": esc["entity_id"],
+                "details": {"escalation_id": esc["id"], "reason": esc["reason"]},
+            }
+        )
+        idx += 1
+
+    return events
 
 
 def _sample_treaties() -> list[dict[str, Any]]:
@@ -898,11 +1060,19 @@ async def seed_sample_data() -> None:
         }
     )
 
-    # Compliance — only seed audit events; decisions are recorded only when
-    # real Foundry agents run (no synthetic/mock decision data).
+    # Compliance — seed decision records and audit events
+    for dec in _sample_decision_records():
+        await compliance_repo.add_decision(dec)
+
     await compliance_repo.clear_audit_events()
     for evt in _sample_audit_events():
         await compliance_repo.add_audit_event(evt)
+
+    # Escalations — populate the in-memory queue
+    from openinsure.services.escalation import _escalation_queue
+
+    for esc in _sample_escalations():
+        _escalation_queue.append(esc)
 
     # Reinsurance — treaties, cessions, recoveries
     for treaty in _sample_treaties():
