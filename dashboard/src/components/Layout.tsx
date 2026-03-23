@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import {
   LayoutDashboard,
   Inbox,
@@ -29,6 +30,7 @@ import {
 } from 'lucide-react';
 import { useAuth, NAV_ACCESS, type UserRole } from '../context/AuthContext';
 import { useMockMode } from '../context/MockContext';
+import { getEscalationCount } from '../api/escalations';
 
 const SIDEBAR_COLLAPSED_KEY = 'openinsure_sidebar_collapsed';
 
@@ -90,7 +92,8 @@ const NavSection: React.FC<{
   role: UserRole;
   sectionLabel?: string;
   collapsed?: boolean;
-}> = ({ items, role, sectionLabel, collapsed }) => {
+  escalationCount?: number;
+}> = ({ items, role, sectionLabel, collapsed, escalationCount }) => {
   const visible = filterItems(items, role);
   if (visible.length === 0) return null;
   return (
@@ -108,31 +111,46 @@ const NavSection: React.FC<{
           <div className="h-px bg-slate-200/50" />
         </div>
       )}
-      {visible.map(({ to, label, icon: Icon }) => (
-        <NavLink
-          key={to}
-          to={to}
-          end={to === '/'}
-          title={collapsed ? label : undefined}
-          className={({ isActive }) =>
-            `group relative flex items-center ${collapsed ? 'justify-center' : 'gap-2.5'} rounded-lg ${collapsed ? 'px-2 py-2 mx-1' : 'px-3 py-[7px]'} text-[13px] font-medium transition-all duration-150 ${
-              isActive
-                ? 'bg-indigo-50/80 text-indigo-700'
-                : 'text-slate-500 hover:bg-slate-100/80 hover:text-slate-800'
-            }`
-          }
-        >
-          {({ isActive }) => (
-            <>
-              {isActive && !collapsed && (
-                <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-[3px] rounded-r-full bg-indigo-500" />
-              )}
-              <Icon size={17} className={`shrink-0 ${isActive ? 'text-indigo-600' : 'text-slate-400 group-hover:text-slate-600'}`} />
-              {!collapsed && <span>{label}</span>}
-            </>
-          )}
-        </NavLink>
-      ))}
+      {visible.map(({ to, label, icon: Icon }) => {
+        const showBadge = to === '/escalations' && escalationCount != null && escalationCount > 0;
+        return (
+          <NavLink
+            key={to}
+            to={to}
+            end={to === '/'}
+            title={collapsed ? label : undefined}
+            className={({ isActive }) =>
+              `group relative flex items-center ${collapsed ? 'justify-center' : 'gap-2.5'} rounded-lg ${collapsed ? 'px-2 py-2 mx-1' : 'px-3 py-[7px]'} text-[13px] font-medium transition-all duration-150 ${
+                isActive
+                  ? 'bg-indigo-50/80 text-indigo-700'
+                  : 'text-slate-500 hover:bg-slate-100/80 hover:text-slate-800'
+              }`
+            }
+          >
+            {({ isActive }) => (
+              <>
+                {isActive && !collapsed && (
+                  <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-[3px] rounded-r-full bg-indigo-500" />
+                )}
+                <Icon size={17} className={`shrink-0 ${isActive ? 'text-indigo-600' : 'text-slate-400 group-hover:text-slate-600'}`} />
+                {!collapsed && (
+                  <span className="flex-1">{label}</span>
+                )}
+                {showBadge && !collapsed && (
+                  <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-bold text-white">
+                    {escalationCount}
+                  </span>
+                )}
+                {showBadge && collapsed && (
+                  <span className="absolute -top-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[9px] font-bold text-white ring-2 ring-white">
+                    {escalationCount}
+                  </span>
+                )}
+              </>
+            )}
+          </NavLink>
+        );
+      })}
     </>
   );
 };
@@ -142,6 +160,16 @@ const Layout: React.FC = () => {
   const { useMock, toggleMock } = useMockMode();
   const location = useLocation();
   const isBroker = user.role === 'broker';
+
+  // Escalation badge count (#76)
+  const { data: escalationCount = 0 } = useQuery({
+    queryKey: ['escalation-count'],
+    queryFn: async () => {
+      try { return await getEscalationCount(); }
+      catch { return 0; }
+    },
+    refetchInterval: 30_000,
+  });
 
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -298,7 +326,7 @@ const Layout: React.FC = () => {
 
           {/* Nav */}
           <nav className="flex-1 space-y-0.5 overflow-y-auto custom-scrollbar px-2 py-2">
-            <NavSection items={navItems} role={user.role} collapsed={collapsed} />
+            <NavSection items={navItems} role={user.role} collapsed={collapsed} escalationCount={escalationCount} />
             <NavSection items={workbenchItems} role={user.role} sectionLabel="Workbenches" collapsed={collapsed} />
             <NavSection items={extraItems} role={user.role} sectionLabel="Views" collapsed={collapsed} />
           </nav>

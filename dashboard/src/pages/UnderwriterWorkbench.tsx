@@ -1,10 +1,13 @@
 import React, { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Sparkles } from 'lucide-react';
 import StatusBadge from '../components/StatusBadge';
 import TrafficLight from '../components/TrafficLight';
 import ConfidenceBar from '../components/ConfidenceBar';
 import TimelineEvent from '../components/TimelineEvent';
+import ProcessWorkflowModal from '../components/ProcessWorkflowModal';
 import { getUnderwriterQueue } from '../api/workbench';
+import { processSubmission } from '../api/submissions';
 import { TableSkeleton } from '../components/Skeleton';
 import { formatDate } from '../utils/formatDate';
 import type { UnderwriterQueueItem, LOB } from '../types';
@@ -27,12 +30,28 @@ const lobLabels: Record<LOB, string> = {
 const money = (n: number) =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n);
 
+/** Derive row color class based on confidence & recommendation */
+function rowColorClass(item: UnderwriterQueueItem): string {
+  const rec = (item.agent_recommendation || '').toLowerCase();
+  const conf = item.confidence ?? 0;
+
+  if (rec.includes('decline') || conf < 0.5) return 'bg-red-50/60 hover:bg-red-50';
+  if (conf >= 0.7 && rec.includes('quote') && !rec.includes('refer')) return 'bg-emerald-50/50 hover:bg-emerald-50';
+  if (rec.includes('refer') || (conf >= 0.5 && conf < 0.7)) return 'bg-amber-50/50 hover:bg-amber-50';
+  return 'hover:bg-slate-50/50';
+}
+
 type Tab = 'analysis' | 'documents' | 'risk' | 'history';
 
 const UnderwriterWorkbench: React.FC = () => {
+  const queryClient = useQueryClient();
   const { data: queue = [], isLoading } = useQuery({ queryKey: ['uw-queue'], queryFn: getUnderwriterQueue });
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>('analysis');
+
+  // "Process with AI" modal state (#71)
+  const [processingId, setProcessingId] = useState<string | null>(null);
+  const [processingLabel, setProcessingLabel] = useState('');
 
   // Decision panel state
   const [showDecline, setShowDecline] = useState(false);
@@ -68,13 +87,16 @@ const UnderwriterWorkbench: React.FC = () => {
   };
 
   const handleConfirmAction = () => {
-    // In a real app, this would call an API
     alert(`Action "${confirmAction}" confirmed with reason: ${actionReason}`);
     resetActions();
   };
 
-  const authorityLimit = 500_000; // Example: underwriter's authority limit for premium
+  const authorityLimit = 500_000;
   const needsEscalation = selected ? selected.recommended_terms.premium > authorityLimit : false;
+
+  /** Can this item be processed with AI? */
+  const canProcess = (item: UnderwriterQueueItem) =>
+    ['received', 'underwriting'].includes(item.status);
 
   if (isLoading) return <div className="space-y-4"><TableSkeleton rows={6} columns={8} /></div>;
 
@@ -104,7 +126,7 @@ const UnderwriterWorkbench: React.FC = () => {
               {queue.map((item) => (
                 <tr
                   key={item.id}
-                  className={`cursor-pointer transition-colors ${selectedId === item.id ? 'bg-indigo-50/60' : 'hover:bg-slate-50/50'}`}
+                  className={`cursor-pointer transition-colors ${selectedId === item.id ? 'bg-indigo-50/60' : rowColorClass(item)}`}
                   onClick={() => handleSelect(item)}
                 >
                   <td className="px-3 py-2"><StatusBadge label={item.priority} variant={priorityVariant[item.priority] ?? 'yellow'} /></td>
@@ -112,13 +134,32 @@ const UnderwriterWorkbench: React.FC = () => {
                   <td className="px-3 py-2 text-xs text-slate-900">{item.applicant_name}</td>
                   <td className="px-3 py-2 text-xs text-slate-600">{lobLabels[item.lob]}</td>
                   <td className="px-3 py-2">
-                    <span className={`font-mono text-xs ${item.risk_score >= 70 ? 'text-red-600 font-semibold' : item.risk_score >= 40 ? 'text-amber-600' : 'text-slate-500'}`}>
-                      {item.risk_score || '—'}
+                    <span className={`font-mono text-xs ${item.risk_score >= 7 ? 'text-red-600 font-semibold' : item.risk_score >= 4 ? 'text-amber-600' : 'text-emerald-600'}`}>
+                      {item.risk_score ? `${item.risk_score}/10` : '—'}
                     </span>
                   </td>
                   <td className="px-3 py-2 text-xs text-slate-600">{item.confidence ? `${Math.round(item.confidence * 100)}%` : '—'}</td>
-                  <td className="px-3 py-2 text-xs text-slate-600 max-w-[120px] truncate">{item.agent_recommendation}</td>
-                  <td className="px-3 py-2 text-xs text-slate-500">{formatDate(item.due_date || item.received_date)}</td>
+                  <td className="px-3 py-2 text-xs text-slate-600 max-w-[120px] truncate">
+                    {item.agent_recommendation || '—'}
+                  </td>
+                  <td className="px-3 py-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-slate-500">{formatDate(item.due_date || item.received_date)}</span>
+                      {canProcess(item) && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setProcessingId(item.id);
+                            setProcessingLabel(item.submission_number || item.id.substring(0, 8));
+                          }}
+                          title="Process with AI"
+                          className="rounded-md bg-gradient-to-r from-indigo-500 to-purple-500 p-1 text-white shadow-sm hover:from-indigo-600 hover:to-purple-600 transition-all"
+                        >
+                          <Sparkles size={12} />
+                        </button>
+                      )}
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -162,9 +203,67 @@ const UnderwriterWorkbench: React.FC = () => {
             <div className="flex-1 overflow-y-auto p-5">
               {tab === 'analysis' && (
                 <div className="space-y-5">
-                  {/* Risk Score Breakdown */}
+                  {/* Applicant Info (#68) */}
                   <div>
-                    <h3 className="mb-3 text-sm font-semibold text-slate-800">Risk Score Breakdown</h3>
+                    <h3 className="mb-3 text-sm font-semibold text-slate-800">Applicant Information</h3>
+                    <div className="grid grid-cols-2 gap-3">
+                      {[
+                        ['Name', selected.applicant_name],
+                        ['Company', selected.company_name],
+                        ['Industry', selected.industry || '—'],
+                        ['Revenue', selected.annual_revenue ? money(selected.annual_revenue) : '—'],
+                        ['Employees', selected.employee_count ? selected.employee_count.toLocaleString() : '—'],
+                        ['Line of Business', lobLabels[selected.lob]],
+                      ].map(([label, value]) => (
+                        <div key={label} className="flex items-center justify-between rounded border border-slate-100 px-3 py-2">
+                          <span className="text-xs text-slate-500">{label}</span>
+                          <span className="text-sm font-medium text-slate-900">{value}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Cyber Risk Data (#68) */}
+                  {selected.cyber_risk_data && (
+                    <div>
+                      <h3 className="mb-3 text-sm font-semibold text-slate-800">Cyber Risk Data</h3>
+                      <div className="grid grid-cols-2 gap-3">
+                        {[
+                          ['Security Posture', `${selected.cyber_risk_data.security_rating}/100`],
+                          ['MFA Enabled', selected.cyber_risk_data.mfa_enabled ? '✓ Yes' : '✗ No'],
+                          ['Endpoint Protection', selected.cyber_risk_data.encryption_at_rest ? '✓ Active' : '✗ Missing'],
+                          ['Open Vulnerabilities', String(selected.cyber_risk_data.open_vulnerabilities)],
+                          ['IR Plan', selected.cyber_risk_data.incident_response_plan ? '✓ Yes' : '✗ No'],
+                          ['3rd-Party Risk', `${selected.cyber_risk_data.third_party_risk_score}/100`],
+                        ].map(([label, value]) => (
+                          <div key={label} className="flex items-center justify-between rounded border border-slate-100 px-3 py-2">
+                            <span className="text-xs text-slate-500">{label}</span>
+                            <span className="text-sm font-medium text-slate-900">{value}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Agent Risk Assessment — Factor Breakdown (#68) */}
+                  <div>
+                    <h3 className="mb-3 text-sm font-semibold text-slate-800">Agent Risk Assessment</h3>
+                    <div className="flex items-center gap-4 mb-3">
+                      <div className="rounded-lg border border-slate-200 px-3 py-2">
+                        <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Risk Score</span>
+                        <p className={`text-xl font-bold ${selected.risk_score >= 7 ? 'text-red-600' : selected.risk_score >= 4 ? 'text-amber-600' : 'text-emerald-600'}`}>
+                          {selected.risk_score || '—'}<span className="text-sm text-slate-400">/10</span>
+                        </p>
+                      </div>
+                      <div className="rounded-lg border border-slate-200 px-3 py-2">
+                        <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Confidence</span>
+                        <div className="mt-1 w-28"><ConfidenceBar value={selected.confidence} /></div>
+                      </div>
+                      <div className="rounded-lg border border-slate-200 px-3 py-2">
+                        <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Recommendation</span>
+                        <p className="text-sm font-semibold text-slate-800">{selected.agent_recommendation || '—'}</p>
+                      </div>
+                    </div>
                     {selected.risk_factors.length > 0 ? (
                       <div className="space-y-2">
                         {selected.risk_factors.map((rf, i) => (
@@ -238,9 +337,17 @@ const UnderwriterWorkbench: React.FC = () => {
                     </div>
                   )}
 
-                  {/* Reasoning Chain */}
+                  {/* Agent Recommendation & Reasoning Chain (#68) */}
                   <div>
-                    <h3 className="mb-3 text-sm font-semibold text-slate-800">Reasoning Chain</h3>
+                    <h3 className="mb-3 text-sm font-semibold text-slate-800">Agent Recommendation</h3>
+                    {selected.agent_recommendation && (
+                      <div className="mb-3 rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-2.5">
+                        <p className="text-sm font-semibold text-indigo-800">{selected.agent_recommendation}</p>
+                        <p className="text-xs text-indigo-600 mt-0.5">
+                          Confidence: {Math.round(selected.confidence * 100)}% · Risk Score: {selected.risk_score}/10
+                        </p>
+                      </div>
+                    )}
                     {selected.reasoning_chain.length > 0 ? (
                       <ol className="space-y-1">
                         {selected.reasoning_chain.map((step, i) => (
@@ -253,6 +360,15 @@ const UnderwriterWorkbench: React.FC = () => {
                     ) : (
                       <p className="text-sm text-slate-400">No reasoning data available</p>
                     )}
+                    {/* Decision Record link */}
+                    <div className="mt-3">
+                      <a
+                        href={`/decisions?submission=${selected.id}`}
+                        className="text-xs font-medium text-indigo-600 hover:text-indigo-800 hover:underline"
+                      >
+                        View Decision Record →
+                      </a>
+                    </div>
                   </div>
                 </div>
               )}
@@ -452,6 +568,12 @@ const UnderwriterWorkbench: React.FC = () => {
                   >
                     Decline
                   </button>
+                  <button
+                    onClick={() => setConfirmAction('Refer')}
+                    className="rounded-lg border border-indigo-300 bg-indigo-50 px-4 py-2 text-sm font-medium text-indigo-700 hover:bg-indigo-100 transition-all"
+                  >
+                    Refer
+                  </button>
                   {needsEscalation && (
                     <StatusBadge label="Needs Escalation" variant="orange" />
                   )}
@@ -461,6 +583,20 @@ const UnderwriterWorkbench: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* "Process with AI" workflow modal (#71) */}
+      {processingId && (
+        <ProcessWorkflowModal
+          mode="submission"
+          itemId={processingId}
+          itemLabel={processingLabel}
+          onClose={() => setProcessingId(null)}
+          onComplete={() => {
+            queryClient.invalidateQueries({ queryKey: ['uw-queue'] });
+          }}
+          processFunc={processSubmission}
+        />
+      )}
     </div>
   );
 };

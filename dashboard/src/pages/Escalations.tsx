@@ -33,6 +33,7 @@ const Escalations: React.FC = () => {
         : rejectEscalation(vars.id, user.name, vars.reason),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['escalations'] });
+      queryClient.invalidateQueries({ queryKey: ['escalation-count'] });
       setModalItem(null);
       setReason('');
     },
@@ -91,9 +92,9 @@ const Escalations: React.FC = () => {
           <thead className="sticky top-0 z-10 border-b border-slate-100 bg-slate-50/80 backdrop-blur-sm">
             <tr>
               <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">Action</th>
-              <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">Entity</th>
+              <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">Source Agent</th>
               <th className="px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-wider text-slate-400">Amount</th>
-              <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">Requested By</th>
+              <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">Reason</th>
               <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">Required Role</th>
               <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">Status</th>
               <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">Created</th>
@@ -125,11 +126,11 @@ const Escalations: React.FC = () => {
                     {ACTION_LABELS[item.action] ?? item.action}
                   </td>
                   <td className="px-4 py-3 text-slate-600">
-                    <span className="capitalize">{item.entity_type}</span>
-                    <span className="ml-1 text-xs text-slate-400 font-mono">{item.entity_id.slice(0, 8)}…</span>
+                    <span className="text-sm">{item.requested_by}</span>
+                    <span className="ml-1 text-xs text-slate-400 font-mono">({item.entity_type} {item.entity_id.slice(0, 8)}…)</span>
                   </td>
                   <td className="px-4 py-3 text-right font-mono text-slate-800">{fmt(item.amount)}</td>
-                  <td className="px-4 py-3 text-slate-600">{item.requested_by}</td>
+                  <td className="px-4 py-3 text-xs text-slate-600 max-w-[200px] truncate" title={item.reason}>{item.reason || '—'}</td>
                   <td className="px-4 py-3">
                     <span className="inline-flex items-center rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-medium text-amber-700 ring-1 ring-amber-200">
                       {item.required_role.replace('openinsure-', '')}

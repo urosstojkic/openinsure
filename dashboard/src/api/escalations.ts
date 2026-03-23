@@ -20,9 +20,14 @@ export interface Escalation {
 }
 
 export async function getEscalations(status?: string): Promise<Escalation[]> {
-  const params = status ? { status } : {};
-  const { data } = await client.get('/escalations', { params });
-  return data.items ?? [];
+  try {
+    const params = status ? { status } : {};
+    const { data } = await client.get('/escalations', { params });
+    return data.items ?? [];
+  } catch (error) {
+    console.warn('[API] Escalations fallback:', error);
+    return [];
+  }
 }
 
 export async function getEscalation(id: string): Promise<Escalation> {
@@ -31,8 +36,18 @@ export async function getEscalation(id: string): Promise<Escalation> {
 }
 
 export async function getEscalationCount(): Promise<number> {
-  const { data } = await client.get('/escalations/count');
-  return data.pending;
+  try {
+    const { data } = await client.get('/escalations/count');
+    return data.pending ?? 0;
+  } catch {
+    // Fallback: count pending items from the list endpoint
+    try {
+      const items = await getEscalations('pending');
+      return items.length;
+    } catch {
+      return 0;
+    }
+  }
 }
 
 export async function approveEscalation(id: string, resolved_by: string, reason: string): Promise<Escalation> {
