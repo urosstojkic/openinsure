@@ -48,9 +48,11 @@ interface Props {
 /* ── Constants ─────────────────────────────────────────────────────── */
 
 const SUBMISSION_STEPS: StepConfig[] = [
-  { key: 'triage', label: 'Triage Agent', agent: 'triage_agent', model: 'GPT-5.1', icon: <Zap size={18} />, description: 'Analyzing risk appetite & submission quality' },
+  { key: 'orchestrator', label: 'Orchestrator', agent: 'orchestrator_agent', model: 'GPT-5.1', icon: <Sparkles size={18} />, description: 'Coordinating multi-agent workflow' },
+  { key: 'triage', label: 'Submission Agent', agent: 'triage_agent', model: 'GPT-5.1', icon: <Zap size={18} />, description: 'Analyzing risk appetite & triaging submission' },
   { key: 'underwriting', label: 'Underwriting Agent', agent: 'underwriting_agent', model: 'GPT-5.1', icon: <Brain size={18} />, description: 'Calculating premium & evaluating risk factors' },
-  { key: 'compliance', label: 'Compliance Agent', agent: 'compliance_agent', model: 'GPT-5.1', icon: <Scale size={18} />, description: 'Reviewing regulatory requirements & guidelines' },
+  { key: 'policy', label: 'Policy Agent', agent: 'policy_agent', model: 'GPT-5.1', icon: <Shield size={18} />, description: 'Reviewing terms & generating policy documents' },
+  { key: 'compliance', label: 'Compliance Agent', agent: 'compliance_agent', model: 'GPT-5.1', icon: <Scale size={18} />, description: 'Auditing decision record & regulatory checks' },
 ];
 
 const CLAIM_STEPS: StepConfig[] = [
@@ -62,7 +64,58 @@ const CLAIM_STEPS: StepConfig[] = [
 const money = (n: number) =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n);
 
-const STEP_INTERVAL_MS = 1800;
+const STEP_INTERVAL_MS = 1400;
+
+/* ── Step result summary — extract key metrics for inline display ────── */
+
+function getStepResultSummary(stepKey: string, result: WorkflowResult | null): string | null {
+  if (!result) return null;
+  const steps = result.steps ?? {};
+
+  switch (stepKey) {
+    case 'orchestrator':
+      return `path: ${result.workflow === 'new_business' ? 'standard' : result.workflow ?? 'standard'}`;
+
+    case 'triage': {
+      const triageResp = (steps.triage as WorkflowStepResponse | undefined)?.response ?? {};
+      const risk = triageResp.risk_score;
+      const appetite = triageResp.appetite_match ?? triageResp.recommendation;
+      if (risk != null || appetite) {
+        const parts: string[] = [];
+        if (risk != null) parts.push(`risk: ${risk}`);
+        if (appetite) parts.push(`appetite: ${String(appetite).replace(/_/g, ' ')}`);
+        return parts.join(', ');
+      }
+      return null;
+    }
+
+    case 'underwriting': {
+      const uwResp = (steps.underwriting as WorkflowStepResponse | undefined)?.response ?? {};
+      const premium = uwResp.recommended_premium ?? uwResp.premium ?? result.premium;
+      const conf = uwResp.confidence;
+      if (premium != null || conf != null) {
+        const parts: string[] = [];
+        if (premium != null) parts.push(money(Number(premium)));
+        if (conf != null) parts.push(`confidence: ${(Number(conf) * 100).toFixed(0)}%`);
+        return parts.join(', ');
+      }
+      return null;
+    }
+
+    case 'policy': {
+      if (result.policy_number) return `policy: ${result.policy_number}`;
+      if (result.outcome === 'bound') return 'terms complete';
+      if (result.outcome === 'quoted_pending_approval') return 'terms ready, pending approval';
+      return 'review complete';
+    }
+
+    case 'compliance':
+      return 'no issues';
+
+    default:
+      return null;
+  }
+}
 
 /* ── Outcome badge ─────────────────────────────────────────────────── */
 
@@ -388,7 +441,12 @@ const ProcessWorkflowModal: React.FC<Props> = ({
                     </span>
                   </div>
                   <p className={`text-xs mt-0.5 ${isActive ? 'text-indigo-600' : isDone ? 'text-emerald-600' : 'text-slate-400'}`}>
-                    {isActive ? step.description + '…' : isDone ? 'Complete' : isErr ? 'Failed' : 'Waiting'}
+                    {isActive ? step.description + '…'
+                      : isDone ? (() => {
+                        const summary = getStepResultSummary(step.key, result);
+                        return summary ? `✓ (${summary})` : '✓ Complete';
+                      })()
+                      : isErr ? 'Failed' : 'Waiting'}
                   </p>
                 </div>
 

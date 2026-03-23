@@ -103,23 +103,21 @@ const UnderwriterWorkbench: React.FC = () => {
   return (
     <div className="flex h-[calc(100vh-7rem)] gap-4">
       {/* ── Left Panel: Queue ── */}
-      <div className="w-[40%] shrink-0 overflow-hidden rounded-xl border border-slate-200/60 bg-white shadow-[var(--shadow-xs)]">
+      <div className="w-[44%] shrink-0 overflow-hidden rounded-xl border border-slate-200/60 bg-white shadow-[var(--shadow-xs)]">
         <div className="border-b border-slate-200 px-4 py-3">
           <h1 className="text-lg font-bold tracking-tight text-slate-900">Underwriter Workbench</h1>
           <p className="text-xs text-slate-500 mt-0.5">{queue.length} submissions assigned</p>
         </div>
-        <div className="overflow-y-auto" style={{ maxHeight: 'calc(100% - 56px)' }}>
+        <div className="overflow-auto" style={{ maxHeight: 'calc(100% - 56px)' }}>
           <table className="min-w-full divide-y divide-slate-100">
             <thead className="sticky top-0 z-10 bg-slate-50/80 backdrop-blur-sm">
               <tr>
                 <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">Pri</th>
-                <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">ID</th>
                 <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">Applicant</th>
                 <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">LOB</th>
                 <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">Risk</th>
                 <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">Conf</th>
-                <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">Recommendation</th>
-                <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">Due</th>
+                <th className="px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-wider text-slate-400">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
@@ -130,8 +128,10 @@ const UnderwriterWorkbench: React.FC = () => {
                   onClick={() => handleSelect(item)}
                 >
                   <td className="px-3 py-2"><StatusBadge label={item.priority} variant={priorityVariant[item.priority] ?? 'yellow'} /></td>
-                  <td className="px-3 py-2 font-mono text-xs text-slate-700 max-w-[120px] truncate" title={item.id}>{item.submission_number || item.id.substring(0, 8) + '…'}</td>
-                  <td className="px-3 py-2 text-xs text-slate-900">{item.applicant_name}</td>
+                  <td className="px-3 py-2">
+                    <div className="text-xs font-medium text-slate-900 truncate max-w-[140px]">{item.applicant_name}</div>
+                    <div className="text-[10px] text-slate-400 font-mono">{item.submission_number || item.id.substring(0, 8)}</div>
+                  </td>
                   <td className="px-3 py-2 text-xs text-slate-600">{lobLabels[item.lob]}</td>
                   <td className="px-3 py-2">
                     <span className={`font-mono text-xs ${item.risk_score >= 7 ? 'text-red-600 font-semibold' : item.risk_score >= 4 ? 'text-amber-600' : 'text-emerald-600'}`}>
@@ -139,26 +139,23 @@ const UnderwriterWorkbench: React.FC = () => {
                     </span>
                   </td>
                   <td className="px-3 py-2 text-xs text-slate-600">{item.confidence ? `${Math.round(item.confidence * 100)}%` : '—'}</td>
-                  <td className="px-3 py-2 text-xs text-slate-600 max-w-[120px] truncate">
-                    {item.agent_recommendation || '—'}
-                  </td>
-                  <td className="px-3 py-2">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-slate-500">{formatDate(item.due_date || item.received_date)}</span>
-                      {canProcess(item) && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setProcessingId(item.id);
-                            setProcessingLabel(item.submission_number || item.id.substring(0, 8));
-                          }}
-                          title="Process with AI"
-                          className="rounded-md bg-gradient-to-r from-indigo-500 to-purple-500 p-1 text-white shadow-sm hover:from-indigo-600 hover:to-purple-600 transition-all"
-                        >
-                          <Sparkles size={12} />
-                        </button>
-                      )}
-                    </div>
+                  <td className="px-3 py-2 text-right whitespace-nowrap">
+                    {canProcess(item) ? (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setProcessingId(item.id);
+                          setProcessingLabel(item.submission_number || item.id.substring(0, 8));
+                        }}
+                        title="Process with AI"
+                        className="inline-flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-indigo-500 to-purple-500 px-3 py-1.5 text-[11px] font-semibold text-white shadow-sm shadow-indigo-500/20 hover:from-indigo-600 hover:to-purple-600 active:scale-[0.97] transition-all"
+                      >
+                        <Sparkles size={13} />
+                        Process
+                      </button>
+                    ) : (
+                      <span className="text-[10px] text-slate-400 capitalize">{item.status}</span>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -183,7 +180,21 @@ const UnderwriterWorkbench: React.FC = () => {
                   {selected.applicant_name} · {lobLabels[selected.lob]} · Received {formatDate(selected.received_date)}
                 </p>
               </div>
-              <TrafficLight confidence={selected.confidence} humanOversight={selected.confidence < 0.5 ? 'required' : selected.confidence < 0.8 ? 'recommended' : 'none'} />
+              <div className="flex items-center gap-3">
+                {canProcess(selected) && (
+                  <button
+                    onClick={() => {
+                      setProcessingId(selected.id);
+                      setProcessingLabel(selected.submission_number || selected.id.substring(0, 8));
+                    }}
+                    className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-indigo-500 via-purple-500 to-violet-500 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-indigo-500/25 hover:from-indigo-600 hover:via-purple-600 hover:to-violet-600 active:scale-[0.97] transition-all"
+                  >
+                    <Sparkles size={16} />
+                    Process with AI
+                  </button>
+                )}
+                <TrafficLight confidence={selected.confidence} humanOversight={selected.confidence < 0.5 ? 'required' : selected.confidence < 0.8 ? 'recommended' : 'none'} />
+              </div>
             </div>
 
             {/* Tabs */}
