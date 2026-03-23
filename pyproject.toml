@@ -60,7 +60,7 @@ ignore = ["RUF002", "RUF003", "TRY003", "B008", "ERA001", "S104", "DTZ011", "N80
 "src/openinsure/infrastructure/repositories/*" = ["E501", "ARG002", "ARG004"]
 "src/openinsure/api/*" = ["E501", "ARG001"]
 "src/openinsure/services/*" = ["ARG002", "ARG004", "ARG001", "S110"]
-"src/openinsure/mcp/*" = ["ARG002", "ARG004"]
+"src/openinsure/mcp/*" = ["ARG001", "ARG002", "ARG004"]
 "src/scripts/*" = ["E501", "S110", "T201", "S311", "S602", "S603", "S608", "PLW1510", "PLW2901"]
 
 [tool.mypy]
