@@ -21,6 +21,7 @@ import {
   Calculator,
   Repeat2,
   Banknote,
+  BookOpen,
   PanelLeftClose,
   PanelLeftOpen,
   Menu,
@@ -43,6 +44,7 @@ const navItems = [
   { to: '/escalations', label: 'Escalations',      icon: ArrowUpFromLine },
   { to: '/finance',     label: 'Finance',          icon: Banknote },
   { to: '/compliance',  label: 'Compliance',       icon: ShieldCheck },
+  { to: '/knowledge',   label: 'Knowledge',        icon: BookOpen },
 ];
 
 const workbenchItems = [
@@ -81,6 +83,7 @@ function getBreadcrumb(pathname: string): string {
     '/workbench/compliance': 'Compliance Workbench',
     '/workbench/reinsurance': 'Reinsurance Dashboard',
     '/workbench/actuarial': 'Actuarial Workbench',
+    '/knowledge': 'Knowledge Base',
     '/executive': 'Executive Dashboard',
     '/portal/broker': 'Broker Portal',
   };

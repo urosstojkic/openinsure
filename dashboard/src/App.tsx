@@ -25,6 +25,7 @@ import ReinsuranceDashboard from './pages/ReinsuranceDashboard';
 import ActuarialWorkbench from './pages/ActuarialWorkbench';
 import Escalations from './pages/Escalations';
 import FinanceDashboard from './pages/FinanceDashboard';
+import KnowledgePage from './pages/KnowledgePage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -91,6 +92,7 @@ function AppRoutes() {
         <Route path="workbench/reinsurance" element={<RouteGuard path="workbench/reinsurance"><ReinsuranceDashboard /></RouteGuard>} />
         <Route path="workbench/actuarial" element={<RouteGuard path="workbench/actuarial"><ActuarialWorkbench /></RouteGuard>} />
         <Route path="executive" element={<RouteGuard path="executive"><ExecutiveDashboard /></RouteGuard>} />
+        <Route path="knowledge" element={<RouteGuard path="knowledge"><KnowledgePage /></RouteGuard>} />
         <Route path="portal/broker" element={<RouteGuard path="portal/broker"><BrokerPortal /></RouteGuard>} />
         <Route path="*" element={<DefaultRedirect />} />
       </Route>
