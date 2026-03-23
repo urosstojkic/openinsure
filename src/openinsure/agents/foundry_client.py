@@ -43,11 +43,11 @@ def _configure_otel_once() -> None:
         )
         conn_str = client.telemetry.get_application_insights_connection_string()
 
-        from azure.monitor.opentelemetry import configure_azure_monitor
-        from opentelemetry.instrumentation.openai_v2 import OpenAIInstrumentor
+        from azure.monitor.opentelemetry import configure_azure_monitor  # type: ignore[import-untyped]
+        from opentelemetry.instrumentation.openai_v2 import OpenAIInstrumentor  # type: ignore[import-not-found]
 
         configure_azure_monitor(connection_string=conn_str)
-        OpenAIInstrumentor().instrument()
+        OpenAIInstrumentor().instrument()  # type: ignore[no-untyped-call,unused-ignore]
         logger.info("foundry_client.otel_configured")
     except Exception as exc:
         # Non-fatal — tracing is best-effort

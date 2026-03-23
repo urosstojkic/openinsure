@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from typing import Any
 from uuid import uuid4
 
 from pydantic import BaseModel, Field
@@ -38,7 +39,7 @@ def make_error(
     resource_id: str | None = None,
     field: str | None = None,
     reason: str | None = None,
-) -> dict:
+) -> dict[str, Any]:
     """Build an error response dict suitable for JSONResponse content."""
     detail = None
     if any(v is not None for v in (resource_type, resource_id, field, reason)):
