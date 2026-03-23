@@ -229,6 +229,26 @@ src/openinsure/
 
 ## 7. Deploy Process
 
+### Automated (recommended)
+
+Push to `main` → CI green → CD auto-deploys via GitHub Actions (`.github/workflows/cd.yml`).
+
+The CD workflow:
+1. Triggers on successful CI completion on `main`
+2. Logs into Azure via OIDC (federated credentials, no secrets stored)
+3. Builds both images on ACR with `--cache-from` for faster rebuilds
+4. Deploys to Container Apps with SHA-pinned image tags
+5. Runs smoke tests against production
+
+**Required GitHub repo secrets** (configure in Settings → Secrets → Actions):
+- `AZURE_CLIENT_ID` — Service principal app registration client ID
+- `AZURE_TENANT_ID` — Azure AD tenant ID
+- `AZURE_SUBSCRIPTION_ID` — Azure subscription ID
+
+See `docs/deployment/azure-setup.md` for OIDC federated credential setup.
+
+### Manual (immediate deploy)
+
 ```bash
 # Full deploy (auto-version, both backend + dashboard)
 pwsh scripts/deploy.ps1

@@ -13,12 +13,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && apt-get autoremove -y \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Copy everything needed for install
+# Install Python deps first (cached layer — only rebuilds when pyproject.toml changes)
 COPY pyproject.toml .
+RUN mkdir -p src/openinsure && touch src/openinsure/__init__.py \
+    && pip install --no-cache-dir . \
+    && rm -rf src/openinsure
+
+# Copy application source (changes frequently, but deps are already cached)
 COPY src/ src/
 COPY knowledge/ knowledge/
-
-RUN pip install --no-cache-dir .
+RUN pip install --no-cache-dir --no-deps .
 
 EXPOSE 8000
 
