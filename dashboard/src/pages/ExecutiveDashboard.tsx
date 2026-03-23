@@ -5,11 +5,12 @@ import {
   Area, AreaChart,
 } from 'recharts';
 import {
-  DollarSign, TrendingUp, Percent, Activity, Zap,
+  DollarSign, TrendingUp, Percent, Activity, Zap, Sparkles,
 } from 'lucide-react';
 import StatCard from '../components/StatCard';
 import { StatCardSkeleton, ChartSkeleton } from '../components/Skeleton';
 import { getExecutiveDashboard } from '../api/workbench';
+import { getAIInsights, type AIInsightsData } from '../api/analytics';
 
 const money = (n: number) =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n);
@@ -33,6 +34,11 @@ const ChartTooltipContent = ({ active, payload, label, formatter }: { active?: b
 
 const ExecutiveDashboard: React.FC = () => {
   const { data, isLoading } = useQuery({ queryKey: ['executive'], queryFn: getExecutiveDashboard });
+
+  const { data: aiInsights } = useQuery<AIInsightsData>({
+    queryKey: ['ai-insights'],
+    queryFn: () => getAIInsights(),
+  });
 
   if (isLoading || !data) {
     return (
@@ -189,6 +195,39 @@ const ExecutiveDashboard: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* AI Insights (#83) */}
+      {aiInsights && (
+        <div className="rounded-2xl border border-slate-200/60 bg-white p-6 shadow-[var(--shadow-card)]">
+          <div className="flex items-center gap-2 mb-4">
+            <Sparkles size={18} className="text-indigo-500" />
+            <h3 className="text-sm font-semibold text-slate-700">AI Portfolio Insights</h3>
+            <span className="ml-auto text-[10px] text-slate-400">
+              {aiInsights.source === 'foundry' ? '🤖 Foundry' : '📊 System'} · {new Date(aiInsights.generated_at).toLocaleDateString()}
+            </span>
+          </div>
+          {aiInsights.executive_summary && (
+            <p className="text-sm text-slate-600 leading-relaxed mb-4">{aiInsights.executive_summary}</p>
+          )}
+          <div className="space-y-3">
+            {aiInsights.insights.map((insight, i) => (
+              <div key={i} className="rounded-xl border border-slate-200/60 bg-slate-50/30 p-4">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                    insight.severity === 'critical' ? 'bg-red-100 text-red-700' :
+                    insight.severity === 'warning' ? 'bg-amber-100 text-amber-700' :
+                    'bg-blue-100 text-blue-700'
+                  }`}>
+                    {insight.category}
+                  </span>
+                  <span className="text-sm font-semibold text-slate-800">{insight.title}</span>
+                </div>
+                <p className="text-xs text-slate-500 leading-relaxed">{insight.summary}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
