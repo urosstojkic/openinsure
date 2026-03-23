@@ -15,13 +15,17 @@ compliance audit trails, and the real Azure SQL / Cosmos DB persistence
 layer.  This ensures MCP consumers get the same AI-powered results as
 dashboard users.
 
-Tools (21):
+Tools (27):
     Submission: create_submission, get_submission, list_submissions,
-                triage_submission, quote_submission, bind_submission
-    Claims:     file_claim, get_claim, list_claims, set_reserve
+                triage_submission, quote_submission, bind_submission,
+                enrich_submission
+    Claims:     file_claim, get_claim, list_claims, set_reserve,
+                detect_subrogation
     Policy:     get_policy, list_policies
     Billing:    create_invoice, record_payment, get_billing_status
     Documents:  generate_declaration, generate_certificate
+    Analytics:  get_uw_analytics, get_claims_analytics, get_ai_insights
+    Renewals:   get_upcoming_renewals
     Query:      get_metrics, get_agent_decisions
     Compliance: run_compliance_check
     Workflow:   run_full_workflow
@@ -718,6 +722,150 @@ async def run_full_workflow(
 
 
 # ======================================================================
+# Subrogation tools (#79)
+# ======================================================================
+
+
+@mcp.tool()
+async def detect_subrogation(claim_id: str) -> str:
+    """Analyze a claim for subrogation potential and list existing referrals.
+
+    Retrieves subrogation records for the claim. If none exist yet, the
+    Claims Agent's subrogation_score on the claim response indicates
+    whether a referral should be created.
+
+    Args:
+        claim_id: UUID of the claim to analyze.
+
+    Returns:
+        JSON with the claim's subrogation records and recovery tracking.
+    """
+    try:
+        records = await _request("GET", f"/claims/{claim_id}/subrogation")
+        claim = await _request("GET", f"/claims/{claim_id}")
+        subrogation_score = claim.get("subrogation_score") if isinstance(claim, dict) else None
+        return json.dumps(
+            {
+                "claim_id": claim_id,
+                "subrogation_score": subrogation_score,
+                "records": records,
+                "record_count": len(records) if isinstance(records, list) else 0,
+            },
+            default=str,
+        )
+    except httpx.HTTPStatusError as exc:
+        if exc.response.status_code == 404:
+            return json.dumps({"error": f"Claim {claim_id} not found"})
+        raise
+
+
+# ======================================================================
+# Enrichment tools (#80)
+# ======================================================================
+
+
+@mcp.tool()
+async def enrich_submission(submission_id: str) -> str:
+    """Run data enrichment on a submission using external data providers.
+
+    Queries simulated SecurityScorecard, firmographic, and breach history
+    providers to enrich the submission with risk signals before underwriting.
+
+    Args:
+        submission_id: UUID of the submission to enrich.
+
+    Returns:
+        JSON with enrichment data, risk summary, and composite risk score.
+    """
+    try:
+        result = await _request("POST", f"/submissions/{submission_id}/enrich")
+        logger.info("mcp.enrich_submission", submission_id=submission_id)
+        return json.dumps(result, default=str)
+    except httpx.HTTPStatusError as exc:
+        if exc.response.status_code == 404:
+            return json.dumps({"error": f"Submission {submission_id} not found"})
+        raise
+
+
+# ======================================================================
+# Analytics tools (#81, #82, #83)
+# ======================================================================
+
+
+@mcp.tool()
+async def get_uw_analytics(months: int = 12) -> str:
+    """Retrieve underwriting performance analytics.
+
+    Includes hit ratios, conversion funnel, processing times, and
+    agent vs human decision comparison.
+
+    Args:
+        months: Look-back period in months (default 12).
+
+    Returns:
+        JSON with UW performance metrics and trends.
+    """
+    result = await _request("GET", "/analytics/underwriting", params={"months": months})
+    return json.dumps(result, default=str)
+
+
+@mcp.tool()
+async def get_claims_analytics(months: int = 12) -> str:
+    """Retrieve claims analytics — frequency, severity, and fraud trends.
+
+    Includes frequency/severity time series, reserve development,
+    fraud score distribution, and claims breakdown by type.
+
+    Args:
+        months: Look-back period in months (default 12).
+
+    Returns:
+        JSON with claims analytics data.
+    """
+    result = await _request("GET", "/analytics/claims", params={"months": months})
+    return json.dumps(result, default=str)
+
+
+@mcp.tool()
+async def get_ai_insights(period: str = "last_12_months") -> str:
+    """Get AI-generated executive portfolio insights.
+
+    The Analytics Agent analyzes submissions, claims, and policy data
+    to produce natural-language insights and recommendations.
+
+    Args:
+        period: Analysis period (default: last_12_months).
+
+    Returns:
+        JSON with executive summary, categorized insights, and source.
+    """
+    result = await _request("GET", "/analytics/ai-insights", params={"period": period})
+    return json.dumps(result, default=str)
+
+
+# ======================================================================
+# Renewal tools (#84)
+# ======================================================================
+
+
+@mcp.tool()
+async def get_upcoming_renewals(days: int = 90) -> str:
+    """List policies approaching expiry within the specified window.
+
+    Returns renewal candidates sorted by days to expiry, with counts
+    for 30/60/90-day urgency tiers.
+
+    Args:
+        days: Look-ahead window in days (default 90).
+
+    Returns:
+        JSON with upcoming renewals and urgency breakdown.
+    """
+    result = await _request("GET", "/renewals/upcoming", params={"days": days})
+    return json.dumps(result, default=str)
+
+
+# ======================================================================
 # MCP Resources — read-only context (via API)
 # ======================================================================
 
@@ -801,6 +949,12 @@ class OpenInsureMCPServer:
         "get_billing_status": get_billing_status,
         "generate_declaration": generate_declaration,
         "generate_certificate": generate_certificate,
+        "detect_subrogation": detect_subrogation,
+        "enrich_submission": enrich_submission,
+        "get_uw_analytics": get_uw_analytics,
+        "get_claims_analytics": get_claims_analytics,
+        "get_ai_insights": get_ai_insights,
+        "get_upcoming_renewals": get_upcoming_renewals,
     }
 
     async def list_tools(self) -> list[dict[str, Any]]:
