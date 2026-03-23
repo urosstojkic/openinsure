@@ -1,10 +1,11 @@
 import React from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, FileText, Award, List } from 'lucide-react';
 import StatusBadge from '../components/StatusBadge';
 import { StatCardSkeleton } from '../components/Skeleton';
 import { getPolicy } from '../api/policies';
+import client from '../api/client';
 import type { PolicyStatus } from '../types';
 
 const statusVariant: Record<PolicyStatus, 'green' | 'gray' | 'red' | 'yellow'> = {
@@ -92,8 +93,90 @@ const PolicyDetail: React.FC = () => {
           </dl>
         </div>
       </div>
+
+      {/* Policy Documents */}
+      <PolicyDocuments policyId={id!} />
     </div>
   );
 };
+
+/* ---- Policy Documents Panel (#78) ---- */
+
+interface DocContent {
+  title: string;
+  document_type: string;
+  policy_number: string;
+  sections: { heading: string; content: string; data?: Record<string, unknown> }[];
+  effective_date: string;
+  summary: string;
+  generated_at: string;
+}
+
+function PolicyDocuments({ policyId }: { policyId: string }) {
+  const [activeDoc, setActiveDoc] = React.useState<DocContent | null>(null);
+  const [loading, setLoading] = React.useState<string | null>(null);
+  const [error, setError] = React.useState<string | null>(null);
+
+  const fetchDoc = async (docType: string) => {
+    setLoading(docType);
+    setError(null);
+    try {
+      const { data } = await client.get<DocContent>(`/policies/${policyId}/documents/${docType}`);
+      setActiveDoc(data);
+    } catch {
+      setError(`Failed to generate ${docType} document. API may be unavailable.`);
+    } finally {
+      setLoading(null);
+    }
+  };
+
+  return (
+    <div className="rounded-xl border border-slate-200/60 bg-white p-5 shadow-[var(--shadow-xs)]">
+      <h2 className="mb-4 text-sm font-semibold text-slate-800">Policy Documents</h2>
+      <div className="flex flex-wrap gap-3 mb-4">
+        <button
+          onClick={() => fetchDoc('declaration')}
+          disabled={loading === 'declaration'}
+          className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition-all hover:bg-slate-50 hover:border-slate-300 disabled:opacity-50"
+        >
+          <FileText size={16} />
+          {loading === 'declaration' ? 'Generating…' : 'View Declaration'}
+        </button>
+        <button
+          onClick={() => fetchDoc('certificate')}
+          disabled={loading === 'certificate'}
+          className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition-all hover:bg-slate-50 hover:border-slate-300 disabled:opacity-50"
+        >
+          <Award size={16} />
+          {loading === 'certificate' ? 'Generating…' : 'Download Certificate'}
+        </button>
+        <button
+          onClick={() => fetchDoc('schedule')}
+          disabled={loading === 'schedule'}
+          className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition-all hover:bg-slate-50 hover:border-slate-300 disabled:opacity-50"
+        >
+          <List size={16} />
+          {loading === 'schedule' ? 'Generating…' : 'Coverage Schedule'}
+        </button>
+      </div>
+
+      {error && <p className="text-sm text-red-500 mb-3">{error}</p>}
+
+      {activeDoc && (
+        <div className="rounded-lg border border-slate-100 bg-slate-50/50 p-4 space-y-3">
+          <h3 className="text-base font-bold text-slate-900">{activeDoc.title}</h3>
+          <p className="text-sm text-slate-600 italic">{activeDoc.summary}</p>
+          {activeDoc.sections.map((section, i) => (
+            <div key={i} className="border-t border-slate-200 pt-3">
+              <h4 className="text-sm font-semibold text-slate-800">{section.heading}</h4>
+              <p className="mt-1 text-sm text-slate-600 whitespace-pre-wrap">{section.content}</p>
+            </div>
+          ))}
+          <p className="text-[11px] text-slate-400 mt-2">Generated at {activeDoc.generated_at}</p>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default PolicyDetail;

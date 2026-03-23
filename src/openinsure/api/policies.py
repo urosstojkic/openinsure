@@ -451,3 +451,53 @@ async def list_policy_documents(policy_id: str) -> PolicyDocumentList:
         DocumentItem(document_id=did, name=f"document-{did[:8]}", type="application/pdf") for did in record["documents"]
     ]
     return PolicyDocumentList(policy_id=policy_id, documents=docs)
+
+
+# ---------------------------------------------------------------------------
+# Document generation endpoints (#78)
+# ---------------------------------------------------------------------------
+
+
+class GeneratedDocument(BaseModel):
+    """Structured document content returned by the document generator."""
+
+    title: str
+    document_type: str
+    policy_number: str
+    sections: list[dict[str, Any]]
+    effective_date: str
+    summary: str
+    generated_at: str
+
+
+@router.get("/{policy_id}/documents/declaration", response_model=GeneratedDocument)
+async def get_declaration_page(policy_id: str) -> GeneratedDocument:
+    """Generate a declarations page for the policy."""
+    from openinsure.services.document_generator import DocumentGenerator
+
+    policy = await _get_policy(policy_id)
+    submission = policy.get("metadata", {})
+    doc = DocumentGenerator().generate(policy, submission, "declaration")
+    return GeneratedDocument(**doc)
+
+
+@router.get("/{policy_id}/documents/certificate", response_model=GeneratedDocument)
+async def get_certificate(policy_id: str) -> GeneratedDocument:
+    """Generate a Certificate of Insurance for the policy."""
+    from openinsure.services.document_generator import DocumentGenerator
+
+    policy = await _get_policy(policy_id)
+    submission = policy.get("metadata", {})
+    doc = DocumentGenerator().generate(policy, submission, "certificate")
+    return GeneratedDocument(**doc)
+
+
+@router.get("/{policy_id}/documents/schedule", response_model=GeneratedDocument)
+async def get_coverage_schedule(policy_id: str) -> GeneratedDocument:
+    """Generate a coverage schedule for the policy."""
+    from openinsure.services.document_generator import DocumentGenerator
+
+    policy = await _get_policy(policy_id)
+    submission = policy.get("metadata", {})
+    doc = DocumentGenerator().generate(policy, submission, "schedule")
+    return GeneratedDocument(**doc)
