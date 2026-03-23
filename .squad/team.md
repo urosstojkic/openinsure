@@ -25,4 +25,4 @@
 - **Project:** OpenInsure — AI-native open-source core insurance platform
 - **Stack:** Python/FastAPI backend, React/TypeScript dashboard, Azure (SQL, Cosmos, Foundry, Container Apps)
 - **Created:** 2026-03-09
-- **Status:** 440+ tests, 90+ API endpoints, 22 dashboard pages, 6 Foundry agents, v63 deployed, CI green
+- **Status:** 506 tests, 118 API endpoints, 25 dashboard pages, 8 Foundry agents, v73 deployed, CI green

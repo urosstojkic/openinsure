@@ -73,9 +73,9 @@ Quality compromises MUST be documented as GitHub issues with `quality` label.
 | Metric | Value |
 |--------|-------|
 | Tests | 506 collected (417 unit, pytest CI green) |
-| API endpoints | 90+ across 21 modules |
-| Dashboard pages | 24 (React 18 + TypeScript + Tailwind) |
-| Foundry agents | 6 deployed on Azure AI Foundry |
+| API endpoints | 118 across 21 modules |
+| Dashboard pages | 25 (React 18 + TypeScript + Tailwind) |
+| Foundry agents | 8 deployed on Azure AI Foundry |
 | MCP tools | 16 tools + 5 resources |
 | Azure SQL data | 1,619 submissions, 573 policies, 139 claims |
 | Portfolio | $27.33M GWP, 62.1% loss ratio |
@@ -92,12 +92,14 @@ Quality compromises MUST be documented as GitHub issues with `quality` label.
 | **Policy** | Bind, issue, endorse, renew, cancel |
 | **Claims** | FNOL intake, coverage verification, reserving, fraud detection |
 | **Compliance** | Decision audit, bias analysis, regulatory checking |
+| **Document** | Document classification, extraction, generation |
+| **Knowledge** | Knowledge graph queries, guidelines, regulatory rules |
 
 Every agent decision produces an immutable **Decision Record** (EU AI Act Art. 12). Confidence < 0.7 triggers automatic escalation to human oversight.
 
-### Process Completeness (~75%)
+### Process Completeness (~80%)
 
-See `docs/architecture/process-completeness.md` for the full gap analysis. Key gaps: data enrichment, billing pipeline, subrogation, document generation, automatic cession on bind.
+See `docs/architecture/process-completeness.md` for the full gap analysis. Key gaps: data enrichment, billing pipeline, subrogation, document generation.
 
 ---
 
@@ -148,7 +150,7 @@ Full entity relationships and state machines: `docs/architecture/data-model.md`
 
 ```
 src/openinsure/
-+-- agents/          # 8 AI agents (base, foundry_client, submission, underwriting, ...)
++-- agents/          # 10 files: 8 AI agents + base + foundry_client
 +-- api/             # FastAPI routers (submissions, policies, claims, products, ...)
 +-- compliance/      # EU AI Act: decision records, audit trail, bias monitoring
 +-- domain/          # Pydantic entities (party, submission, policy, claim, product, billing)

@@ -51,11 +51,11 @@
 | **Risk assessment / scoring** | ✅ Implemented | Workflow engine Step 3 (`underwriting`): Underwriting Agent scores risk with base rate $1.50/$1K revenue, adjusts for industry, security, incidents. `SubmissionResponse` includes `risk_score`. | Scoring is LLM-prompt-based; no deterministic rating model exists alongside the AI model. |
 | **Pricing / rating engine** | ✅ Implemented | 7 factor tables documented in charter (industry, revenue, security, controls, incidents, limits, deductibles). Premium calculation in `_build_policy_data()` allocates across 5 cyber coverages (breach response 30%, third-party 30%, regulatory 15%, BI 15%, ransomware 10%). | Factor tables are referenced in prompts but not stored as configurable data in the knowledge graph or DB. No rate versioning. |
 | **Terms & conditions generation** | ✅ Implemented | Workflow Step 4 (`policy_review`): Policy Agent reviews UW terms, verifies coverages, checks pricing within guidelines. Default coverages generated with limits/deductibles from submission data. | T&C generation is AI-driven; no template-based deterministic fallback for standard terms. |
-| **Subjectivities management** | ⚠️ Partially implemented | `SubmissionResponse` has a `subjectivities` field (list of dicts). | No API endpoint to create, track, clear, or enforce subjectivities. No subjectivity-driven blocking of bind. The field exists in the response model but has no business logic. |
+| **Subjectivities management** | ✅ Implemented | `SubmissionResponse` has a `subjectivities` field (list of dicts). CRUD endpoints for creating, tracking, and clearing subjectivities. Bind-blocking when outstanding subjectivities exist. | No automated subjectivity follow-up reminders or expiry tracking. |
 | **Authority matrix / escalation** | ✅ Implemented | `AuthorityEngine` with `check_bind_authority()`, `check_quote_authority()`. 4-tier authority (auto-bind $25K/agent → Junior UW $100K → Sr UW $250K → Committee $500K+). Full escalation API with approve/reject. Escalation chain documented in process-flows. | Authority tiers are hardcoded in `AuthorityEngine`; not yet configurable per deployment. |
 | **Decline with reason tracking** | ✅ Implemented | `SubmissionStatus.DECLINED` with `declined_at` timestamp. `SubmissionResponse` has `declination_reason` field. State machine enforces valid transitions to `declined` from `received`, `triaging`, `underwriting`, `referred`, `quoted`. | Decline reason is captured but not categorized (no taxonomy of decline codes for reporting). |
 
-**Overall assessment:** 75% complete. Core underwriting workflow is functional — risk scoring, pricing, authority checks, and escalation all work. The gaps are: (1) **subjectivities tracking** is a model stub with no logic, (2) the **rating engine** relies entirely on LLM prompts rather than configurable factor tables, and (3) there is no **rate versioning** or **rate change impact analysis**.
+**Overall assessment:** 85% complete. Core underwriting workflow is functional — risk scoring, pricing, authority checks, escalation, and subjectivities tracking all work. The gaps are: (1) the **rating engine** relies on LLM prompts rather than fully configurable factor tables (though rating breakdown display is now implemented), and (2) there is no **rate versioning** or **rate change impact analysis**.
 
 ---
 
@@ -84,10 +84,10 @@
 | **Reserve management (case + IBNR)** | ✅ Implemented | `POST /{claim_id}/reserve` with category, amount, currency, notes. AI-assisted reserve recommendation via Foundry (advisory, human value prevails). Authority check on reserve setting. Actuarial API has IBNR via chain-ladder method. Reserves stored in `claim_reserves` table. | No bulk reserve review, no reserve adequacy alerts, no reserve development tracking over time. |
 | **Settlement / payment** | ✅ Implemented | `POST /{claim_id}/payment` with payee, amount, category, reference. Authority check via `check_settlement_authority()`. Escalation to CCO for amounts above adjuster authority ($25K). | No payment scheduling, no partial settlement tracking, no salvage/deductible recovery. |
 | **Subrogation / recovery** | ❌ Not implemented | Not present in `claims.py` or any other API module. Reinsurance recoveries exist but subrogation against third parties is absent. | No subrogation identification, pursuit tracking, or recovery accounting. |
-| **Regulatory notifications (breach notification)** | ⚠️ Partially implemented | `ClaimCreate` sets `notification_required=True` for data breach and regulatory proceeding claims. `ClaimResponse` has `notification_sent_at` field. | No actual notification sending, no 72-hour timer enforcement, no regulatory body routing. The flag is set but never acted on. |
+| **Regulatory notifications (breach notification)** | ✅ Implemented | `ClaimCreate` sets `notification_required=True` for data breach and regulatory proceeding claims. `ClaimResponse` has `notification_sent_at` field. Claims notification endpoint tracks and records notifications. | No 72-hour timer enforcement. No regulatory body routing. Notification tracking exists but no automated sending to regulatory bodies. |
 | **Fraud detection** | ✅ Implemented | Claims workflow produces `fraud_score` (0.0–1.0). Documented fraud indicators: recent inception (<90 days), late reporting (>30 days), revenue mismatch, frequent claims, inconsistent descriptions, known patterns. Score > 0.7 triggers CCO + Compliance review. `ClaimResponse` has `fraud_score` field. | Fraud detection is in agent prompts only; no ML model or rules engine for deterministic fraud scoring. |
 
-**Overall assessment:** 75% complete. FNOL through settlement is implemented with authority checks and AI-assisted reserving. Gaps: (1) **subrogation** is entirely absent, (2) **breach notification** is flagged but not enforced, and (3) **investigation workflows** lack structured task management. The fraud detection indicators are well-designed in the documentation but rely entirely on LLM judgment.
+**Overall assessment:** 80% complete. FNOL through settlement is implemented with authority checks and AI-assisted reserving. Notifications are tracked. Gaps: (1) **subrogation** is entirely absent, (2) **investigation workflows** lack structured task management, and (3) automated notification sending to regulatory bodies is not implemented. The fraud detection indicators are well-designed but rely on LLM judgment.
 
 ---
 
@@ -111,12 +111,12 @@
 | Sub-process | Status | Implementation Evidence | Gap |
 |---|---|---|---|
 | **Treaty management** | ✅ Implemented | Full CRUD in `reinsurance.py`: `POST/GET /treaties`, support for quota_share, excess_of_loss, surplus, facultative. Treaty fields: reinsurer, dates, LOBs, retention, limit, rate, capacity, reinstatements. | No treaty negotiation workflow, no treaty terms versioning, no sliding scale commission tracking. |
-| **Automatic cession on bind** | ⚠️ Not automatic | `POST /cessions` exists for manual cession recording. Links treaty → policy with ceded premium and limit. Updates treaty capacity_used. | Cession is manual via API call. No automatic cession trigger on policy bind event. The process-flows doc shows `policy.bound → Reinsurance Service` as a subscriber but no implementation exists. |
+| **Automatic cession on bind** | ✅ Implemented | `POST /cessions` for cession recording. Policy bind event triggers automatic cession creation per active treaty terms. Links treaty → policy with ceded premium and limit. Updates treaty capacity_used. | No sliding scale commission tracking. |
 | **Bordereaux generation** | ✅ Implemented | `GET /bordereaux/{treaty_id}` generates bordereau by treaty with period filtering. Returns cessions, recoveries, totals. Also `POST /finance/bordereaux/generate` for MGA bordereaux. | No standard ACORD bordereau format output. No scheduled generation. |
 | **Recovery on claims** | ✅ Implemented | `POST /recoveries` records reinsurance recoveries linked to treaty + claim. Recovery statuses: pending, submitted, collected, disputed. `GET /recoveries` with filtering by treaty, claim, status. | No automatic recovery calculation from treaty terms. Manual recording only. |
 | **Capacity tracking** | ✅ Implemented | `GET /treaties/{treaty_id}/utilization` and `GET /treaties/{treaty_id}/capacity`. Calculates utilization from actual cessions. Returns capacity total/used/remaining/pct. | No capacity exhaustion alerts. No aggregate capacity view across all treaties. |
 
-**Overall assessment:** 75% complete. Treaty CRUD, cessions, recoveries, and bordereaux are all functional. The critical gap is **automatic cession on bind** — the architecture describes this as an event-driven process but the code requires manual cession creation. Capacity tracking works but lacks alerting when approaching limits.
+**Overall assessment:** 85% complete. Treaty CRUD, cessions, recoveries, bordereaux, and automatic cession on bind are all functional. Capacity tracking works but lacks alerting when approaching limits. No treaty negotiation workflow or sliding scale commission tracking.
 
 ---
 
@@ -139,11 +139,11 @@
 |---|---|---|---|
 | **AI decision audit trail** | ✅ Implemented | `decision_records` table with 16 columns capturing agent_id, model, input/output summary, reasoning, confidence, fairness metrics, human oversight. `compliance.py` `GET /decisions` with filtering by type, entity, pagination. `GET /audit-trail` for system-wide events. Workflow engine records DecisionRecord for every agent step. | Immutability relies on database constraints; no append-only log or blockchain-style integrity verification. |
 | **EU AI Act compliance** | ✅ Implemented | `GET /system-inventory` returns Art. 60 AI system inventory with risk classification (HIGH for triage & fraud, LIMITED for rating). 3 registered AI systems. Every workflow step logs decisions per Art. 12. Risk levels: UNACCEPTABLE, HIGH, LIMITED, MINIMAL. | No FRIA (Fundamental Rights Impact Assessment) generator. No conformity assessment workflow. No Art. 13 transparency reporting for end users. |
-| **Bias monitoring** | ✅ Implemented | `POST /bias-report` runs real bias monitoring engine (4/5ths rule, statistical parity) over all submissions via `bias_monitor.generate_bias_report()`. Protected attributes: industry, company size, geography. `BiasMetric` model with threshold comparison. | No scheduled bias monitoring. No automated alerting on threshold breaches. No protected class expansion beyond the 3 default attributes. |
+| **Bias monitoring** | ✅ Implemented | `POST /bias-report` runs real bias monitoring engine (4/5ths rule, statistical parity, disparate impact analysis) over all submissions via `bias_monitor.generate_bias_report()`. Protected attributes: industry, company size, geography. `BiasMetric` model with threshold comparison. Dashboard visualization with labelled metrics. | No automated alerting on threshold breaches. No protected class expansion beyond the 3 default attributes. |
 | **Human oversight framework** | ✅ Implemented | Confidence gating (< 0.5 triggers escalation in workflow). Authority matrix (complexity × consequence). Escalation queue with approve/reject. Every decision records `human_oversight` field (`required`, `recommended`). Override tracking with mandatory reason logging. | No aggregate dashboard for human override frequency. No feedback loop from overrides to model improvement. |
 | **Regulatory reporting** | ⚠️ Partially implemented | Financial summary endpoint provides loss/combined ratio. Actuarial reserves and triangles available. MGA bordereaux generation. | No statutory reporting formats (NAIC Annual Statement, Schedule P, IEE). No state DOI submission. No ORSA (EU Solvency II). |
 
-**Overall assessment:** 80% complete. Compliance is a strength of the platform — the EU AI Act foundations (decision logging, system inventory, bias monitoring, human oversight) are significantly more mature than most insurance platforms. The gaps are in **regulatory reporting output formats** (statutory filings) and **proactive monitoring** (scheduled bias checks, automated alerts).
+**Overall assessment:** 85% complete. Compliance is a strength of the platform — the EU AI Act foundations (decision logging, system inventory, bias monitoring with real disparate impact analysis, human oversight) are significantly more mature than most insurance platforms. The gaps are in **regulatory reporting output formats** (statutory filings) and **proactive monitoring** (automated alerts on bias threshold breaches).
 
 ---
 
@@ -151,7 +151,7 @@
 
 | Sub-process | Status | Implementation Evidence | Gap |
 |---|---|---|---|
-| **Executive dashboards** | ✅ Implemented | React dashboard with executive view (`/executive`). `finance.py` provides summary, cashflow, commissions, reconciliation endpoints. Process-flows doc confirms 22-page dashboard with role-based views. | Dashboard data is served but no persistent reporting (no report archive, no scheduled report generation). |
+| **Executive dashboards** | ✅ Implemented | React dashboard with executive view (`/executive`). `finance.py` provides summary, cashflow, commissions, reconciliation endpoints. 25-page dashboard with role-based views including knowledge graph UI. | Dashboard data is served but no persistent reporting (no report archive, no scheduled report generation). |
 | **Underwriting performance** | ⚠️ Partially implemented | Submission listing with status/channel/LOB filtering. Quote-to-bind tracking (status progression). No dedicated UW performance endpoint. | No hit ratio, no quote-to-bind conversion, no time-to-quote metrics, no broker performance analytics. |
 | **Claims analytics** | ⚠️ Partially implemented | Claims listing with status/type filtering. Claims queue with severity-based priority. Total reserved/paid/incurred on each claim. | No claims development visualization, no severity trend analysis, no adjuster performance metrics. |
 | **Loss ratio / combined ratio** | ✅ Implemented | `finance.py` computes loss ratio (incurred / earned premium), expense ratio (34% fixed), combined ratio. Rate adequacy endpoint in actuarial API. | Loss ratio is aggregate only; no segmentation by LOB, territory, underwriting year. Expense ratio is hardcoded. |
@@ -186,13 +186,13 @@ The following capabilities should **not** be built into the core platform. They 
 | # | Process | Status | Completeness | Priority | Notes |
 |---|---------|--------|-------------|----------|-------|
 | 1 | **New Business Intake** | ✅ Implemented | 80% | Medium | Missing: data enrichment service, broader ACORD form support |
-| 2 | **Underwriting** | ✅ Implemented | 75% | High | Missing: subjectivities tracking, configurable rating tables, rate versioning |
+| 2 | **Underwriting** | ✅ Implemented | 85% | Medium | Missing: configurable rating tables, rate versioning |
 | 3 | **Policy Issuance & Admin** | ✅ Implemented | 80% | High | Missing: document generation, cancel-for-non-payment workflow |
-| 4 | **Claims Management** | ✅ Implemented | 75% | High | Missing: subrogation, breach notification enforcement, structured investigation |
+| 4 | **Claims Management** | ✅ Implemented | 80% | High | Missing: subrogation, structured investigation, automated regulatory notification sending |
 | 5 | **Billing & Finance** | ⚠️ Partial | 55% | **Critical** | Missing: billing API endpoints, invoice lifecycle, payment collection, installment plans |
-| 6 | **Reinsurance** | ✅ Implemented | 75% | Medium | Missing: automatic cession on bind, capacity alerts |
+| 6 | **Reinsurance** | ✅ Implemented | 85% | Low | Missing: capacity alerts, treaty negotiation workflow |
 | 7 | **Renewals** | ✅ Implemented | 85% | Low | Missing: automated scheduling, broker acceptance step |
-| 8 | **Compliance & Audit** | ✅ Implemented | 80% | Medium | Missing: FRIA generator, statutory reporting formats, scheduled bias monitoring |
+| 8 | **Compliance & Audit** | ✅ Implemented | 85% | Medium | Missing: FRIA generator, statutory reporting formats |
 | 9 | **Reporting & Analytics** | ⚠️ Partial | 65% | Medium | Missing: UW performance metrics, segmented loss ratios, claims analytics |
 | — | **Workflow Engine** | ✅ Implemented | 85% | — | 3 workflows (new_business, claims, renewal). Condition gating, confidence thresholds, event publishing. |
 | — | **State Machines** | ✅ Implemented | 95% | — | Submission, Policy, Claim transitions + invariant validation. Well-tested. |
@@ -200,7 +200,7 @@ The following capabilities should **not** be built into the core platform. They 
 | — | **RBAC / Auth** | ✅ Implemented | 90% | — | 11 persona roles, navigation access matrix, role-based API guards. |
 | — | **Event-Driven Architecture** | ✅ Implemented | 70% | Medium | Domain events published via Service Bus. Subscribers described but few wired (e.g., auto-cession). |
 
-**Weighted platform completeness: ~75%** — The transaction processing core (submission → underwriting → policy → claims) is solid. Billing is the largest gap. Reporting and analytics need expansion for operational decision-making.
+**Weighted platform completeness: ~80%** — The transaction processing core (submission → underwriting → policy → claims) is solid. Subjectivities, auto-cession, bias monitoring, and notification tracking were added in v73. Billing is the largest remaining gap. Reporting and analytics need expansion for operational decision-making.
 
 ---
 
@@ -213,9 +213,9 @@ These gaps block realistic end-to-end insurance operations.
 | # | Item | Type | Effort | Rationale |
 |---|------|------|--------|-----------|
 | 1 | **Billing API implementation** | Build | Large | Cannot operate without invoicing, payment tracking, and installment management. Schema exists; API + service layer needed. |
-| 2 | **Subjectivities tracking** | Build | Medium | Carriers cannot bind without subjectivity clearance tracking. Model field exists; needs CRUD endpoints, clearance workflow, and bind-blocking logic. |
-| 3 | **Automatic cession on bind** | Build | Small | Wire `policy.bound` domain event to auto-create cession records per active treaty terms. Event infrastructure exists; needs subscriber. |
-| 4 | **Policy document generation** | Integrate | Medium | Integrate a template engine (Docmosis, Windward, or a simple Jinja2 + WeasyPrint pipeline) for declarations pages, certificates, and endorsements. |
+| 2 | **Policy document generation** | Integrate | Medium | Integrate a template engine (Docmosis, Windward, or a simple Jinja2 + WeasyPrint pipeline) for declarations pages, certificates, and endorsements. |
+
+> **Completed in v73:** Subjectivities tracking (#47), automatic cession on bind (#55), claims notifications (#48), rating breakdown (#70), bias monitoring engine (#73), knowledge UI (#75).
 
 ### Phase 2 — Operational Excellence (weeks 6–12)
 
@@ -224,11 +224,10 @@ These gaps reduce operational efficiency and limit platform credibility.
 | # | Item | Type | Effort | Rationale |
 |---|------|------|--------|-----------|
 | 5 | **Data enrichment service** | Integrate | Medium | Wire SecurityScorecard / BitSight / firmographic APIs via Foundry Tools. Add enrichment step to new_business workflow. |
-| 6 | **Breach notification enforcement** | Build | Small | Add 72-hour timer on data breach claims, regulatory body routing, and notification tracking. Flag already set in FNOL. |
-| 7 | **Configurable rating tables** | Build | Medium | Move rating factors from agent prompts to versioned knowledge graph entries. Enable actuarial teams to update rates without code changes. |
-| 8 | **Subrogation module** | Build | Medium | Add subrogation identification on claim close, recovery pursuit tracking, and accounting. New API module. |
-| 9 | **UW performance analytics** | Build | Small | Hit ratio, quote-to-bind, time-to-quote, broker performance endpoints from existing submission data. |
-| 10 | **Scheduled renewal detection** | Build | Small | Logic App or cron trigger for `identify_renewals()` at 90/60/30 days. Generate renewal records automatically. |
+| 6 | **Configurable rating tables** | Build | Medium | Move rating factors from agent prompts to versioned knowledge graph entries. Enable actuarial teams to update rates without code changes. |
+| 7 | **Subrogation module** | Build | Medium | Add subrogation identification on claim close, recovery pursuit tracking, and accounting. New API module. |
+| 8 | **UW performance analytics** | Build | Small | Hit ratio, quote-to-bind, time-to-quote, broker performance endpoints from existing submission data. |
+| 9 | **Scheduled renewal detection** | Build | Small | Logic App or cron trigger for `identify_renewals()` at 90/60/30 days. Generate renewal records automatically. |
 
 ### Phase 3 — Carrier Readiness (weeks 12–20)
 
@@ -255,4 +254,4 @@ These capabilities differentiate a platform from an MVP.
 
 ---
 
-*This assessment reflects the codebase as of July 2025. Re-assess after each phase completion.*
+*This assessment reflects the codebase as of v73 (July 2025). Re-assess after each phase completion.*

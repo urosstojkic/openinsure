@@ -18,10 +18,10 @@ OpenInsure is an open-source, AI-native core insurance platform built on the Mic
 **OpenInsure:** Agent receives submission → extracts data → assesses risk → generates quote → binds within authority → escalates exceptions to humans
 
 **What's live today:**
-- ✅ 6 AI agents (Orchestrator, Submission, Underwriting, Policy, Claims, Compliance) deployed on Azure AI Foundry — all active
+- ✅ 8 AI agents (Orchestrator, Submission, Underwriting, Policy, Claims, Compliance, Document, Knowledge) deployed on Azure AI Foundry — all active
 - ✅ Microsoft Foundry AI pipeline with ProcessWorkflowModal visualization (step-by-step AI reasoning with confidence scores)
-- ✅ 90+ REST API endpoints across 21 modules — submissions, policies, claims, billing, compliance, knowledge, reinsurance, actuarial, MGA oversight, renewals, finance, and demo
-- ✅ React dashboard with 24 pages including role-specific workbenches (Executive, Underwriting, Claims, Compliance, Broker Portal, Reinsurance, Actuarial, MGA Oversight, Renewals, Finance) — all showing real SQL data with cross-dashboard consistency
+- ✅ 118 REST API endpoints across 21 modules — submissions, policies, claims, billing, compliance, knowledge, reinsurance, actuarial, MGA oversight, renewals, finance, and demo
+- ✅ React dashboard with 25 pages including role-specific workbenches (Executive, Underwriting, Claims, Compliance, Broker Portal, Reinsurance, Actuarial, MGA Oversight, Renewals, Finance) — all showing real SQL data with cross-dashboard consistency
 - ✅ Azure SQL (private endpoint, VNet-integrated) with 3+ years of operations data: 1,540 submissions, 513 policies, 115 claims
 - ✅ $24.19M GWP, 36.9% loss ratio, 88.8% combined ratio
 - ✅ Carrier-grade modules: reinsurance management, actuarial analytics, MGA oversight, renewal workflow, finance dashboard
@@ -30,11 +30,13 @@ OpenInsure is an open-source, AI-native core insurance platform built on the Mic
 - ✅ Knowledge graph with claims precedents, compliance rules (EU AI Act, GDPR, NAIC), and coverage definitions
 - ✅ One-call demo: `POST /api/v1/demo/full-workflow` runs the entire lifecycle (submission → triage → quote → bind → claim → reserve) in ~3ms
 - ✅ Cyber Liability SMB product with 5 coverages and configurable rating engine
-- ✅ EU AI Act compliance: immutable decision records, bias monitoring (4/5ths rule), audit trail
+- ✅ Bias monitoring with real disparate impact analysis (4/5ths rule) across protected attributes
+- ✅ Escalation framework with approve/reject workflow and sidebar badge notifications
+- ✅ Knowledge graph UI with tabbed display (guidelines, precedents, compliance rules)
 - ✅ Security hardened: parameterized SQL queries, constant-time auth, production error sanitization, upload size limits
 - ✅ Role-based access control with 19 platform roles and authority delegation
 - ✅ Azure infrastructure: VNet-integrated Container Apps, Azure SQL with private endpoint (no public access), 13+ resources as Bicep IaC
-- ✅ 448+ tests with comprehensive E2E lifecycle coverage, CI green (ruff + mypy + bandit + pytest)
+- ✅ 506 tests with comprehensive E2E lifecycle coverage, CI green (ruff + mypy + bandit + pytest)
 
 ### Why OpenInsure?
 
@@ -62,18 +64,20 @@ OpenInsure is an open-source, AI-native core insurance platform built on the Mic
 │                    M365 Copilot / Teams                      │
 │         (User-facing agent surface for insurance ops)        │
 ├─────────────────────────────────────────────────────────────┤
-│              React Dashboard (24 pages, real SQL data)       │
+│              React Dashboard (25 pages, real SQL data)       │
 │   Executive │ UW Workbench │ Claims │ Compliance │ Broker   │
 ├─────────────────────────────────────────────────────────────┤
 │                 Azure AI Foundry                             │
 │  ┌──────────────┬──────────────┬───────────────────────┐    │
 │  │ Agent Service │   AI Search  │   Foundry Models      │    │
-│  │ 6 Agents:     │ (Knowledge   │  (GPT-5.1, Claude,   │    │
+│  │ 8 Agents:     │ (Knowledge   │  (GPT-5.1, Claude,   │    │
 │  │ Orchestrator, │  retrieval,  │   Phi, Mistral —      │    │
 │  │ Submission,   │  hybrid      │   1,900+ models)      │    │
 │  │ Underwriting, │  vector +    │                       │    │
 │  │ Policy,Claims,│  keyword)    │                       │    │
-│  │ Compliance    │              │                       │    │
+│  │ Compliance,   │              │                       │    │
+│  │ Document,     │              │                       │    │
+│  │ Knowledge     │              │                       │    │
 │  └──────────────┴──────────────┴───────────────────────┘    │
 ├─────────────────────────────────────────────────────────────┤
 │              FastAPI Backend (Python 3.12+)                  │
@@ -113,7 +117,7 @@ OpenInsure is an open-source, AI-native core insurance platform built on the Mic
 
 ## Foundry Agents
 
-OpenInsure deploys **6 specialized AI agents** on Azure AI Foundry Agent Service:
+OpenInsure deploys **8 specialized AI agents** on Azure AI Foundry Agent Service:
 
 | Agent | Responsibility | Key Decisions |
 |-------|---------------|---------------|
@@ -123,6 +127,8 @@ OpenInsure deploys **6 specialized AI agents** on Azure AI Foundry Agent Service
 | **Policy Agent** | Bind, issue, endorse, renew, cancel | Policy lifecycle actions |
 | **Claims Agent** | FNOL intake, coverage verification, reserving, fraud detection | Severity triage, reserve setting, fraud flagging |
 | **Compliance Agent** | Decision audit, bias analysis, regulatory checking | Compliance pass/fail, bias alerts |
+| **Document Agent** | Document classification, extraction, generation | Document type, extracted fields |
+| **Knowledge Agent** | Knowledge graph queries, guidelines, regulatory rules | Relevant guidelines, precedents |
 
 Every agent decision produces an immutable **Decision Record** (EU AI Act Art. 12) with reasoning chain, confidence score, and fairness metrics. Agents with confidence < 0.7 automatically escalate to human oversight.
 
@@ -350,21 +356,22 @@ Every agent decision produces a **Decision Record** for EU AI Act compliance:
 ### Phase 1 — Core Platform & Cyber MVP ✅
 
 - ✅ Core domain model (Party, Submission, Policy, Claim, Product, Billing)
-- ✅ REST API with 90+ endpoints across 21 modules
-- ✅ 6 Foundry AI agents with decision record logging
+- ✅ REST API with 118 endpoints across 21 modules
+- ✅ 8 Foundry AI agents with decision record logging
 - ✅ Azure infrastructure (9 Bicep modules, 13+ Azure resources)
 - ✅ Knowledge base (cyber product, underwriting guidelines, regulatory requirements)
 - ✅ EU AI Act compliance layer (decision records, audit trail, bias monitoring)
 - ✅ MCP Server interface
 - ✅ Role-based access control (19 platform roles, authority delegation)
-- ✅ React dashboard with 24 pages
-- ✅ Cyber Liability SMB product (5 coverages, configurable rating engine)
-- ✅ CI/CD pipeline (lint, type check, security scan, 448+ tests, build)
+- ✅ React dashboard with 25 pages
+- ✅ Cyber Liability SMB product (5 coverages, configurable rating engine with breakdown display)
+- ✅ CI/CD pipeline (lint, type check, security scan, 506 tests, build)
 
 ### Phase 2 — Dashboard & Workbenches ✅
 
-- ✅ Underwriting Workbench, Claims Workbench, Compliance Workbench
-- ✅ Broker Portal for external self-service
+- ✅ Underwriting Workbench with detail panel and Process with AI modal (step-by-step AI reasoning)
+- ✅ Claims Workbench, Compliance Workbench
+- ✅ Broker Portal with full submit-track-quote-bind-claim flow
 - ✅ Multi-agent orchestration workflows (new_business, claims_workflow)
 
 ### Phase 3 — Carrier Modules ✅
@@ -393,14 +400,27 @@ Every agent decision produces a **Decision Record** for EU AI Act compliance:
 - ✅ Comprehensive E2E test (full lifecycle: submission → bind → claim → close)
 - ✅ OpenAPI documentation with tag descriptions and request examples
 
+### Phase 6 — Review v2 Features ✅
+
+- ✅ Process with AI modal — Foundry AI pipeline visualization with step-by-step reasoning and confidence scores
+- ✅ UW workbench detail panel with risk assessment breakdown
+- ✅ Bias monitoring with real disparate impact analysis (4/5ths rule, statistical parity)
+- ✅ Knowledge graph UI with tabbed display (guidelines, precedents, compliance rules)
+- ✅ Broker portal full lifecycle (submit → track → quote → bind → claim)
+- ✅ Escalation framework with sidebar badge and approve/reject workflow
+- ✅ Subjectivities tracking with CRUD and bind-blocking logic
+- ✅ Automatic cession on policy bind
+- ✅ Rating breakdown display with factor tables
+- ✅ Claims notifications with breach notification tracking
+
 ### In Progress
 
 - 🔄 M365 Copilot publishing
 - 🔄 Azure AI Search vector indexing for knowledge retrieval
 
-### Process Completeness (~75%)
+### Process Completeness (~80%)
 
-Core insurance workflows are ~75% complete. See [Process Completeness Assessment](docs/architecture/process-completeness.md) for the full gap analysis and roadmap.
+Core insurance workflows are ~80% complete. See [Process Completeness Assessment](docs/architecture/process-completeness.md) for the full gap analysis and roadmap.
 
 ### MCP Server
 

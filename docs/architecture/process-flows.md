@@ -31,13 +31,13 @@ OpenInsure uses eight AI agents deployed on Microsoft Foundry (GPT-5.1), orchest
 ```mermaid
 graph TB
     subgraph "User Interfaces"
-        D[React Dashboard<br/>22 pages]
+        D[React Dashboard<br/>25 pages]
         BP[Broker Portal]
         M365[M365 Copilot / Teams]
     end
 
     subgraph "Backend — FastAPI"
-        API[REST API<br/>90+ endpoints]
+        API[REST API<br/>118 endpoints]
         WE[Workflow Engine]
         FC[Foundry Client]
     end
@@ -535,7 +535,7 @@ graph TB
     end
 
     subgraph "Application Layer"
-        API[FastAPI Backend<br/>Python 3.12+<br/>90+ REST Endpoints]
+        API[FastAPI Backend<br/>Python 3.12+<br/>118 REST Endpoints]
         WE[Workflow Engine<br/>Multi-Agent Orchestration]
         MCP[MCP Server<br/>Tool Interface]
     end
