@@ -259,6 +259,16 @@ export interface RecommendedTerms {
   conditions: string[];
 }
 
+export interface RatingBreakdown {
+  base_premium: string;
+  adjusted_premium: string;
+  final_premium: string;
+  factors_applied: Record<string, string>;
+  confidence: number;
+  explanation: string;
+  warnings: string[];
+}
+
 export interface UnderwriterQueueItem {
   id: string;
   submission_number?: string;
@@ -283,6 +293,7 @@ export interface UnderwriterQueueItem {
   reasoning_chain: string[];
   decision_history: DecisionEvent[];
   cyber_risk_data?: CyberRiskData;
+  rating_breakdown?: RatingBreakdown;
 }
 
 // ── Claims Workbench ──

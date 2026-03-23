@@ -62,6 +62,7 @@ function mapToUWQueueItem(item: any): UnderwriterQueueItem {
     reasoning_chain: item.reasoning_chain || [],
     decision_history: item.decision_history || [],
     cyber_risk_data: item.cyber_risk_data,
+    rating_breakdown: item.rating_breakdown || undefined,
   };
 }
 
@@ -94,9 +95,11 @@ function mapToClaimsQueueItem(item: any): ClaimsQueueItem {
 }
 
 function mapToDecisionAuditItem(item: any): DecisionAuditItem {
+  const dt = String(item.decision_type || item.action || '');
+  const agentLabel = DECISION_TYPE_TO_AGENT[dt] || dt.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()) || 'Unknown';
   return {
     id: item.id || '',
-    agent: item.agent || item.agent_name || item.actor || '',
+    agent: item.agent || item.agent_name || agentLabel,
     decision_type: item.decision_type || item.action || '',
     confidence: item.confidence ?? 0,
     input_summary: item.input_summary || item.entity_id || item.resource_id || '',
@@ -264,6 +267,27 @@ export async function getBiasReport(): Promise<BiasReport> {
   }
 }
 
+const DECISION_TYPE_TO_AGENT: Record<string, string> = {
+  triage: 'Submission Agent',
+  underwriting: 'Underwriting Agent',
+  pricing: 'Underwriting Agent',
+  claims: 'Claims Agent',
+  claims_assessment: 'Claims Agent',
+  compliance: 'Compliance Agent',
+  compliance_audit: 'Compliance Agent',
+  fraud_detection: 'Fraud Agent',
+  policy_review: 'Policy Agent',
+  orchestration: 'Orchestrator',
+  renewal: 'Renewal Agent',
+};
+
+function deriveAgentNameFromDecision(d: Record<string, unknown>): string {
+  if (typeof d.agent_name === 'string' && d.agent_name) return d.agent_name;
+  if (typeof d.agent === 'string' && d.agent) return d.agent;
+  const dt = String(d.decision_type || '');
+  return DECISION_TYPE_TO_AGENT[dt] || dt.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()) || 'Unknown';
+}
+
 export async function getComplianceWorkbenchData(): Promise<ComplianceSummary> {
   if (USE_MOCK) return mockCompliance;
   try {
@@ -283,7 +307,7 @@ export async function getComplianceWorkbenchData(): Promise<ComplianceSummary> {
     let totalConfidence = 0;
 
     for (const d of decisionItems) {
-      const agent = d.agent_name || d.agent || 'unknown';
+      const agent = deriveAgentNameFromDecision(d);
       const dtype = d.decision_type || 'unknown';
       decisions_by_agent[agent] = (decisions_by_agent[agent] || 0) + 1;
       decisions_by_type[dtype] = (decisions_by_type[dtype] || 0) + 1;

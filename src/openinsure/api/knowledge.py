@@ -133,9 +133,9 @@ async def search_knowledge_endpoint(
     type: str | None = Query(None, description="Filter by entity type"),
 ) -> KnowledgeSearchResponse:
     """Search the knowledge base by text, optionally filtered by entity type."""
-    store = get_knowledge_store()
-    if store:
-        try:
+    try:
+        store = get_knowledge_store()
+        if store:
             raw = store.search_knowledge(q, entity_type=type)
             results = [
                 KnowledgeSearchResult(
@@ -151,8 +151,8 @@ async def search_knowledge_endpoint(
                 for doc in raw
             ]
             return KnowledgeSearchResponse(query=q, entity_type=type, results=results, total=len(results))
-        except Exception:
-            _log.debug("Cosmos DB unavailable, using static fallback", exc_info=True)
+    except Exception:
+        _log.warning("knowledge.cosmos_unavailable", resource="search", exc_info=True)
 
     # Static fallback — simple substring match
     results = []
@@ -167,14 +167,14 @@ async def search_knowledge_endpoint(
 @router.get("/guidelines/{lob}", response_model=GuidelineResponse)
 async def get_guidelines(lob: str) -> GuidelineResponse:
     """Retrieve underwriting guidelines for a line of business."""
-    store = get_knowledge_store()
-    if store:
-        try:
+    try:
+        store = get_knowledge_store()
+        if store:
             docs = store.query_guidelines(lob)
             if docs:
                 return GuidelineResponse(lob=lob, guidelines=docs, total=len(docs))
-        except Exception:
-            _log.debug("Cosmos DB unavailable, using static fallback", exc_info=True)
+    except Exception:
+        _log.warning("knowledge.cosmos_unavailable", lob=lob, exc_info=True)
 
     # Static fallback
     gl = _STATIC_GUIDELINES.get(lob)
@@ -188,14 +188,14 @@ async def list_knowledge_products(
     lob: str | None = Query(None, description="Filter by line of business"),
 ) -> KnowledgeProductResponse:
     """List product definitions from the knowledge graph."""
-    store = get_knowledge_store()
-    if store:
-        try:
+    try:
+        store = get_knowledge_store()
+        if store:
             docs = store.query_products(lob)
             if docs:
                 return KnowledgeProductResponse(products=docs, total=len(docs))
-        except Exception:
-            _log.debug("Cosmos DB unavailable, using static fallback", exc_info=True)
+    except Exception:
+        _log.warning("knowledge.cosmos_unavailable", resource="products", exc_info=True)
 
     # Static fallback
     products = _STATIC_PRODUCTS
@@ -230,15 +230,15 @@ async def get_claims_precedents(claim_type: str) -> ClaimsPrecedentResponse:
     """Retrieve claims precedents by claim type for adjuster guidance."""
     from openinsure.agents.knowledge_agent import CLAIMS_PRECEDENTS
 
-    store = get_knowledge_store()
-    if store:
-        try:
+    try:
+        store = get_knowledge_store()
+        if store:
             docs = store.query_by_type("claims_precedent")
             docs = [d for d in docs if d.get("claim_type") == claim_type]
             if docs:
                 return ClaimsPrecedentResponse(claim_type=claim_type, precedents=docs, total=len(docs))
-        except Exception:
-            _log.debug("Cosmos DB unavailable, using static fallback", exc_info=True)
+    except Exception:
+        _log.warning("knowledge.cosmos_unavailable", resource="claims_precedents", exc_info=True)
 
     precedent = CLAIMS_PRECEDENTS.get(claim_type)
     if precedent is None:
@@ -251,14 +251,14 @@ async def list_claims_precedents() -> ClaimsPrecedentResponse:
     """List all claims precedents."""
     from openinsure.agents.knowledge_agent import CLAIMS_PRECEDENTS
 
-    store = get_knowledge_store()
-    if store:
-        try:
+    try:
+        store = get_knowledge_store()
+        if store:
             docs = store.query_by_type("claims_precedent")
             if docs:
                 return ClaimsPrecedentResponse(claim_type="all", precedents=docs, total=len(docs))
-        except Exception:
-            _log.debug("Cosmos DB unavailable, using static fallback", exc_info=True)
+    except Exception:
+        _log.warning("knowledge.cosmos_unavailable", resource="claims_precedents", exc_info=True)
 
     return ClaimsPrecedentResponse(
         claim_type="all", precedents=list(CLAIMS_PRECEDENTS.values()), total=len(CLAIMS_PRECEDENTS)
@@ -270,15 +270,15 @@ async def get_compliance_rules(framework: str) -> ComplianceRulesResponse:
     """Retrieve compliance framework rules."""
     from openinsure.agents.knowledge_agent import COMPLIANCE_RULES
 
-    store = get_knowledge_store()
-    if store:
-        try:
+    try:
+        store = get_knowledge_store()
+        if store:
             docs = store.query_by_type("compliance_rule")
             docs = [d for d in docs if d.get("framework") == framework]
             if docs:
                 return ComplianceRulesResponse(framework=framework, rules=docs, total=len(docs))
-        except Exception:
-            _log.debug("Cosmos DB unavailable, using static fallback", exc_info=True)
+    except Exception:
+        _log.warning("knowledge.cosmos_unavailable", resource="compliance_rules", exc_info=True)
 
     rules = COMPLIANCE_RULES.get(framework)
     if rules is None:
@@ -291,13 +291,13 @@ async def list_compliance_rules() -> ComplianceRulesResponse:
     """List all compliance framework rules."""
     from openinsure.agents.knowledge_agent import COMPLIANCE_RULES
 
-    store = get_knowledge_store()
-    if store:
-        try:
+    try:
+        store = get_knowledge_store()
+        if store:
             docs = store.query_by_type("compliance_rule")
             if docs:
                 return ComplianceRulesResponse(framework="all", rules=docs, total=len(docs))
-        except Exception:
-            _log.debug("Cosmos DB unavailable, using static fallback", exc_info=True)
+    except Exception:
+        _log.warning("knowledge.cosmos_unavailable", resource="compliance_rules", exc_info=True)
 
     return ComplianceRulesResponse(framework="all", rules=list(COMPLIANCE_RULES.values()), total=len(COMPLIANCE_RULES))

@@ -69,6 +69,27 @@ export async function getDecisions(): Promise<AgentDecision[]> {
   }
 }
 
+const DECISION_TYPE_TO_AGENT: Record<string, string> = {
+  triage: 'Submission Agent',
+  underwriting: 'Underwriting Agent',
+  pricing: 'Underwriting Agent',
+  claims: 'Claims Agent',
+  claims_assessment: 'Claims Agent',
+  compliance: 'Compliance Agent',
+  compliance_audit: 'Compliance Agent',
+  fraud_detection: 'Fraud Agent',
+  policy_review: 'Policy Agent',
+  orchestration: 'Orchestrator',
+  renewal: 'Renewal Agent',
+};
+
+function deriveAgentName(d: Record<string, unknown>): string {
+  if (typeof d.agent_name === 'string' && d.agent_name) return d.agent_name;
+  if (typeof d.agent === 'string' && d.agent) return d.agent;
+  const dt = String(d.decision_type || '');
+  return DECISION_TYPE_TO_AGENT[dt] || dt.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()) || 'Unknown';
+}
+
 export async function getComplianceSummary(): Promise<ComplianceSummary> {
   if (USE_MOCK) return mockCompliance;
   try {
@@ -86,7 +107,7 @@ export async function getComplianceSummary(): Promise<ComplianceSummary> {
     let totalConfidence = 0;
 
     for (const d of decisionItems) {
-      const agent = d.agent_name || d.agent || 'unknown';
+      const agent = deriveAgentName(d);
       const dtype = d.decision_type || 'unknown';
       decisions_by_agent[agent] = (decisions_by_agent[agent] || 0) + 1;
       decisions_by_type[dtype] = (decisions_by_type[dtype] || 0) + 1;

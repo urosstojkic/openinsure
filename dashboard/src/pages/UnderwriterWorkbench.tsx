@@ -96,7 +96,7 @@ const UnderwriterWorkbench: React.FC = () => {
 
   /** Can this item be processed with AI? */
   const canProcess = (item: UnderwriterQueueItem) =>
-    ['received', 'underwriting'].includes(item.status);
+    ['received', 'triaging', 'underwriting', 'quoted'].includes(item.status);
 
   if (isLoading) return <div className="space-y-4"><TableSkeleton rows={6} columns={8} /></div>;
 
@@ -345,6 +345,55 @@ const UnderwriterWorkbench: React.FC = () => {
                           {selected.recommended_terms.conditions.map((c, i) => <li key={i}>{c}</li>)}
                         </ul>
                       )}
+                    </div>
+                  )}
+
+                  {/* Rating Breakdown */}
+                  {selected.rating_breakdown && (
+                    <div>
+                      <h3 className="mb-3 text-sm font-semibold text-slate-800">Rating Breakdown</h3>
+                      <div className="rounded-xl border border-slate-200/60 overflow-hidden">
+                        <table className="min-w-full text-sm">
+                          <thead className="bg-slate-50/80">
+                            <tr>
+                              <th className="px-4 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">Factor</th>
+                              <th className="px-4 py-2 text-right text-[11px] font-semibold uppercase tracking-wider text-slate-400">Value</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-50">
+                            <tr>
+                              <td className="px-4 py-2 text-slate-700">Base Premium</td>
+                              <td className="px-4 py-2 text-right font-mono text-slate-900">{money(Number(selected.rating_breakdown.base_premium))}</td>
+                            </tr>
+                            {Object.entries(selected.rating_breakdown.factors_applied || {}).map(([factor, value]) => (
+                              <tr key={factor}>
+                                <td className="px-4 py-2 text-slate-600 pl-8">
+                                  {factor.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())}
+                                </td>
+                                <td className="px-4 py-2 text-right font-mono text-slate-700">{String(value)}×</td>
+                              </tr>
+                            ))}
+                            <tr className="bg-slate-50/60">
+                              <td className="px-4 py-2 text-slate-700">Adjusted Premium</td>
+                              <td className="px-4 py-2 text-right font-mono text-slate-900">{money(Number(selected.rating_breakdown.adjusted_premium))}</td>
+                            </tr>
+                            <tr className="bg-indigo-50/60 font-semibold">
+                              <td className="px-4 py-2 text-indigo-900">Final Premium</td>
+                              <td className="px-4 py-2 text-right font-mono text-indigo-900">{money(Number(selected.rating_breakdown.final_premium))}</td>
+                            </tr>
+                          </tbody>
+                        </table>
+                        {selected.rating_breakdown.explanation && (
+                          <div className="border-t border-slate-100 px-4 py-2 text-xs text-slate-500">
+                            {selected.rating_breakdown.explanation}
+                          </div>
+                        )}
+                        {(selected.rating_breakdown.warnings?.length ?? 0) > 0 && (
+                          <div className="border-t border-amber-100 bg-amber-50 px-4 py-2 text-xs text-amber-700">
+                            {selected.rating_breakdown.warnings.map((w: string, i: number) => <p key={i}>⚠ {w}</p>)}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   )}
 
