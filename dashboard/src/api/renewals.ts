@@ -53,3 +53,37 @@ export async function getRenewalRecords(): Promise<RenewalRecord[]> {
   const { data } = await client.get('/renewals/records');
   return data.items ?? [];
 }
+
+// --- Renewal Scheduler (#84) ---
+
+export interface RenewalQueueItem {
+  id: string;
+  policy_id: string;
+  policy_number: string;
+  policyholder_name: string;
+  status: string;
+  days_to_expiry: number;
+  expiring_premium: number;
+  effective_date: string;
+  expiration_date: string;
+  badge: string;
+  recommendation: string;
+  ai_terms: Record<string, unknown> | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export async function runRenewalScheduler(): Promise<{ status: string; stats: Record<string, number> }> {
+  const { data } = await client.post('/renewals/scheduler/run');
+  return data;
+}
+
+export async function getRenewalQueue(status?: string): Promise<RenewalQueueItem[]> {
+  const { data } = await client.get<RenewalQueueItem[]>('/renewals/queue', { params: { status } });
+  return data;
+}
+
+export async function generateAITerms(policyId: string): Promise<Record<string, unknown>> {
+  const { data } = await client.post(`/renewals/${policyId}/terms`);
+  return data;
+}

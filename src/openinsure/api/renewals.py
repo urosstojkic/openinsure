@@ -12,6 +12,11 @@ from pydantic import BaseModel, Field
 
 from openinsure.infrastructure.factory import get_policy_repository, get_renewal_repository
 from openinsure.services.renewal import generate_renewal_terms, identify_renewals
+from openinsure.services.renewal_scheduler import (
+    get_renewal_queue,
+    identify_and_queue_renewals,
+    pre_populate_renewal_terms,
+)
 
 router = APIRouter()
 
@@ -79,6 +84,23 @@ class RenewalRecordList(BaseModel):
     total: int
 
 
+class RenewalQueueItem(BaseModel):
+    id: str
+    policy_id: str
+    policy_number: str = ""
+    policyholder_name: str = ""
+    status: str = "pending"
+    days_to_expiry: int = 0
+    expiring_premium: float = 0
+    effective_date: str = ""
+    expiration_date: str = ""
+    badge: str = "Renewal"
+    recommendation: str = "review_required"
+    ai_terms: dict[str, Any] | None = None
+    created_at: str = ""
+    updated_at: str = ""
+
+
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
@@ -116,6 +138,30 @@ async def list_upcoming_renewals(
         within_90_days=len(within_90),
         renewals=items,
     )
+
+
+@router.post("/scheduler/run")
+async def run_renewal_scheduler() -> dict[str, Any]:
+    """Manually trigger the renewal scheduler (normally runs daily)."""
+    stats = await identify_and_queue_renewals()
+    return {"status": "completed", "stats": stats}
+
+
+@router.get("/queue", response_model=list[RenewalQueueItem])
+async def list_renewal_queue(
+    status: str | None = Query(None, description="Filter by queue status"),
+    sort_by: str = Query("days_to_expiry", description="Sort field"),
+) -> list[RenewalQueueItem]:
+    """Prioritized renewal queue for UW workbench."""
+    items = await get_renewal_queue(status=status, sort_by=sort_by)
+    return [RenewalQueueItem(**i) for i in items]
+
+
+@router.post("/{policy_id}/terms")
+async def generate_ai_renewal_terms(policy_id: str) -> dict[str, Any]:
+    """Pre-populate renewal terms using the underwriting agent."""
+    terms = await pre_populate_renewal_terms(policy_id)
+    return {"policy_id": policy_id, "terms": terms}
 
 
 @router.post("/{policy_id}/generate")
