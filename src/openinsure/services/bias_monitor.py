@@ -35,10 +35,25 @@ class BiasAnalysisResult:
         self.timestamp: str = datetime.now(UTC).isoformat()
 
     def to_dict(self) -> dict[str, Any]:
+        # Compute max rate among sufficiently-sized groups for gap calculation
+        max_rate = 0.0
+        for data in self.groups.values():
+            if data.get("total", 0) >= _MIN_SAMPLE_SIZE and data["rate"] > max_rate:
+                max_rate = data["rate"]
+
+        groups_with_gap: dict[str, dict[str, Any]] = {}
+        for name, data in self.groups.items():
+            gap_pct = round((max_rate - data["rate"]) * 100, 2) if max_rate > 0 else 0.0
+            groups_with_gap[name] = {
+                **data,
+                "gap_percentage": gap_pct,
+                "flagged": name in self.flagged_groups,
+            }
+
         return {
             "metric": self.metric_name,
             "group_field": self.group_field,
-            "groups": self.groups,
+            "groups": groups_with_gap,
             "four_fifths_ratio": round(self.four_fifths_ratio, 4),
             "passes_threshold": self.passes_threshold,
             "flagged_groups": self.flagged_groups,
@@ -74,6 +89,17 @@ async def analyze_submission_bias(submissions: list[dict[str, Any]]) -> list[dic
             group_fn=lambda s: _revenue_band((s.get("risk_data") or {}).get("annual_revenue", 0)),
             outcome_fn=lambda s: s.get("status") in ("bound", "quoted"),
             metric_name="Approval Rate by Revenue Band",
+        ).to_dict()
+    )
+
+    # Analyze by security score band
+    results.append(
+        _analyze_by_group(
+            submissions,
+            group_field="security_score_band",
+            group_fn=lambda s: _security_score_band((s.get("risk_data") or {}).get("security_score")),
+            outcome_fn=lambda s: s.get("status") in ("bound", "quoted"),
+            metric_name="Approval Rate by Security Score",
         ).to_dict()
     )
 
@@ -194,3 +220,22 @@ def _revenue_band(revenue: Any) -> str:
     if rev < 100_000_000:
         return "$25M-$100M"
     return "$100M+"
+
+
+def _security_score_band(score: Any) -> str:
+    """Classify a 0–1 security score into human-readable bands."""
+    if score is None:
+        return "Unknown"
+    try:
+        s = float(score)
+    except (TypeError, ValueError):
+        return "Unknown"
+    if s < 0.3:
+        return "Poor (<0.3)"
+    if s < 0.5:
+        return "Fair (0.3-0.5)"
+    if s < 0.7:
+        return "Good (0.5-0.7)"
+    if s < 0.9:
+        return "Strong (0.7-0.9)"
+    return "Excellent (0.9+)"

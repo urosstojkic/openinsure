@@ -6,6 +6,7 @@ from openinsure.services.bias_monitor import (
     BiasAnalysisResult,
     _analyze_by_group,
     _revenue_band,
+    _security_score_band,
     analyze_submission_bias,
     generate_bias_report,
 )
@@ -164,16 +165,16 @@ class TestAnalyzeByGroup:
 
 @pytest.mark.asyncio
 class TestAnalyzeSubmissionBias:
-    async def test_returns_three_analyses(self):
+    async def test_returns_four_analyses(self):
         subs = _make_submissions([("Tech", 15, 5), ("Finance", 14, 6)])
         results = await analyze_submission_bias(subs)
-        assert len(results) == 3
+        assert len(results) == 4
         fields = {r["group_field"] for r in results}
-        assert fields == {"industry", "revenue_band", "channel"}
+        assert fields == {"industry", "revenue_band", "security_score_band", "channel"}
 
     async def test_empty_submissions(self):
         results = await analyze_submission_bias([])
-        assert len(results) == 3
+        assert len(results) == 4
         assert all(r["groups"] == {} for r in results)
 
 
@@ -209,3 +210,52 @@ class TestGenerateBiasReport:
         """Claims parameter is accepted for future use."""
         report = await generate_bias_report([], claims=[{"id": "c1"}])
         assert report["overall_status"] == "compliant"
+
+
+# ---------------------------------------------------------------------------
+# _security_score_band
+# ---------------------------------------------------------------------------
+
+
+class TestSecurityScoreBand:
+    @pytest.mark.parametrize(
+        ("score", "expected"),
+        [
+            (0.1, "Poor (<0.3)"),
+            (0.35, "Fair (0.3-0.5)"),
+            (0.6, "Good (0.5-0.7)"),
+            (0.8, "Strong (0.7-0.9)"),
+            (0.95, "Excellent (0.9+)"),
+            (None, "Unknown"),
+            ("bad", "Unknown"),
+        ],
+    )
+    def test_bands(self, score, expected):
+        assert _security_score_band(score) == expected
+
+
+# ---------------------------------------------------------------------------
+# gap_percentage in group data
+# ---------------------------------------------------------------------------
+
+
+class TestGapPercentage:
+    def test_group_data_includes_gap_and_flagged(self):
+        subs = _make_submissions([("Tech", 18, 2), ("Retail", 5, 15)])
+        result = _analyze_by_group(
+            subs,
+            group_field="industry",
+            group_fn=lambda s: s["risk_data"]["industry"],
+            outcome_fn=lambda s: s["status"] == "bound",
+            metric_name="test",
+        )
+        d = result.to_dict()
+        for group in d["groups"].values():
+            assert "gap_percentage" in group
+            assert "flagged" in group
+        # The best group has gap 0
+        assert d["groups"]["Tech"]["gap_percentage"] == 0.0
+        assert d["groups"]["Tech"]["flagged"] is False
+        # Retail is flagged with a positive gap
+        assert d["groups"]["Retail"]["gap_percentage"] > 0
+        assert d["groups"]["Retail"]["flagged"] is True

@@ -398,6 +398,8 @@ export interface BiasGroupData {
   total: number;
   positive: number;
   rate: number;
+  gap_percentage?: number;
+  flagged?: boolean;
 }
 
 export interface BiasAnalysis {
