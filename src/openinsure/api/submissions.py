@@ -510,7 +510,7 @@ async def triage_submission(submission_id: str) -> TriageResult:
                     }
                 )
             except Exception:
-                _logger.warning(  # type: ignore[call-arg]
+                _logger.warning(
                     "submissions.decision_recording_failed",
                     decision_type="triage",
                     submission_id=submission_id,
@@ -612,7 +612,7 @@ async def generate_quote(submission_id: str, user: CurrentUser = Depends(get_cur
                     }
                 )
             except Exception:
-                _logger.warning(  # type: ignore[call-arg]
+                _logger.warning(
                     "submissions.decision_recording_failed",
                     decision_type="quote",
                     submission_id=submission_id,
@@ -855,7 +855,7 @@ async def bind_submission(submission_id: str, user: CurrentUser = Depends(get_cu
                 }
             )
         except Exception:
-            _logger.warning(  # type: ignore[call-arg]
+            _logger.warning(
                 "submissions.decision_recording_failed",
                 decision_type="bind",
                 submission_id=submission_id,
@@ -931,7 +931,7 @@ async def bind_submission(submission_id: str, user: CurrentUser = Depends(get_cu
                         raw_t["capacity_used"] = raw_t.get("capacity_used", 0) + float(cession.ceded_limit)
                         break
     except Exception:
-        _logger.warning("submissions.auto_cession_failed", submission_id=submission_id, exc_info=True)  # type: ignore[call-arg]
+        _logger.warning("submissions.auto_cession_failed", submission_id=submission_id, exc_info=True)
 
     # Update submission status
     record["status"] = SubmissionStatus.BOUND
@@ -1349,7 +1349,7 @@ async def process_submission(submission_id: str, user: CurrentUser = Depends(get
                             raw_t["capacity_used"] = raw_t.get("capacity_used", 0) + float(cession.ceded_limit)
                             break
         except Exception:
-            _logger.warning("submissions.auto_cession_failed", submission_id=submission_id, exc_info=True)  # type: ignore[call-arg]
+            _logger.warning("submissions.auto_cession_failed", submission_id=submission_id, exc_info=True)
 
         await _repo.update(submission_id, {"status": "bound", "updated_at": now})
         await publish_domain_event(
