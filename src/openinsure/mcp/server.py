@@ -15,11 +15,13 @@ compliance audit trails, and the real Azure SQL / Cosmos DB persistence
 layer.  This ensures MCP consumers get the same AI-powered results as
 dashboard users.
 
-Tools (16):
+Tools (21):
     Submission: create_submission, get_submission, list_submissions,
                 triage_submission, quote_submission, bind_submission
     Claims:     file_claim, get_claim, list_claims, set_reserve
     Policy:     get_policy, list_policies
+    Billing:    create_invoice, record_payment, get_billing_status
+    Documents:  generate_declaration, generate_certificate
     Query:      get_metrics, get_agent_decisions
     Compliance: run_compliance_check
     Workflow:   run_full_workflow
@@ -432,6 +434,170 @@ async def list_policies(status: str | None = None, limit: int = 20) -> str:
 
 
 # ======================================================================
+# Billing tools (#77)
+# ======================================================================
+
+
+@mcp.tool()
+async def create_invoice(
+    account_id: str,
+    amount: float,
+    due_date: str,
+    description: str = "Premium installment",
+) -> str:
+    """Generate an invoice on a billing account.
+
+    Args:
+        account_id: UUID of the billing account.
+        amount: Invoice amount in USD.
+        due_date: Due date in ISO-8601 format (YYYY-MM-DD).
+        description: Line-item description.
+
+    Returns:
+        JSON with the created invoice record.
+    """
+    body: dict[str, Any] = {
+        "amount": amount,
+        "due_date": due_date,
+        "description": description,
+    }
+    try:
+        result = await _request(
+            "POST",
+            f"/billing/accounts/{account_id}/invoices",
+            json_body=body,
+        )
+        logger.info(
+            "mcp.create_invoice",
+            account_id=account_id,
+            amount=amount,
+        )
+        return json.dumps(result, default=str)
+    except httpx.HTTPStatusError as exc:
+        if exc.response.status_code == 404:
+            return json.dumps({"error": f"Billing account {account_id} not found"})
+        if exc.response.status_code == 409:
+            return json.dumps({"error": "Cannot generate invoices on a cancelled account"})
+        raise
+
+
+@mcp.tool()
+async def record_payment(
+    account_id: str,
+    amount: float,
+    method: str = "ach",
+    reference: str = "",
+) -> str:
+    """Record a payment against a billing account.
+
+    Args:
+        account_id: UUID of the billing account.
+        amount: Payment amount in USD.
+        method: Payment method (ach, wire, check, credit_card).
+        reference: External payment reference number.
+
+    Returns:
+        JSON with payment confirmation, updated balance, and account status.
+    """
+    body: dict[str, Any] = {
+        "amount": amount,
+        "method": method,
+    }
+    if reference:
+        body["reference"] = reference
+    try:
+        result = await _request(
+            "POST",
+            f"/billing/accounts/{account_id}/payments",
+            json_body=body,
+        )
+        logger.info(
+            "mcp.record_payment",
+            account_id=account_id,
+            amount=amount,
+            method=method,
+        )
+        return json.dumps(result, default=str)
+    except httpx.HTTPStatusError as exc:
+        if exc.response.status_code == 404:
+            return json.dumps({"error": f"Billing account {account_id} not found"})
+        if exc.response.status_code == 409:
+            return json.dumps({"error": exc.response.json().get("detail", "Payment conflict")})
+        raise
+
+
+@mcp.tool()
+async def get_billing_status(account_id: str) -> str:
+    """Get billing account balance, invoices, and payment history.
+
+    Args:
+        account_id: UUID of the billing account.
+
+    Returns:
+        JSON with account details, balance, invoice list, and ledger.
+    """
+    try:
+        account = await _request("GET", f"/billing/accounts/{account_id}")
+        ledger = await _request("GET", f"/billing/accounts/{account_id}/ledger")
+        return json.dumps({"account": account, "ledger": ledger}, default=str)
+    except httpx.HTTPStatusError as exc:
+        if exc.response.status_code == 404:
+            return json.dumps({"error": f"Billing account {account_id} not found"})
+        raise
+
+
+# ======================================================================
+# Document tools (#78)
+# ======================================================================
+
+
+@mcp.tool()
+async def generate_declaration(policy_id: str) -> str:
+    """Generate a declarations page for a policy.
+
+    Produces a structured document with named insured, policy period,
+    coverage summary, premium breakdown, and endorsements.
+
+    Args:
+        policy_id: UUID of the policy.
+
+    Returns:
+        JSON with document title, sections, and summary.
+    """
+    try:
+        result = await _request("GET", f"/policies/{policy_id}/documents/declaration")
+        logger.info("mcp.generate_declaration", policy_id=policy_id)
+        return json.dumps(result, default=str)
+    except httpx.HTTPStatusError as exc:
+        if exc.response.status_code == 404:
+            return json.dumps({"error": f"Policy {policy_id} not found"})
+        raise
+
+
+@mcp.tool()
+async def generate_certificate(policy_id: str) -> str:
+    """Generate a Certificate of Insurance for a policy.
+
+    Produces a structured certificate with insured info, coverage types,
+    limits, policy period, and cancellation provisions.
+
+    Args:
+        policy_id: UUID of the policy.
+
+    Returns:
+        JSON with certificate title, sections, and summary.
+    """
+    try:
+        result = await _request("GET", f"/policies/{policy_id}/documents/certificate")
+        logger.info("mcp.generate_certificate", policy_id=policy_id)
+        return json.dumps(result, default=str)
+    except httpx.HTTPStatusError as exc:
+        if exc.response.status_code == 404:
+            return json.dumps({"error": f"Policy {policy_id} not found"})
+        raise
+
+
+# ======================================================================
 # Query / metrics tools
 # ======================================================================
 
@@ -630,6 +796,11 @@ class OpenInsureMCPServer:
         "list_policies": list_policies,
         "get_agent_decisions": get_agent_decisions,
         "run_full_workflow": run_full_workflow,
+        "create_invoice": create_invoice,
+        "record_payment": record_payment,
+        "get_billing_status": get_billing_status,
+        "generate_declaration": generate_declaration,
+        "generate_certificate": generate_certificate,
     }
 
     async def list_tools(self) -> list[dict[str, Any]]:
