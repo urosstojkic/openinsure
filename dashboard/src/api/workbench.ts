@@ -239,7 +239,7 @@ export async function getBiasChartData(): Promise<BiasChartData> {
     const analyses = data.analyses || [];
     return {
       approval_by_sector: analyses
-        .filter((a: Record<string, unknown>) => a.metric === 'approval_rate')
+        .filter((a: Record<string, unknown>) => String(a.metric ?? '').toLowerCase().includes('industry'))
         .flatMap((a: Record<string, unknown>) =>
           Object.entries((a.groups || {}) as Record<string, { rate: number }>)
             .map(([sector, g]) => ({ sector, rate: g.rate })),

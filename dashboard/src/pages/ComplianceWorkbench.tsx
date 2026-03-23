@@ -15,7 +15,7 @@ const ComplianceWorkbench: React.FC = () => {
   const { data: overrides = [] } = useQuery({ queryKey: ['override-log'], queryFn: getOverrideLog });
   const { data: biasData } = useQuery({ queryKey: ['bias-charts'], queryFn: getBiasChartData });
   const queryClient = useQueryClient();
-  const { data: biasReport, isLoading: biasReportLoading } = useQuery({ queryKey: ['bias-report'], queryFn: getBiasReport, retry: false });
+  const { data: biasReport, isLoading: biasReportLoading } = useQuery({ queryKey: ['bias-report'], queryFn: getBiasReport });
   const generateReport = useMutation({
     mutationFn: getBiasReport,
     onSuccess: (data) => queryClient.setQueryData(['bias-report'], data),

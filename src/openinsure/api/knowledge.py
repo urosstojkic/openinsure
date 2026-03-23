@@ -174,7 +174,7 @@ async def get_guidelines(lob: str) -> GuidelineResponse:
             if docs:
                 return GuidelineResponse(lob=lob, guidelines=docs, total=len(docs))
     except Exception:
-        _log.warning("knowledge.cosmos_unavailable", lob=lob, exc_info=True)
+        _log.warning("knowledge.cosmos_unavailable lob=%s", lob, exc_info=True)
 
     # Static fallback
     gl = _STATIC_GUIDELINES.get(lob)
@@ -195,7 +195,7 @@ async def list_knowledge_products(
             if docs:
                 return KnowledgeProductResponse(products=docs, total=len(docs))
     except Exception:
-        _log.warning("knowledge.cosmos_unavailable", resource="products", exc_info=True)
+        _log.warning("knowledge.cosmos_unavailable resource=products", exc_info=True)
 
     # Static fallback
     products = _STATIC_PRODUCTS
@@ -238,7 +238,7 @@ async def get_claims_precedents(claim_type: str) -> ClaimsPrecedentResponse:
             if docs:
                 return ClaimsPrecedentResponse(claim_type=claim_type, precedents=docs, total=len(docs))
     except Exception:
-        _log.warning("knowledge.cosmos_unavailable", resource="claims_precedents", exc_info=True)
+        _log.warning("knowledge.cosmos_unavailable resource=claims_precedents", exc_info=True)
 
     precedent = CLAIMS_PRECEDENTS.get(claim_type)
     if precedent is None:
@@ -258,7 +258,7 @@ async def list_claims_precedents() -> ClaimsPrecedentResponse:
             if docs:
                 return ClaimsPrecedentResponse(claim_type="all", precedents=docs, total=len(docs))
     except Exception:
-        _log.warning("knowledge.cosmos_unavailable", resource="claims_precedents", exc_info=True)
+        _log.warning("knowledge.cosmos_unavailable resource=claims_precedents", exc_info=True)
 
     return ClaimsPrecedentResponse(
         claim_type="all", precedents=list(CLAIMS_PRECEDENTS.values()), total=len(CLAIMS_PRECEDENTS)
@@ -278,7 +278,7 @@ async def get_compliance_rules(framework: str) -> ComplianceRulesResponse:
             if docs:
                 return ComplianceRulesResponse(framework=framework, rules=docs, total=len(docs))
     except Exception:
-        _log.warning("knowledge.cosmos_unavailable", resource="compliance_rules", exc_info=True)
+        _log.warning("knowledge.cosmos_unavailable resource=compliance_rules", exc_info=True)
 
     rules = COMPLIANCE_RULES.get(framework)
     if rules is None:
@@ -298,6 +298,6 @@ async def list_compliance_rules() -> ComplianceRulesResponse:
             if docs:
                 return ComplianceRulesResponse(framework="all", rules=docs, total=len(docs))
     except Exception:
-        _log.warning("knowledge.cosmos_unavailable", resource="compliance_rules", exc_info=True)
+        _log.warning("knowledge.cosmos_unavailable resource=compliance_rules", exc_info=True)
 
     return ComplianceRulesResponse(framework="all", rules=list(COMPLIANCE_RULES.values()), total=len(COMPLIANCE_RULES))

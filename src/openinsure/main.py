@@ -61,6 +61,30 @@ def create_app() -> FastAPI:
             await seed_sample_data()
             logger.info("openinsure.seed_data", status="loaded")
 
+        # Always populate the in-memory escalation queue from existing repo data,
+        # since it isn't persisted across restarts regardless of storage mode.
+        from openinsure.services.escalation import _escalation_queue
+
+        if not _escalation_queue:
+            try:
+                from openinsure.infrastructure.factory import get_submission_repository
+                from openinsure.infrastructure.seed_data import (
+                    _rng,
+                    _sample_decision_records,
+                    _sample_escalations,
+                )
+
+                _sub_repo = get_submission_repository()
+                _subs = await _sub_repo.list_all(limit=5000)
+                if _subs:
+                    _rng.seed(42)
+                    _decs = _sample_decision_records(_subs)
+                    _escs = _sample_escalations(_subs, _decs)
+                    _escalation_queue.extend(_escs)
+                    logger.info("openinsure.escalations.seeded", count=len(_escs))
+            except Exception:
+                logger.warning("openinsure.escalations.seed_failed", exc_info=True)
+
         yield
 
         logger.info("openinsure.shutdown")
