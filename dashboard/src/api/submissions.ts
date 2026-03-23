@@ -62,6 +62,6 @@ export async function createSubmission(payload: Record<string, unknown>): Promis
 }
 
 export async function processSubmission(id: string): Promise<{ message: string; [key: string]: unknown }> {
-  const { data } = await client.post(`/submissions/${id}/process`);
+  const { data } = await client.post(`/submissions/${id}/process`, null, { timeout: 180_000 });
   return data;
 }

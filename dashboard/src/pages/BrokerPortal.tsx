@@ -160,30 +160,20 @@ const BrokerPortal: React.FC = () => {
 
   return (
     <div className="-m-6 flex h-[calc(100vh-3.5rem)] flex-col">
-      {/* ── Top Nav Bar (replaces sidebar for broker view) ── */}
-      <div className="flex items-center justify-between border-b border-slate-200 bg-white px-6 py-3">
-        <div className="flex items-center gap-6">
-          <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600 text-sm font-bold text-white">OI</div>
-            <span className="text-lg font-bold text-slate-900">OpenInsure</span>
-            <StatusBadge label="Broker Portal" variant="blue" />
-          </div>
-          <nav className="flex gap-1">
-            {([['submissions', 'My Submissions'], ['policies', 'My Policies'], ['claims', 'My Claims'], ['documents', 'Documents']] as const).map(([key, label]) => (
-              <button
-                key={key}
-                onClick={() => { setActiveTab(key); setSelectedSubmission(null); }}
-                className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${activeTab === key ? 'bg-indigo-50 text-indigo-600' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}`}
-              >
-                {label}
-              </button>
-            ))}
-          </nav>
-        </div>
-        <div className="flex items-center gap-3">
-          <span className="text-sm text-slate-500">Broker</span>
-          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-600 text-xs font-bold text-white">BR</div>
-        </div>
+      {/* ── Tab Nav (branding handled by Layout header) ── */}
+      <div className="flex items-center justify-between border-b border-slate-200 bg-white px-6">
+        <nav className="flex gap-1 py-2">
+          <StatusBadge label="Broker Portal" variant="blue" />
+          {([['submissions', 'My Submissions'], ['policies', 'My Policies'], ['claims', 'My Claims'], ['documents', 'Documents']] as const).map(([key, label]) => (
+            <button
+              key={key}
+              onClick={() => { setActiveTab(key); setSelectedSubmission(null); }}
+              className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${activeTab === key ? 'bg-indigo-50 text-indigo-600' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}`}
+            >
+              {label}
+            </button>
+          ))}
+        </nav>
       </div>
 
       {/* ── Content ── */}
