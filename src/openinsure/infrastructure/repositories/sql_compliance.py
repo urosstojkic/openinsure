@@ -282,8 +282,27 @@ def _deserialize_decision(row: dict[str, Any]) -> dict[str, Any]:
     row["entity_type"] = ds.get("entity_type") or (inp.get("entity_type") if isinstance(inp, dict) else "") or ""
 
     # Map model_used / agent_id → model_id
-    row["model_id"] = row.pop("model_used", "") or row.get("agent_id", "")
+    raw_agent_id = row.get("agent_id", "")
+    row["model_id"] = row.pop("model_used", "") or raw_agent_id
     row.pop("agent_id", None)
+
+    # Derive human-readable agent_name for the compliance dashboard
+    _agent_display = {
+        "openinsure-submission": "Submission Triage Agent",
+        "openinsure-underwriting": "Underwriting Agent",
+        "openinsure-policy": "Policy Review Agent",
+        "openinsure-orchestrator": "Orchestrator Agent",
+        "openinsure-claims": "Claims Assessment Agent",
+        "triage-agent-v1": "Submission Triage Agent",
+        "underwriting-agent-v1": "Underwriting Agent",
+        "fraud-detection-v1": "Claims Fraud Detection",
+        "rating-engine-v1": "Rating Engine",
+        "gpt-5.1": "Foundry GPT-5.1",
+    }
+    _aid = raw_agent_id or row.get("model_id", "")
+    row["agent_name"] = _agent_display.get(
+        _aid, _aid.replace("-", " ").replace("_", " ").title() if _aid else "Unknown Agent"
+    )
 
     # Map output_data → output_summary
     row["output_summary"] = row.pop("output_data", {}) or {}

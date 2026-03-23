@@ -4,6 +4,27 @@ from __future__ import annotations
 
 from typing import Any
 
+# Map agent IDs / model IDs to human-readable display names
+_AGENT_NAMES: dict[str, str] = {
+    "openinsure-submission": "Submission Triage Agent",
+    "openinsure-underwriting": "Underwriting Agent",
+    "openinsure-policy": "Policy Review Agent",
+    "openinsure-orchestrator": "Orchestrator Agent",
+    "openinsure-claims": "Claims Assessment Agent",
+    "triage-agent-v1": "Submission Triage Agent",
+    "underwriting-agent-v1": "Underwriting Agent",
+    "fraud-detection-v1": "Claims Fraud Detection",
+    "rating-engine-v1": "Rating Engine",
+}
+
+
+def _agent_display_name(agent_id: str) -> str:
+    """Return a human-readable agent display name."""
+    if agent_id in _AGENT_NAMES:
+        return _AGENT_NAMES[agent_id]
+    # Fallback: clean up the ID into a readable form
+    return agent_id.replace("-", " ").replace("_", " ").title() if agent_id else "Unknown Agent"
+
 
 class InMemoryComplianceRepository:
     """Dict/list-backed compliance store for local development and testing."""
@@ -15,6 +36,10 @@ class InMemoryComplianceRepository:
     # -- decisions -----------------------------------------------------------
 
     async def add_decision(self, decision: dict[str, Any]) -> dict[str, Any]:
+        # Ensure agent_name is present for compliance dashboard grouping
+        if "agent_name" not in decision:
+            agent_id = decision.get("model_id", decision.get("agent_id", ""))
+            decision["agent_name"] = _agent_display_name(agent_id)
         self._decisions[decision["id"]] = decision
         return decision
 
@@ -67,6 +92,7 @@ class InMemoryComplianceRepository:
         from uuid import uuid4
 
         record_id = str(record.get("decision_id", record.get("id", uuid4())))
+        agent_id = record.get("agent_id", record.get("model_used", record.get("model_id", "")))
         entry = {
             "id": record_id,
             "decision_type": record.get("decision_type", ""),
@@ -74,6 +100,7 @@ class InMemoryComplianceRepository:
             "entity_type": record.get("entity_type", "agent"),
             "model_id": record.get("model_used", record.get("model_id", "")),
             "model_version": record.get("model_version", ""),
+            "agent_name": _agent_display_name(agent_id),
             "input_summary": record.get("input_summary", {}),
             "output_summary": record.get("output", record.get("output_summary", {})),
             "confidence": record.get("confidence", 0),

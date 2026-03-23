@@ -7,6 +7,7 @@ Falls back to the static dictionaries when Cosmos DB is not configured.
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query
@@ -15,6 +16,7 @@ from pydantic import BaseModel, Field
 from openinsure.infrastructure.factory import get_knowledge_store
 
 router = APIRouter()
+_log = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -133,28 +135,32 @@ async def search_knowledge_endpoint(
     """Search the knowledge base by text, optionally filtered by entity type."""
     store = get_knowledge_store()
     if store:
-        raw = store.search_knowledge(q, entity_type=type)
-        results = [
-            KnowledgeSearchResult(
-                id=doc.get("id", ""),
-                entityType=doc.get("entityType", ""),
-                content=doc.get("content", ""),
-                extra={
-                    k: v
-                    for k, v in doc.items()
-                    if k not in ("id", "entityType", "content") and k not in _COSMOS_META_KEYS
-                },
-            )
-            for doc in raw
-        ]
-    else:
-        # Static fallback — simple substring match
-        results = []
-        for lob, gl in _STATIC_GUIDELINES.items():
-            if q.lower() in str(gl).lower():
-                if type and type != "guideline":
-                    continue
-                results.append(KnowledgeSearchResult(id=f"guideline-{lob}", entityType="guideline", content=str(gl)))
+        try:
+            raw = store.search_knowledge(q, entity_type=type)
+            results = [
+                KnowledgeSearchResult(
+                    id=doc.get("id", ""),
+                    entityType=doc.get("entityType", ""),
+                    content=doc.get("content", ""),
+                    extra={
+                        k: v
+                        for k, v in doc.items()
+                        if k not in ("id", "entityType", "content") and k not in _COSMOS_META_KEYS
+                    },
+                )
+                for doc in raw
+            ]
+            return KnowledgeSearchResponse(query=q, entity_type=type, results=results, total=len(results))
+        except Exception:
+            _log.debug("Cosmos DB unavailable, using static fallback", exc_info=True)
+
+    # Static fallback — simple substring match
+    results = []
+    for lob, gl in _STATIC_GUIDELINES.items():
+        if q.lower() in str(gl).lower():
+            if type and type != "guideline":
+                continue
+            results.append(KnowledgeSearchResult(id=f"guideline-{lob}", entityType="guideline", content=str(gl)))
     return KnowledgeSearchResponse(query=q, entity_type=type, results=results, total=len(results))
 
 
@@ -163,8 +169,12 @@ async def get_guidelines(lob: str) -> GuidelineResponse:
     """Retrieve underwriting guidelines for a line of business."""
     store = get_knowledge_store()
     if store:
-        docs = store.query_guidelines(lob)
-        return GuidelineResponse(lob=lob, guidelines=docs, total=len(docs))
+        try:
+            docs = store.query_guidelines(lob)
+            if docs:
+                return GuidelineResponse(lob=lob, guidelines=docs, total=len(docs))
+        except Exception:
+            _log.debug("Cosmos DB unavailable, using static fallback", exc_info=True)
 
     # Static fallback
     gl = _STATIC_GUIDELINES.get(lob)
@@ -180,8 +190,12 @@ async def list_knowledge_products(
     """List product definitions from the knowledge graph."""
     store = get_knowledge_store()
     if store:
-        docs = store.query_products(lob)
-        return KnowledgeProductResponse(products=docs, total=len(docs))
+        try:
+            docs = store.query_products(lob)
+            if docs:
+                return KnowledgeProductResponse(products=docs, total=len(docs))
+        except Exception:
+            _log.debug("Cosmos DB unavailable, using static fallback", exc_info=True)
 
     # Static fallback
     products = _STATIC_PRODUCTS
@@ -218,10 +232,13 @@ async def get_claims_precedents(claim_type: str) -> ClaimsPrecedentResponse:
 
     store = get_knowledge_store()
     if store:
-        docs = store.query_by_type("claims_precedent")
-        docs = [d for d in docs if d.get("claim_type") == claim_type]
-        if docs:
-            return ClaimsPrecedentResponse(claim_type=claim_type, precedents=docs, total=len(docs))
+        try:
+            docs = store.query_by_type("claims_precedent")
+            docs = [d for d in docs if d.get("claim_type") == claim_type]
+            if docs:
+                return ClaimsPrecedentResponse(claim_type=claim_type, precedents=docs, total=len(docs))
+        except Exception:
+            _log.debug("Cosmos DB unavailable, using static fallback", exc_info=True)
 
     precedent = CLAIMS_PRECEDENTS.get(claim_type)
     if precedent is None:
@@ -236,9 +253,12 @@ async def list_claims_precedents() -> ClaimsPrecedentResponse:
 
     store = get_knowledge_store()
     if store:
-        docs = store.query_by_type("claims_precedent")
-        if docs:
-            return ClaimsPrecedentResponse(claim_type="all", precedents=docs, total=len(docs))
+        try:
+            docs = store.query_by_type("claims_precedent")
+            if docs:
+                return ClaimsPrecedentResponse(claim_type="all", precedents=docs, total=len(docs))
+        except Exception:
+            _log.debug("Cosmos DB unavailable, using static fallback", exc_info=True)
 
     return ClaimsPrecedentResponse(
         claim_type="all", precedents=list(CLAIMS_PRECEDENTS.values()), total=len(CLAIMS_PRECEDENTS)
@@ -252,10 +272,13 @@ async def get_compliance_rules(framework: str) -> ComplianceRulesResponse:
 
     store = get_knowledge_store()
     if store:
-        docs = store.query_by_type("compliance_rule")
-        docs = [d for d in docs if d.get("framework") == framework]
-        if docs:
-            return ComplianceRulesResponse(framework=framework, rules=docs, total=len(docs))
+        try:
+            docs = store.query_by_type("compliance_rule")
+            docs = [d for d in docs if d.get("framework") == framework]
+            if docs:
+                return ComplianceRulesResponse(framework=framework, rules=docs, total=len(docs))
+        except Exception:
+            _log.debug("Cosmos DB unavailable, using static fallback", exc_info=True)
 
     rules = COMPLIANCE_RULES.get(framework)
     if rules is None:
@@ -270,8 +293,11 @@ async def list_compliance_rules() -> ComplianceRulesResponse:
 
     store = get_knowledge_store()
     if store:
-        docs = store.query_by_type("compliance_rule")
-        if docs:
-            return ComplianceRulesResponse(framework="all", rules=docs, total=len(docs))
+        try:
+            docs = store.query_by_type("compliance_rule")
+            if docs:
+                return ComplianceRulesResponse(framework="all", rules=docs, total=len(docs))
+        except Exception:
+            _log.debug("Cosmos DB unavailable, using static fallback", exc_info=True)
 
     return ComplianceRulesResponse(framework="all", rules=list(COMPLIANCE_RULES.values()), total=len(COMPLIANCE_RULES))

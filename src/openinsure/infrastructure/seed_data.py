@@ -466,16 +466,10 @@ def _sample_decision_records(
         security = rd.get("security_score", 0.5)
 
         # Triage confidence: 70 % high, 30 % low
-        triage_conf = (
-            round(_rng.uniform(0.72, 0.98), 2)
-            if _rng.random() < 0.70
-            else round(_rng.uniform(0.35, 0.68), 2)
-        )
+        triage_conf = round(_rng.uniform(0.72, 0.98), 2) if _rng.random() < 0.70 else round(_rng.uniform(0.35, 0.68), 2)
 
         triage_rec = (
-            "decline"
-            if risk_score > 0.75
-            else ("refer_to_senior" if risk_score > 0.55 else "proceed_to_quote")
+            "decline" if risk_score > 0.75 else ("refer_to_senior" if risk_score > 0.55 else "proceed_to_quote")
         )
 
         decisions.append(
@@ -513,20 +507,14 @@ def _sample_decision_records(
 
         # Underwriting decision for submissions past triage
         if sub["status"] in _past_triage:
-            uw_conf = (
-                round(_rng.uniform(0.72, 0.97), 2)
-                if _rng.random() < 0.70
-                else round(_rng.uniform(0.40, 0.68), 2)
-            )
+            uw_conf = round(_rng.uniform(0.72, 0.97), 2) if _rng.random() < 0.70 else round(_rng.uniform(0.40, 0.68), 2)
 
             base_premium = max(5_000, int(revenue * 0.0015))
             premium = int(base_premium * (1 + risk_score * 0.5))
             is_override = sub["status"] == "bound" and uw_conf < 0.65
 
             uw_rec = (
-                "decline"
-                if sub["status"] == "declined"
-                else ("refer_to_senior" if premium > 50_000 else "approve")
+                "decline" if sub["status"] == "declined" else ("refer_to_senior" if premium > 50_000 else "approve")
             )
 
             decisions.append(
@@ -555,9 +543,7 @@ def _sample_decision_records(
                     ),
                     "human_override": is_override,
                     "override_reason": (
-                        "Senior UW approved after additional documentation review."
-                        if is_override
-                        else None
+                        "Senior UW approved after additional documentation review." if is_override else None
                     ),
                     "created_at": sub["updated_at"],
                 }
@@ -599,9 +585,7 @@ def _sample_escalations(
                 "requested_by": dec["model_id"],
                 "requested_role": "uw_analyst",
                 "amount": premium if premium is not None else 0,
-                "required_role": (
-                    "cuo" if premium is not None and premium > 100_000 else "senior_uw"
-                ),
+                "required_role": ("cuo" if premium is not None and premium > 100_000 else "senior_uw"),
                 "escalation_chain": ["senior_uw", "cuo"],
                 "reason": "; ".join(reasons),
                 "context": {

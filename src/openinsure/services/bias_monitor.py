@@ -11,6 +11,7 @@ Methods:
 
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
@@ -20,6 +21,20 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
 logger = structlog.get_logger()
+
+
+def _parse_json_field(value: Any) -> dict[str, Any]:
+    """Safely parse a JSON string or return an existing dict."""
+    if isinstance(value, dict):
+        return value
+    if isinstance(value, str):
+        try:
+            parsed = json.loads(value)
+            if isinstance(parsed, dict):
+                return parsed
+        except (json.JSONDecodeError, TypeError):
+            pass
+    return {}
 
 
 class BiasAnalysisResult:
@@ -75,7 +90,7 @@ async def analyze_submission_bias(submissions: list[dict[str, Any]]) -> list[dic
         _analyze_by_group(
             submissions,
             group_field="industry",
-            group_fn=lambda s: (s.get("risk_data") or {}).get("industry", "Unknown"),
+            group_fn=lambda s: _parse_json_field(s.get("risk_data")).get("industry", "Unknown"),
             outcome_fn=lambda s: s.get("status") in ("bound", "quoted"),
             metric_name="Approval Rate by Industry",
         ).to_dict()
@@ -86,7 +101,7 @@ async def analyze_submission_bias(submissions: list[dict[str, Any]]) -> list[dic
         _analyze_by_group(
             submissions,
             group_field="revenue_band",
-            group_fn=lambda s: _revenue_band((s.get("risk_data") or {}).get("annual_revenue", 0)),
+            group_fn=lambda s: _revenue_band(_parse_json_field(s.get("risk_data")).get("annual_revenue", 0)),
             outcome_fn=lambda s: s.get("status") in ("bound", "quoted"),
             metric_name="Approval Rate by Revenue Band",
         ).to_dict()
@@ -97,7 +112,7 @@ async def analyze_submission_bias(submissions: list[dict[str, Any]]) -> list[dic
         _analyze_by_group(
             submissions,
             group_field="security_score_band",
-            group_fn=lambda s: _security_score_band((s.get("risk_data") or {}).get("security_score")),
+            group_fn=lambda s: _security_score_band(_parse_json_field(s.get("risk_data")).get("security_score")),
             outcome_fn=lambda s: s.get("status") in ("bound", "quoted"),
             metric_name="Approval Rate by Security Score",
         ).to_dict()

@@ -72,13 +72,13 @@ Quality compromises MUST be documented as GitHub issues with `quality` label.
 
 | Metric | Value |
 |--------|-------|
-| Tests | 448+ (pytest, CI green) |
+| Tests | 506 collected (417 unit, pytest CI green) |
 | API endpoints | 90+ across 21 modules |
 | Dashboard pages | 24 (React 18 + TypeScript + Tailwind) |
 | Foundry agents | 6 deployed on Azure AI Foundry |
 | MCP tools | 16 tools + 5 resources |
-| Azure SQL data | 1,540 submissions, 513 policies, 115 claims |
-| Portfolio | $24.19M GWP, 36.9% loss ratio, 88.8% combined ratio |
+| Azure SQL data | 1,619 submissions, 573 policies, 139 claims |
+| Portfolio | $27.33M GWP, 62.1% loss ratio |
 | CI pipeline | ruff + mypy + bandit + pytest (GitHub Actions) |
 | Hosting | Azure Container Apps (VNet + private endpoint) |
 
