@@ -113,16 +113,16 @@ pytest tests/ -v --cov=src/openinsure --cov-fail-under=80
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│  Dashboard (React 19 + Vite + Tailwind)                        │
-│  21 views · 11 role-specific workbenches · Broker portal        │
+│  Dashboard (React 18 + Vite + Tailwind)                        │
+│  24 pages · 11 role-specific workbenches · Broker portal        │
 └────────────────────────┬────────────────────────────────────────┘
                          │ REST
 ┌────────────────────────▼────────────────────────────────────────┐
 │  FastAPI Backend (/api/v1/*)                                    │
-│  35+ endpoints · RBAC middleware · Pydantic v2 validation       │
+│  90+ endpoints · RBAC middleware · Pydantic v2 validation       │
 ├─────────────┬──────────────┬───────────────┬────────────────────┤
 │  Agents     │  Services    │  RBAC         │  Compliance        │
-│  8 Foundry  │  Rating      │  24 roles     │  EU AI Act         │
+│  6 Foundry  │  Rating      │  19 roles     │  EU AI Act         │
 │  agents     │  Lifecycle   │  Authority    │  Decision Records  │
 │             │  Claims      │  matrix       │  Bias monitoring   │
 ├─────────────┴──────────────┴───────────────┴────────────────────┤

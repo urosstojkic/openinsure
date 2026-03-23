@@ -21,7 +21,7 @@ OpenInsure is an open-source, AI-native core insurance platform built on the Mic
 - ✅ 6 AI agents (Orchestrator, Submission, Underwriting, Policy, Claims, Compliance) deployed on Azure AI Foundry — all active
 - ✅ Microsoft Foundry AI pipeline with ProcessWorkflowModal visualization (step-by-step AI reasoning with confidence scores)
 - ✅ 90+ REST API endpoints across 21 modules — submissions, policies, claims, billing, compliance, knowledge, reinsurance, actuarial, MGA oversight, renewals, finance, and demo
-- ✅ React dashboard with 22 pages including role-specific workbenches (Executive, Underwriting, Claims, Compliance, Broker Portal, Reinsurance, Actuarial, MGA Oversight, Renewals, Finance) — all showing real SQL data with cross-dashboard consistency
+- ✅ React dashboard with 24 pages including role-specific workbenches (Executive, Underwriting, Claims, Compliance, Broker Portal, Reinsurance, Actuarial, MGA Oversight, Renewals, Finance) — all showing real SQL data with cross-dashboard consistency
 - ✅ Azure SQL (private endpoint, VNet-integrated) with 3+ years of operations data: 1,540 submissions, 513 policies, 115 claims
 - ✅ $24.19M GWP, 36.9% loss ratio, 88.8% combined ratio
 - ✅ Carrier-grade modules: reinsurance management, actuarial analytics, MGA oversight, renewal workflow, finance dashboard
@@ -34,7 +34,7 @@ OpenInsure is an open-source, AI-native core insurance platform built on the Mic
 - ✅ Security hardened: parameterized SQL queries, constant-time auth, production error sanitization, upload size limits
 - ✅ Role-based access control with 19 platform roles and authority delegation
 - ✅ Azure infrastructure: VNet-integrated Container Apps, Azure SQL with private endpoint (no public access), 13+ resources as Bicep IaC
-- ✅ 449+ tests with comprehensive E2E lifecycle coverage, CI green (ruff + mypy + bandit + pytest)
+- ✅ 448+ tests with comprehensive E2E lifecycle coverage, CI green (ruff + mypy + bandit + pytest)
 
 ### Why OpenInsure?
 
@@ -62,7 +62,7 @@ OpenInsure is an open-source, AI-native core insurance platform built on the Mic
 │                    M365 Copilot / Teams                      │
 │         (User-facing agent surface for insurance ops)        │
 ├─────────────────────────────────────────────────────────────┤
-│              React Dashboard (22 pages, real SQL data)       │
+│              React Dashboard (24 pages, real SQL data)       │
 │   Executive │ UW Workbench │ Claims │ Compliance │ Broker   │
 ├─────────────────────────────────────────────────────────────┤
 │                 Azure AI Foundry                             │
@@ -357,9 +357,9 @@ Every agent decision produces a **Decision Record** for EU AI Act compliance:
 - ✅ EU AI Act compliance layer (decision records, audit trail, bias monitoring)
 - ✅ MCP Server interface
 - ✅ Role-based access control (19 platform roles, authority delegation)
-- ✅ React dashboard with 22 pages
+- ✅ React dashboard with 24 pages
 - ✅ Cyber Liability SMB product (5 coverages, configurable rating engine)
-- ✅ CI/CD pipeline (lint, type check, security scan, 445+ tests, build)
+- ✅ CI/CD pipeline (lint, type check, security scan, 448+ tests, build)
 
 ### Phase 2 — Dashboard & Workbenches ✅
 
@@ -397,6 +397,22 @@ Every agent decision produces a **Decision Record** for EU AI Act compliance:
 
 - 🔄 M365 Copilot publishing
 - 🔄 Azure AI Search vector indexing for knowledge retrieval
+
+### Process Completeness (~75%)
+
+Core insurance workflows are ~75% complete. See [Process Completeness Assessment](docs/architecture/process-completeness.md) for the full gap analysis and roadmap.
+
+### MCP Server
+
+OpenInsure ships a standards-compliant **MCP server** with 16 tools and 5 resources, enabling any MCP-compatible agent (Copilot CLI, Claude Desktop, custom orchestrators) to interact with the platform. See [MCP Integration](docs/architecture/mcp-integration.md) for details.
+
+```bash
+# stdio transport (Copilot CLI, Claude Desktop)
+python -m openinsure.mcp
+
+# SSE transport (web clients)
+python -m openinsure.mcp --sse
+```
 
 ## Tech Stack
 

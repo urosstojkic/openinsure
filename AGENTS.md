@@ -104,17 +104,11 @@ Key ADRs:
 
 ## Quality Gates (All Must Pass)
 
-1. **Tests**: `pytest tests/ -v` — all green
-2. **Lint**: `ruff check src/ tests/` — no errors
-3. **Format**: `ruff format --check src/ tests/` — compliant
-4. **Types**: `mypy src/openinsure/` — no errors
-5. **Security**: `bandit -r src/openinsure/` — no high/critical findings
-6. **Coverage**: `pytest --cov=src/openinsure --cov-fail-under=80` — ≥80%
-7. **Build**: `pip install -e .` — installs cleanly
+See `.github/copilot-instructions.md` §2 for the complete quality gates checklist.
 
 ## Security Requirements (Non-Negotiable)
 
-Every code change MUST satisfy these security requirements without being asked:
+See `SECURITY.md` for the full security policy. Key non-negotiables:
 
 1. **No hardcoded credentials** — All secrets via environment variables or Key Vault
 2. **Input validation** — All API inputs validated via Pydantic models
