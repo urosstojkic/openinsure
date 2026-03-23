@@ -59,6 +59,16 @@ def _make_foundry_mock(responses: dict[str, dict[str, Any]] | None = None) -> Ma
             "source": "foundry",
             "raw": "{}",
         },
+        "openinsure-enrichment": {
+            "response": {
+                "composite_risk_score": 0.75,
+                "risk_signals": [],
+                "data_quality": "high",
+                "confidence": 0.85,
+            },
+            "source": "foundry",
+            "raw": "{}",
+        },
         "openinsure-claims": {
             "response": {
                 "coverage_confirmed": True,
@@ -96,21 +106,23 @@ class TestWorkflowDefinitions:
         assert "claims_assessment" in WORKFLOWS
         assert "renewal" in WORKFLOWS
 
-    def test_new_business_has_all_five_steps(self) -> None:
+    def test_new_business_has_all_six_steps(self) -> None:
         wf = WORKFLOWS["new_business"]
-        assert len(wf.steps) == 5
+        assert len(wf.steps) == 6
         names = [s.name for s in wf.steps]
         assert "orchestration" in names
+        assert "enrichment" in names
         assert "intake" in names
         assert "underwriting" in names
         assert "policy_review" in names
         assert "compliance" in names
 
     def test_new_business_step_order(self) -> None:
-        """Orchestration → intake → underwriting → policy_review → compliance."""
+        """Orchestration → enrichment → intake → underwriting → policy_review → compliance."""
         wf = WORKFLOWS["new_business"]
         names = [s.name for s in wf.steps]
-        assert names.index("orchestration") < names.index("intake")
+        assert names.index("orchestration") < names.index("enrichment")
+        assert names.index("enrichment") < names.index("intake")
         assert names.index("intake") < names.index("underwriting")
         assert names.index("underwriting") < names.index("policy_review")
         assert names.index("policy_review") < names.index("compliance")
@@ -119,6 +131,7 @@ class TestWorkflowDefinitions:
         wf = WORKFLOWS["new_business"]
         agent_map = {s.name: s.agent for s in wf.steps}
         assert agent_map["orchestration"] == "openinsure-orchestrator"
+        assert agent_map["enrichment"] == "openinsure-enrichment"
         assert agent_map["intake"] == "openinsure-submission"
         assert agent_map["underwriting"] == "openinsure-underwriting"
         assert agent_map["policy_review"] == "openinsure-policy"
@@ -203,20 +216,21 @@ class TestExecuteWorkflow:
         assert execution.status == "completed"
         assert execution.completed_at is not None
         step_names = [s["name"] for s in execution.steps_completed]
-        # All 5 steps should be present
+        # All 6 steps should be present
         assert "orchestration" in step_names
+        assert "enrichment" in step_names
         assert "intake" in step_names
         assert "underwriting" in step_names
         assert "policy_review" in step_names
         assert "compliance" in step_names
         # All should be completed (not skipped/failed)
         completed_steps = [s for s in execution.steps_completed if s["status"] == "completed"]
-        assert len(completed_steps) == 5
+        assert len(completed_steps) == 6
 
     @patch("openinsure.services.workflow_engine.publish_domain_event", new_callable=AsyncMock)
     @patch("openinsure.services.workflow_engine.get_foundry_client")
     async def test_new_business_all_six_agents_invoked(self, mock_get_fc: MagicMock, mock_event: AsyncMock) -> None:
-        """Verify all 5 distinct Foundry agents are called in new_business workflow."""
+        """Verify all 6 distinct Foundry agents are called in new_business workflow."""
         mock = _make_foundry_mock()
         mock_get_fc.return_value = mock
 
@@ -224,6 +238,7 @@ class TestExecuteWorkflow:
 
         invoked_agents = [call.args[0] for call in mock.invoke.call_args_list]
         assert "openinsure-orchestrator" in invoked_agents
+        assert "openinsure-enrichment" in invoked_agents
         assert "openinsure-submission" in invoked_agents
         assert "openinsure-underwriting" in invoked_agents
         assert "openinsure-policy" in invoked_agents
@@ -396,6 +411,7 @@ class TestExecuteWorkflow:
         execution = await execute_workflow("new_business", "sub-ctx", "submission", {"id": "sub-ctx"})
 
         assert "orchestration_result" in execution.context
+        assert "enrichment_result" in execution.context
         assert "intake_result" in execution.context
         assert "underwriting_result" in execution.context
         assert "policy_review_result" in execution.context

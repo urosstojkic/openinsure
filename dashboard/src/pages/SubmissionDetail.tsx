@@ -1,13 +1,13 @@
 import React from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Download, CheckCircle, XCircle, AlertTriangle, ArrowUpRight, FileText, Shield, Clock } from 'lucide-react';
 import StatusBadge from '../components/StatusBadge';
 import ConfidenceBar from '../components/ConfidenceBar';
 import ReasoningPanel from '../components/ReasoningPanel';
 import TimelineEvent from '../components/TimelineEvent';
 import Skeleton from '../components/Skeleton';
-import { getSubmission } from '../api/submissions';
+import { getSubmission, enrichSubmission } from '../api/submissions';
 import type { SubmissionStatus } from '../types';
 
 const statusVariant: Record<SubmissionStatus, 'blue' | 'yellow' | 'orange' | 'green' | 'purple' | 'red' | 'cyan'> = {
@@ -84,6 +84,82 @@ function Pipeline({ status }: { status: SubmissionStatus }) {
             Submission {status === 'declined' ? 'declined' : 'referred for manual review'}
           </span>
         </div>
+      )}
+    </div>
+  );
+}
+
+function EnrichmentSection({ submissionId, metadata }: { submissionId: string; metadata: Record<string, unknown> }) {
+  const queryClient = useQueryClient();
+  const riskSummary = metadata?.risk_summary as { composite_risk_score?: number; security_grade?: string; breach_count?: number; credit_rating?: string; enriched_at?: string } | undefined;
+
+  const enrichMutation = useMutation({
+    mutationFn: () => enrichSubmission(submissionId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['submission', submissionId] });
+    },
+  });
+
+  const gradeColor = (grade: string) => {
+    if (grade === 'A') return 'text-emerald-600 bg-emerald-50';
+    if (grade === 'B') return 'text-blue-600 bg-blue-50';
+    if (grade === 'C') return 'text-yellow-600 bg-yellow-50';
+    return 'text-red-600 bg-red-50';
+  };
+
+  return (
+    <div className="rounded-2xl border border-slate-200/60 bg-white p-6 shadow-[var(--shadow-card)]">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-lg font-bold text-slate-900">Data Enrichment</h2>
+        <button
+          onClick={() => enrichMutation.mutate()}
+          disabled={enrichMutation.isPending}
+          className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+        >
+          {enrichMutation.isPending ? 'Enriching...' : riskSummary ? 'Re-Enrich' : 'Enrich Now'}
+        </button>
+      </div>
+
+      {enrichMutation.isError && (
+        <p className="text-sm text-red-500 mb-3">Enrichment failed. Please try again.</p>
+      )}
+
+      {riskSummary ? (
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+            <div className="rounded-xl border border-slate-200/60 bg-slate-50/30 p-3">
+              <p className="text-[10px] font-medium uppercase tracking-wider text-slate-400">Risk Score</p>
+              <p className="mt-1 text-xl font-bold text-slate-900">
+                {typeof riskSummary.composite_risk_score === 'number'
+                  ? (riskSummary.composite_risk_score * 100).toFixed(0)
+                  : '—'}
+              </p>
+            </div>
+            <div className="rounded-xl border border-slate-200/60 bg-slate-50/30 p-3">
+              <p className="text-[10px] font-medium uppercase tracking-wider text-slate-400">Security Grade</p>
+              <p className={`mt-1 inline-flex rounded-full px-2 py-0.5 text-lg font-bold ${gradeColor(riskSummary.security_grade || 'N/A')}`}>
+                {riskSummary.security_grade || 'N/A'}
+              </p>
+            </div>
+            <div className="rounded-xl border border-slate-200/60 bg-slate-50/30 p-3">
+              <p className="text-[10px] font-medium uppercase tracking-wider text-slate-400">Breach Count</p>
+              <p className="mt-1 text-xl font-bold text-slate-900">{riskSummary.breach_count ?? '—'}</p>
+            </div>
+            <div className="rounded-xl border border-slate-200/60 bg-slate-50/30 p-3">
+              <p className="text-[10px] font-medium uppercase tracking-wider text-slate-400">Credit Rating</p>
+              <p className="mt-1 text-xl font-bold text-slate-900">{riskSummary.credit_rating || '—'}</p>
+            </div>
+          </div>
+          {riskSummary.enriched_at && (
+            <p className="text-[11px] text-slate-400">
+              Last enriched: {new Date(riskSummary.enriched_at).toLocaleString()}
+            </p>
+          )}
+        </div>
+      ) : (
+        <p className="text-sm text-slate-400">
+          No enrichment data available. Click &quot;Enrich Now&quot; to query external data sources.
+        </p>
       )}
     </div>
   );
@@ -357,6 +433,9 @@ const SubmissionDetail: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Data Enrichment (#80) */}
+      <EnrichmentSection submissionId={sub.id} metadata={(sub as any).metadata || {}} />
     </div>
   );
 };

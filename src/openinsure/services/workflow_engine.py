@@ -80,6 +80,18 @@ NEW_BUSINESS_WORKFLOW = WorkflowDefinition(
             ),
         ),
         WorkflowStep(
+            name="enrichment",
+            agent="openinsure-enrichment",
+            prompt_template=(
+                "Enrich this submission with external data. Query security ratings, "
+                "firmographics, and breach history providers.\n"
+                'Respond with JSON: {{"composite_risk_score": 0.0-1.0, '
+                '"risk_signals": [...], "data_quality": "high/medium/low", "confidence": 0.0-1.0}}\n\n'
+                "Submission: {submission_data}\nOrchestration: {orchestration_result}"
+            ),
+            required=False,
+        ),
+        WorkflowStep(
             name="intake",
             agent="openinsure-submission",
             prompt_template=(

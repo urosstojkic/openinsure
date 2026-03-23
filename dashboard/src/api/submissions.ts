@@ -65,3 +65,24 @@ export async function processSubmission(id: string): Promise<{ message: string; 
   const { data } = await client.post(`/submissions/${id}/process`, null, { timeout: 180_000 });
   return data;
 }
+
+// --- Enrichment (#80) ---
+
+export interface EnrichmentResult {
+  submission_id: string;
+  status: string;
+  enrichment_data: Record<string, unknown>;
+  risk_summary: {
+    composite_risk_score: number;
+    security_grade: string;
+    verified_revenue: number | null;
+    breach_count: number;
+    credit_rating: string;
+    enriched_at: string;
+  };
+}
+
+export async function enrichSubmission(submissionId: string): Promise<EnrichmentResult> {
+  const { data } = await client.post<EnrichmentResult>(`/submissions/${submissionId}/enrich`);
+  return data;
+}
