@@ -2,7 +2,7 @@
 
 **AI-Native Open Source Core Insurance Platform**
 
-[![CI](https://github.com/urosstojkic/openinsure/actions/workflows/ci.yml/badge.svg)](https://github.com/urosstojkic/openinsure/actions/workflows/ci.yml)
+[![CI](https://github.com/<your-org>/openinsure/actions/workflows/ci.yml/badge.svg)](https://github.com/<your-org>/openinsure/actions/workflows/ci.yml)
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](https://opensource.org/licenses/AGPL-3.0)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://www.python.org/downloads/)
 
@@ -161,7 +161,7 @@ OpenInsure supports **11 dashboard roles** with role-specific views and authorit
 
 ```bash
 # Clone the repository
-git clone https://github.com/urosstojkic/openinsure.git
+git clone https://github.com/<your-org>/openinsure.git
 cd openinsure
 
 # Install backend dependencies
@@ -198,10 +198,10 @@ pwsh scripts/deploy.ps1 -BackendOnly       # backend only
 pwsh scripts/deploy.ps1 -DashboardOnly     # dashboard only
 ```
 
-**Live instance (VNet-integrated):**
-- **Dashboard:** https://openinsure-dashboard.proudplant-9550e5a5.swedencentral.azurecontainerapps.io
-- **Backend API:** https://openinsure-backend.proudplant-9550e5a5.swedencentral.azurecontainerapps.io
-- **API Docs:** https://openinsure-backend.proudplant-9550e5a5.swedencentral.azurecontainerapps.io/docs
+**After deploying, your endpoints will be:**
+- **Dashboard:** `https://<app-name>.<environment>.<region>.azurecontainerapps.io`
+- **Backend API:** `https://<app-name>.<environment>.<region>.azurecontainerapps.io`
+- **API Docs:** `https://<backend-url>/docs`
 - **Foundry Agents:** Visible in [Microsoft Foundry portal](https://ai.azure.com)
 
 ## Testing

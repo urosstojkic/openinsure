@@ -174,10 +174,10 @@ src/openinsure/
 
 | Resource | URL |
 |----------|-----|
-| Dashboard | https://openinsure-dashboard.proudplant-9550e5a5.swedencentral.azurecontainerapps.io |
-| Backend API | https://openinsure-backend.proudplant-9550e5a5.swedencentral.azurecontainerapps.io |
-| API Docs (Swagger) | https://openinsure-backend.proudplant-9550e5a5.swedencentral.azurecontainerapps.io/docs |
-| GitHub | https://github.com/urosstojkic/openinsure |
+| Dashboard | `https://<app-name>.<environment>.<region>.azurecontainerapps.io` |
+| Backend API | `https://<app-name>.<environment>.<region>.azurecontainerapps.io` |
+| API Docs (Swagger) | `https://<backend-url>/docs` |
+| GitHub | `https://github.com/<your-org>/openinsure` |
 | Foundry Portal | https://ai.azure.com (project-scoped) |
 | Local API | http://localhost:8000/docs |
 | Local Dashboard | http://localhost:5173 |
@@ -258,7 +258,7 @@ pwsh scripts/deploy.ps1 -BackendOnly
 pwsh scripts/deploy.ps1 -DashboardOnly
 
 # Post-deploy verification
-python scripts/smoke_test.py https://openinsure-backend.proudplant-9550e5a5.swedencentral.azurecontainerapps.io
+python scripts/smoke_test.py https://<your-backend-url>
 ```
 
 The deploy script: ACR build, Container Apps update, auto-incrementing version tags (`v1`, `v2`, ...). No login prompts — uses existing `az login` session.

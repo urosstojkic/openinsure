@@ -851,13 +851,13 @@ Deploy all Azure resources via Bicep IaC in `infra/`:
 ```bash
 # Deploy to dev
 az deployment group create \
-  --resource-group openinsure-dev-sc \
+  --resource-group <your-resource-group> \
   --template-file infra/main.bicep \
   --parameters infra/parameters/dev.bicepparam
 
 # Deploy to prod
 az deployment group create \
-  --resource-group openinsure-prod \
+  --resource-group <your-resource-group> \
   --template-file infra/main.bicep \
   --parameters infra/parameters/prod.bicepparam
 ```
@@ -886,11 +886,11 @@ az acr build --registry <registry> --image openinsure-dashboard:latest --file da
 
 # Update Container Apps
 az containerapp update --name openinsure-backend \
-  --resource-group openinsure-dev-sc \
+  --resource-group <your-resource-group> \
   --image <registry>.azurecr.io/openinsure-backend:latest
 
 az containerapp update --name openinsure-dashboard \
-  --resource-group openinsure-dev-sc \
+  --resource-group <your-resource-group> \
   --image <registry>.azurecr.io/openinsure-dashboard:latest
 ```
 
