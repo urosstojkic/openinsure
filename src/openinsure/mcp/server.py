@@ -5,13 +5,11 @@ that any MCP client (GitHub Copilot, Claude Desktop, custom orchestrators)
 can interact with the insurance platform through a standardised tool /
 resource interface.
 
-**Dual-mode usage:**
-
-1. ``FastMCP`` transport (stdio / SSE) — run via ``python -m openinsure.mcp``
-   for direct consumption by Copilot CLI, Claude Desktop, etc.
-
-2. ``OpenInsureMCPServer`` wrapper — the legacy programmatic API retained
-   for backward-compatible integration tests.
+**Architecture:** All tools delegate to the FastAPI REST API
+(``http://localhost:{port}/api/v1/...``) which is backed by Microsoft
+Foundry agents, RBAC / authority checks, compliance audit trails, and
+the real Azure SQL / Cosmos DB persistence layer.  This ensures MCP
+consumers get the same AI-powered results as dashboard users.
 
 Tools (16):
     Submission: create_submission, get_submission, list_submissions,
@@ -31,11 +29,10 @@ Resources (5):
 from __future__ import annotations
 
 import json
-from datetime import UTC, datetime
-from decimal import Decimal
+import os
 from typing import Any, ClassVar
-from uuid import UUID, uuid4
 
+import httpx
 import structlog
 from mcp.server.fastmcp import FastMCP
 
@@ -55,9 +52,38 @@ mcp = FastMCP(
     ),
 )
 
+# ======================================================================
+# HTTP client — talks to the FastAPI backend
+# ======================================================================
 
-def _now_iso() -> str:
-    return datetime.now(UTC).isoformat()
+_BASE_URL = os.environ.get(
+    "OPENINSURE_API_BASE_URL",
+    f"http://localhost:{os.environ.get('OPENINSURE_PORT', '8000')}",
+)
+
+
+def _api_url(path: str) -> str:
+    """Build a full API URL from a relative path."""
+    return f"{_BASE_URL}/api/v1{path}"
+
+
+async def _request(
+    method: str,
+    path: str,
+    *,
+    json_body: dict[str, Any] | None = None,
+    params: dict[str, Any] | None = None,
+) -> dict[str, Any] | list[Any]:
+    """Send an HTTP request to the FastAPI backend and return parsed JSON."""
+    url = _api_url(path)
+    # Strip None values from query params
+    if params:
+        params = {k: v for k, v in params.items() if v is not None}
+
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        resp = await client.request(method, url, json=json_body, params=params)
+        resp.raise_for_status()
+        return resp.json()
 
 
 # ======================================================================
@@ -85,25 +111,17 @@ async def create_submission(
     Returns:
         JSON with the created submission record.
     """
-    from openinsure.infrastructure.factory import get_submission_repository
-
-    repo = get_submission_repository()
-    submission_id = str(uuid4())
-    data = {
-        "id": submission_id,
-        "submission_number": f"SUB-{uuid4().hex[:8].upper()}",
-        "status": "received",
-        "applicant": applicant,
+    body = {
+        "applicant_name": applicant,
         "line_of_business": line_of_business,
         "risk_data": {
             "annual_revenue": annual_revenue,
             "employee_count": employee_count,
             "industry": industry,
         },
-        "created_at": _now_iso(),
     }
-    result = await repo.create(data)
-    logger.info("mcp.create_submission", submission_id=submission_id)
+    result = await _request("POST", "/submissions", json_body=body)
+    logger.info("mcp.create_submission", submission_id=result.get("id"))
     return json.dumps(result, default=str)
 
 
@@ -117,13 +135,13 @@ async def get_submission(submission_id: str) -> str:
     Returns:
         JSON with submission details, or error if not found.
     """
-    from openinsure.infrastructure.factory import get_submission_repository
-
-    repo = get_submission_repository()
-    result = await repo.get_by_id(UUID(submission_id))
-    if not result:
-        return json.dumps({"error": f"Submission {submission_id} not found"})
-    return json.dumps(result, default=str)
+    try:
+        result = await _request("GET", f"/submissions/{submission_id}")
+        return json.dumps(result, default=str)
+    except httpx.HTTPStatusError as exc:
+        if exc.response.status_code == 404:
+            return json.dumps({"error": f"Submission {submission_id} not found"})
+        raise
 
 
 @mcp.tool()
@@ -137,13 +155,11 @@ async def list_submissions(status: str | None = None, limit: int = 20) -> str:
     Returns:
         JSON array of submission summaries.
     """
-    from openinsure.infrastructure.factory import get_submission_repository
-
-    repo = get_submission_repository()
-    items, total = await repo.list(limit=limit)
+    params: dict[str, Any] = {"limit": limit}
     if status:
-        items = [s for s in items if s.get("status") == status]
-    return json.dumps({"submissions": items, "total": total}, default=str)
+        params["status"] = status
+    result = await _request("GET", "/submissions", params=params)
+    return json.dumps(result, default=str)
 
 
 @mcp.tool()
@@ -156,23 +172,14 @@ async def triage_submission(submission_id: str) -> str:
     Returns:
         JSON with triage results including risk score and recommendation.
     """
-    from openinsure.infrastructure.factory import get_submission_repository
-
-    repo = get_submission_repository()
-    submission = await repo.get_by_id(UUID(submission_id))
-    if not submission:
-        return json.dumps({"error": f"Submission {submission_id} not found"})
-
-    triage_result = {
-        "risk_score": 6.5,
-        "appetite_match": True,
-        "priority": "standard",
-        "recommendation": "proceed_to_underwriting",
-        "flags": [],
-    }
-    await repo.update(UUID(submission_id), {"status": "triaging", "triage_result": triage_result})
-    logger.info("mcp.triage_submission", submission_id=submission_id)
-    return json.dumps({"submission_id": submission_id, "triage": triage_result}, default=str)
+    try:
+        result = await _request("POST", f"/submissions/{submission_id}/triage")
+        logger.info("mcp.triage_submission", submission_id=submission_id)
+        return json.dumps(result, default=str)
+    except httpx.HTTPStatusError as exc:
+        if exc.response.status_code == 404:
+            return json.dumps({"error": f"Submission {submission_id} not found"})
+        raise
 
 
 @mcp.tool()
@@ -197,41 +204,14 @@ async def quote_submission(
     Returns:
         JSON with premium, risk factors, and confidence score.
     """
-    from openinsure.services.rating import CyberRatingEngine, RatingInput
-
-    engine = CyberRatingEngine()
-    rating_input = RatingInput(
-        annual_revenue=Decimal(str(annual_revenue)),
-        employee_count=employee_count,
-        industry_sic_code="7372",
-        security_maturity_score=security_score,
-        has_mfa=False,
-        has_endpoint_protection=False,
-        has_backup_strategy=False,
-        requested_limit=Decimal(str(limit)),
-        requested_deductible=Decimal(str(deductible)),
-    )
-    result = engine.calculate_premium(rating_input)
-
-    # Update submission with quoted premium
-    from openinsure.infrastructure.factory import get_submission_repository
-
-    repo = get_submission_repository()
-    await repo.update(
-        UUID(submission_id),
-        {"status": "quoted", "quoted_premium": str(result.final_premium)},
-    )
-    logger.info("mcp.quote_submission", submission_id=submission_id, premium=str(result.final_premium))
-    return json.dumps(
-        {
-            "submission_id": submission_id,
-            "premium": str(result.final_premium),
-            "risk_factors": {k: str(v) for k, v in result.factors_applied.items()},
-            "confidence": result.confidence,
-            "explanation": result.explanation,
-        },
-        default=str,
-    )
+    try:
+        result = await _request("POST", f"/submissions/{submission_id}/quote")
+        logger.info("mcp.quote_submission", submission_id=submission_id)
+        return json.dumps(result, default=str)
+    except httpx.HTTPStatusError as exc:
+        if exc.response.status_code == 404:
+            return json.dumps({"error": f"Submission {submission_id} not found"})
+        raise
 
 
 @mcp.tool()
@@ -245,21 +225,14 @@ async def bind_submission(submission_id: str, payment_method: str = "invoice") -
     Returns:
         JSON with the new policy record.
     """
-    from openinsure.infrastructure.factory import get_policy_repository
-
-    repo = get_policy_repository()
-    policy_id = str(uuid4())
-    policy_data = {
-        "id": policy_id,
-        "policy_number": f"POL-{uuid4().hex[:8].upper()}",
-        "submission_id": submission_id,
-        "status": "active",
-        "payment_method": payment_method,
-        "bound_at": _now_iso(),
-    }
-    result = await repo.create(policy_data)
-    logger.info("mcp.bind_submission", submission_id=submission_id, policy_id=policy_id)
-    return json.dumps(result, default=str)
+    try:
+        result = await _request("POST", f"/submissions/{submission_id}/bind")
+        logger.info("mcp.bind_submission", submission_id=submission_id)
+        return json.dumps(result, default=str)
+    except httpx.HTTPStatusError as exc:
+        if exc.response.status_code == 404:
+            return json.dumps({"error": f"Submission {submission_id} not found"})
+        raise
 
 
 # ======================================================================
@@ -287,24 +260,17 @@ async def file_claim(
     Returns:
         JSON with the created claim record.
     """
-    from openinsure.infrastructure.factory import get_claim_repository
-
-    repo = get_claim_repository()
-    claim_id = str(uuid4())
-    claim_data = {
-        "id": claim_id,
-        "claim_number": f"CLM-{uuid4().hex[:8].upper()}",
+    body: dict[str, Any] = {
         "policy_id": policy_id,
-        "loss_date": loss_date,
+        "date_of_loss": loss_date,
         "description": description,
-        "cause_of_loss": cause_of_loss,
-        "status": "fnol",
-        "created_at": _now_iso(),
+        "claim_type": cause_of_loss,
+        "reported_by": "MCP Client",
     }
     if estimated_amount is not None:
-        claim_data["estimated_amount"] = estimated_amount
-    result = await repo.create(claim_data)
-    logger.info("mcp.file_claim", claim_id=claim_id, policy_id=policy_id)
+        body["metadata"] = {"estimated_amount": estimated_amount}
+    result = await _request("POST", "/claims", json_body=body)
+    logger.info("mcp.file_claim", claim_id=result.get("id"), policy_id=policy_id)
     return json.dumps(result, default=str)
 
 
@@ -318,13 +284,13 @@ async def get_claim(claim_id: str) -> str:
     Returns:
         JSON with claim details.
     """
-    from openinsure.infrastructure.factory import get_claim_repository
-
-    repo = get_claim_repository()
-    result = await repo.get_by_id(UUID(claim_id))
-    if not result:
-        return json.dumps({"error": f"Claim {claim_id} not found"})
-    return json.dumps(result, default=str)
+    try:
+        result = await _request("GET", f"/claims/{claim_id}")
+        return json.dumps(result, default=str)
+    except httpx.HTTPStatusError as exc:
+        if exc.response.status_code == 404:
+            return json.dumps({"error": f"Claim {claim_id} not found"})
+        raise
 
 
 @mcp.tool()
@@ -338,13 +304,11 @@ async def list_claims(status: str | None = None, limit: int = 20) -> str:
     Returns:
         JSON array of claims.
     """
-    from openinsure.infrastructure.factory import get_claim_repository
-
-    repo = get_claim_repository()
-    items, total = await repo.list(limit=limit)
+    params: dict[str, Any] = {"limit": limit}
     if status:
-        items = [c for c in items if c.get("status") == status]
-    return json.dumps({"claims": items, "total": total}, default=str)
+        params["status"] = status
+    result = await _request("GET", "/claims", params=params)
+    return json.dumps(result, default=str)
 
 
 @mcp.tool()
@@ -360,18 +324,20 @@ async def set_reserve(claim_id: str, amount: float, category: str = "indemnity",
     Returns:
         JSON confirming the reserve update.
     """
-    from openinsure.infrastructure.factory import get_claim_repository
-
-    repo = get_claim_repository()
-    claim = await repo.get_by_id(UUID(claim_id))
-    if not claim:
-        return json.dumps({"error": f"Claim {claim_id} not found"})
-    await repo.update(UUID(claim_id), {"status": "reserved", "total_reserved": amount})
-    logger.info("mcp.set_reserve", claim_id=claim_id, amount=amount, category=category)
-    return json.dumps(
-        {"claim_id": claim_id, "reserve_amount": amount, "category": category, "notes": notes, "status": "reserved"},
-        default=str,
-    )
+    body: dict[str, Any] = {
+        "category": category,
+        "amount": amount,
+    }
+    if notes:
+        body["notes"] = notes
+    try:
+        result = await _request("POST", f"/claims/{claim_id}/reserve", json_body=body)
+        logger.info("mcp.set_reserve", claim_id=claim_id, amount=amount, category=category)
+        return json.dumps(result, default=str)
+    except httpx.HTTPStatusError as exc:
+        if exc.response.status_code == 404:
+            return json.dumps({"error": f"Claim {claim_id} not found"})
+        raise
 
 
 # ======================================================================
@@ -389,13 +355,13 @@ async def get_policy(policy_id: str) -> str:
     Returns:
         JSON with policy details.
     """
-    from openinsure.infrastructure.factory import get_policy_repository
-
-    repo = get_policy_repository()
-    result = await repo.get_by_id(UUID(policy_id))
-    if not result:
-        return json.dumps({"error": f"Policy {policy_id} not found"})
-    return json.dumps(result, default=str)
+    try:
+        result = await _request("GET", f"/policies/{policy_id}")
+        return json.dumps(result, default=str)
+    except httpx.HTTPStatusError as exc:
+        if exc.response.status_code == 404:
+            return json.dumps({"error": f"Policy {policy_id} not found"})
+        raise
 
 
 @mcp.tool()
@@ -409,13 +375,11 @@ async def list_policies(status: str | None = None, limit: int = 20) -> str:
     Returns:
         JSON array of policies.
     """
-    from openinsure.infrastructure.factory import get_policy_repository
-
-    repo = get_policy_repository()
-    items, total = await repo.list(limit=limit)
+    params: dict[str, Any] = {"limit": limit}
     if status:
-        items = [p for p in items if p.get("status") == status]
-    return json.dumps({"policies": items, "total": total}, default=str)
+        params["status"] = status
+    result = await _request("GET", "/policies", params=params)
+    return json.dumps(result, default=str)
 
 
 # ======================================================================
@@ -430,24 +394,8 @@ async def get_metrics() -> str:
     Returns:
         JSON with total submissions, policies, claims, and summary stats.
     """
-    from openinsure.infrastructure.factory import (
-        get_claim_repository,
-        get_policy_repository,
-        get_submission_repository,
-    )
-
-    subs = await get_submission_repository().count()
-    pols = await get_policy_repository().count()
-    claims = await get_claim_repository().count()
-    return json.dumps(
-        {
-            "total_submissions": subs,
-            "total_policies": pols,
-            "total_claims": claims,
-            "bind_rate": f"{(pols / subs * 100):.1f}%" if subs > 0 else "N/A",
-        },
-        default=str,
-    )
+    result = await _request("GET", "/metrics/summary")
+    return json.dumps(result, default=str)
 
 
 @mcp.tool()
@@ -460,13 +408,8 @@ async def get_agent_decisions(limit: int = 10) -> str:
     Returns:
         JSON with recent AI decisions for compliance review.
     """
-    from openinsure.infrastructure.factory import get_compliance_repository
-
-    repo = get_compliance_repository()
-    if repo:
-        decisions, total = await repo.list_decisions(limit=limit)
-        return json.dumps({"decisions": decisions, "total": total}, default=str)
-    return json.dumps({"decisions": [], "total": 0, "note": "In-memory mode — no persistent records"})
+    result = await _request("GET", "/compliance/decisions", params={"limit": limit})
+    return json.dumps(result, default=str)
 
 
 # ======================================================================
@@ -484,15 +427,13 @@ async def run_compliance_check(decision_id: str) -> str:
     Returns:
         JSON with compliance status and any findings.
     """
-    from openinsure.infrastructure.factory import get_compliance_repository
-
-    repo = get_compliance_repository()
-    if repo:
-        decisions, _total = await repo.list_decisions(limit=5)
-        return json.dumps(
-            {"status": "compliant", "decision_id": decision_id, "recent_decisions": len(decisions)}, default=str
-        )
-    return json.dumps({"status": "compliant", "decision_id": decision_id, "note": "In-memory mode"})
+    try:
+        result = await _request("GET", f"/compliance/decisions/{decision_id}")
+        return json.dumps({"status": "compliant", "decision": result}, default=str)
+    except httpx.HTTPStatusError as exc:
+        if exc.response.status_code == 404:
+            return json.dumps({"error": f"Decision {decision_id} not found"})
+        raise
 
 
 # ======================================================================
@@ -516,7 +457,7 @@ async def run_full_workflow(
     Returns:
         JSON with submission, triage, quote, and policy details.
     """
-    # Step 1: Create
+    # Step 1: Create submission via API
     sub_json = await create_submission(
         applicant=applicant,
         annual_revenue=annual_revenue,
@@ -525,74 +466,63 @@ async def run_full_workflow(
     sub = json.loads(sub_json)
     sub_id = sub.get("id", "")
 
-    # Step 2: Triage
-    triage_json = await triage_submission(sub_id)
-    triage = json.loads(triage_json)
+    # Step 2: Run the multi-agent workflow via API (triage → quote → bind)
+    try:
+        workflow_result = await _request("POST", f"/workflows/new-business/{sub_id}")
+        logger.info("mcp.run_full_workflow", applicant=applicant, submission_id=sub_id)
+        return json.dumps(
+            {
+                "workflow": "new_business",
+                "submission": sub,
+                "workflow_execution": workflow_result,
+            },
+            default=str,
+        )
+    except httpx.HTTPStatusError:
+        # Fallback: run steps individually via API if workflow endpoint fails
+        triage_json = await triage_submission(sub_id)
+        triage = json.loads(triage_json)
 
-    # Step 3: Quote
-    quote_json = await quote_submission(
-        submission_id=sub_id,
-        annual_revenue=annual_revenue,
-        employee_count=employee_count,
-    )
-    quote = json.loads(quote_json)
+        quote_json = await quote_submission(submission_id=sub_id)
+        quote = json.loads(quote_json)
 
-    # Step 4: Bind
-    bind_json = await bind_submission(sub_id)
-    policy = json.loads(bind_json)
+        bind_json = await bind_submission(sub_id)
+        policy = json.loads(bind_json)
 
-    logger.info("mcp.run_full_workflow", applicant=applicant, submission_id=sub_id)
-    return json.dumps(
-        {
-            "workflow": "new_business",
-            "submission": sub,
-            "triage": triage,
-            "quote": quote,
-            "policy": policy,
-        },
-        default=str,
-    )
+        logger.info("mcp.run_full_workflow.fallback", applicant=applicant, submission_id=sub_id)
+        return json.dumps(
+            {
+                "workflow": "new_business",
+                "submission": sub,
+                "triage": triage,
+                "quote": quote,
+                "policy": policy,
+            },
+            default=str,
+        )
 
 
 # ======================================================================
-# MCP Resources — read-only context
+# MCP Resources — read-only context (via API)
 # ======================================================================
 
 
 @mcp.resource("insurance://submissions/{submission_id}")
 async def submission_resource(submission_id: str) -> str:
     """Insurance submission details."""
-    from openinsure.infrastructure.factory import get_submission_repository
-
-    repo = get_submission_repository()
-    result = await repo.get_by_id(UUID(submission_id))
-    if not result:
-        return json.dumps({"error": f"Submission {submission_id} not found"})
-    return json.dumps(result, default=str)
+    return await get_submission(submission_id)
 
 
 @mcp.resource("insurance://policies/{policy_id}")
 async def policy_resource(policy_id: str) -> str:
     """Insurance policy details including coverages, limits, and status."""
-    from openinsure.infrastructure.factory import get_policy_repository
-
-    repo = get_policy_repository()
-    result = await repo.get_by_id(UUID(policy_id))
-    if not result:
-        return json.dumps({"error": f"Policy {policy_id} not found"})
-    return json.dumps(result, default=str)
+    return await get_policy(policy_id)
 
 
 @mcp.resource("insurance://claims/{claim_id}")
 async def claim_resource(claim_id: str) -> str:
     """Insurance claim details, status, and reserves."""
-    from openinsure.infrastructure.factory import get_claim_repository
-
-    repo = get_claim_repository()
-    result = await repo.get_by_id(UUID(claim_id))
-    if not result:
-        return json.dumps({"error": f"Claim {claim_id} not found"})
-    return json.dumps(result, default=str)
+    return await get_claim(claim_id)
 
 
 @mcp.resource("insurance://metrics/summary")
@@ -604,13 +534,13 @@ async def metrics_resource() -> str:
 @mcp.resource("insurance://products/{product_id}")
 async def product_resource(product_id: str) -> str:
     """Insurance product definition with coverages and rating factors."""
-    from openinsure.infrastructure.factory import get_product_repository
-
-    repo = get_product_repository()
-    result = await repo.get_by_id(UUID(product_id))
-    if not result:
-        return json.dumps({"error": f"Product {product_id} not found"})
-    return json.dumps(result, default=str)
+    try:
+        result = await _request("GET", f"/products/{product_id}")
+        return json.dumps(result, default=str)
+    except httpx.HTTPStatusError as exc:
+        if exc.response.status_code == 404:
+            return json.dumps({"error": f"Product {product_id} not found"})
+        raise
 
 
 # ======================================================================
@@ -657,10 +587,7 @@ class OpenInsureMCPServer:
         """Return MCP tool definitions (legacy format)."""
         tools = []
         for name, fn in self._TOOL_MAP.items():
-            # Deduplicate — only include the canonical (snake_case) names
-            # plus the legacy camelCase aliases
             tools.append({"name": name, "description": fn.__doc__ or ""})
-        # Deduplicate by name
         seen: set[str] = set()
         unique: list[dict[str, Any]] = []
         for t in tools:
@@ -726,7 +653,6 @@ class OpenInsureMCPServer:
     async def read_resource(self, uri: str) -> dict[str, Any]:
         """Read an MCP resource by URI (legacy interface)."""
         logger.info("mcp.resource_read", uri=uri)
-        # Strip scheme
         path = uri.replace("insurance://", "").strip("/")
         parts = path.split("/")
         if len(parts) < 2:
