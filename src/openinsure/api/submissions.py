@@ -265,6 +265,7 @@ class QuoteResponse(BaseModel):
     coverages: list[dict[str, Any]]
     valid_until: str
     authority: dict[str, Any] | None = None
+    rating_breakdown: dict[str, Any] | None = None
 
 
 class BindResponse(BaseModel):
@@ -466,17 +467,13 @@ async def triage_submission(submission_id: str) -> TriageResult:
     foundry = get_foundry_client()
 
     if foundry.is_available:
+        from openinsure.agents.prompts import build_triage_prompt, get_triage_context
+
+        guidelines = await get_triage_context(record)
+        triage_prompt = build_triage_prompt(record, guidelines=guidelines or None)
         result = await foundry.invoke(
             "openinsure-submission",
-            "You are triaging a cyber insurance submission. Our appetite accepts:\n"
-            "- IT/Tech (SIC 7xxx), Financial (SIC 6xxx), Professional Services\n"
-            "- Revenue $500K to $50M\n"
-            "- Security maturity score 4+ out of 10\n"
-            "- Max 3 prior incidents\n\n"
-            "Respond ONLY with JSON:\n"
-            '{"appetite_match": "yes", "risk_score": 5, "priority": "medium", '
-            '"confidence": 0.9, "reasoning": "..."}\n\n'
-            f"Submission:\n{json.dumps(record, default=str)[:1000]}",
+            triage_prompt,
         )
         resp = result.get("response", {})
         if isinstance(resp, dict) and result.get("source") == "foundry":
@@ -501,11 +498,14 @@ async def triage_submission(submission_id: str) -> TriageResult:
                         "entity_id": submission_id,
                         "entity_type": "submission",
                         "confidence": float(resp.get("confidence", 0.85)),
-                        "input_summary": {"submission_id": submission_id},
+                        "input_summary": {
+                            "submission_id": submission_id,
+                            "prompt_length": len(triage_prompt),
+                        },
                         "output": resp,
                         "reasoning": str(resp.get("reasoning", "")),
                         "model_used": "gpt-5.1",
-                        "human_oversight": "recommended",
+                        "human_oversight": ("required" if float(resp.get("confidence", 0.85)) < 0.7 else "recommended"),
                         "created_at": _now(),
                     }
                 )
@@ -570,13 +570,29 @@ async def generate_quote(submission_id: str, user: CurrentUser = Depends(get_cur
     foundry = get_foundry_client()
 
     if foundry.is_available:
+        from openinsure.agents.prompts import (
+            _get_rating_breakdown,
+            build_underwriting_prompt,
+            get_triage_context,
+        )
+
+        triage_result = record.get("triage_result")
+        if isinstance(triage_result, str):
+            try:
+                triage_result = json.loads(triage_result)
+            except (json.JSONDecodeError, TypeError):
+                triage_result = None
+        guidelines = await get_triage_context(record)
+        rating_breakdown = _get_rating_breakdown(record)
+        underwriting_prompt = build_underwriting_prompt(
+            record,
+            triage_result=triage_result,
+            guidelines=guidelines or None,
+            rating_breakdown=rating_breakdown,
+        )
         result = await foundry.invoke(
             "openinsure-underwriting",
-            "Price this cyber insurance submission. Calculate premium.\n"
-            "Base: $1.50 per $1000 revenue. Adjust for industry, security, incidents.\n"
-            "Respond ONLY with JSON:\n"
-            '{"risk_score": 35, "recommended_premium": 12500, "confidence": 0.85}\n\n'
-            f"Submission:\n{json.dumps(record, default=str)[:800]}",
+            underwriting_prompt,
         )
         resp = result.get("response", {})
         if isinstance(resp, dict) and "recommended_premium" in resp:
@@ -603,11 +619,14 @@ async def generate_quote(submission_id: str, user: CurrentUser = Depends(get_cur
                         "entity_id": submission_id,
                         "entity_type": "submission",
                         "confidence": float(resp.get("confidence", 0.85)),
-                        "input_summary": {"submission_id": submission_id},
+                        "input_summary": {
+                            "submission_id": submission_id,
+                            "prompt_length": len(underwriting_prompt),
+                        },
                         "output": resp,
                         "reasoning": str(resp.get("reasoning", "")),
                         "model_used": "gpt-5.1",
-                        "human_oversight": "recommended",
+                        "human_oversight": ("required" if float(resp.get("confidence", 0.85)) < 0.7 else "recommended"),
                         "created_at": _now(),
                     }
                 )
@@ -678,6 +697,7 @@ async def generate_quote(submission_id: str, user: CurrentUser = Depends(get_cur
                 coverages=[{"name": "Cyber Liability", "limit": 1_000_000, "deductible": 10_000}],
                 valid_until=_now(),
                 authority={"decision": auth_result.decision, "reason": auth_result.reason},
+                rating_breakdown=rating_breakdown,
             )
 
     # Local fallback
@@ -809,14 +829,18 @@ async def bind_submission(submission_id: str, user: CurrentUser = Depends(get_cu
 
     foundry = get_foundry_client()
     if foundry.is_available:
+        from openinsure.agents.prompts import build_policy_review_prompt
+
+        uw_result = record.get("triage_result")
+        if isinstance(uw_result, str):
+            try:
+                uw_result = json.loads(uw_result)
+            except (json.JSONDecodeError, TypeError):
+                uw_result = None
+        policy_review_prompt = build_policy_review_prompt(record, underwriting_result=uw_result)
         policy_review = await foundry.invoke(
             "openinsure-policy",
-            "Review and approve this policy for issuance. Verify coverages, "
-            "terms, and pricing are appropriate.\n"
-            'Respond with JSON: {"recommendation": "issue", "terms_complete": true, '
-            '"notes": "...", "confidence": 0.9}\n\n'
-            f"Submission: {json.dumps(record, default=str)[:600]}\n"
-            f"Premium: {premium}\nPolicy: {policy_number}",
+            policy_review_prompt,
         )
         from openinsure.services.event_publisher import publish_domain_event as _pub
 
@@ -838,6 +862,7 @@ async def bind_submission(submission_id: str, user: CurrentUser = Depends(get_cu
 
             compliance_repo = get_compliance_repository()
             pr_resp = policy_review.get("response", {})
+            pr_confidence = float(pr_resp.get("confidence", 0.9)) if isinstance(pr_resp, dict) else 0.9
             await compliance_repo.store_decision(
                 {
                     "decision_id": str(uuid.uuid4()),
@@ -845,12 +870,16 @@ async def bind_submission(submission_id: str, user: CurrentUser = Depends(get_cu
                     "decision_type": "policy_review",
                     "entity_id": submission_id,
                     "entity_type": "submission",
-                    "confidence": float(pr_resp.get("confidence", 0.9)) if isinstance(pr_resp, dict) else 0.9,
-                    "input_summary": {"submission_id": submission_id, "policy_number": policy_number},
+                    "confidence": pr_confidence,
+                    "input_summary": {
+                        "submission_id": submission_id,
+                        "policy_number": policy_number,
+                        "prompt_length": len(policy_review_prompt),
+                    },
                     "output": pr_resp if isinstance(pr_resp, dict) else {"raw": str(pr_resp)[:500]},
                     "reasoning": str(pr_resp.get("notes", "")) if isinstance(pr_resp, dict) else "",
                     "model_used": "gpt-5.1",
-                    "human_oversight": "recommended",
+                    "human_oversight": "required" if pr_confidence < 0.7 else "recommended",
                     "created_at": _now(),
                 }
             )

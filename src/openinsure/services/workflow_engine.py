@@ -244,18 +244,10 @@ async def execute_workflow(
             )
             continue
 
-        # Build prompt from template
-        prompt = step.prompt_template
-        for key, val in execution.context.items():
-            prompt = prompt.replace(f"{{{key}}}", str(val)[:500])
-        # Also replace specific step results
-        for completed in execution.steps_completed:
-            result_key = f"{completed['name']}_result"
-            if result_key in prompt or f"{{{result_key}}}" in prompt:
-                prompt = prompt.replace(
-                    f"{{{result_key}}}",
-                    str(completed.get("response", ""))[:500],
-                )
+        # Build structured prompt via prompt builders (#67)
+        from openinsure.agents.prompts import build_prompt_for_step
+
+        prompt = await build_prompt_for_step(step.name, execution.context, entity_id, entity_type)
 
         # Execute via Foundry
         try:
@@ -307,11 +299,11 @@ async def execute_workflow(
                 break
 
             # Record decision for each completed step
-            oversight = "required" if needs_human_review else "recommended"
             try:
                 from openinsure.infrastructure.factory import get_compliance_repository
 
                 compliance_repo = get_compliance_repository()
+                reasoning = str(resp.get("reasoning", "")) if isinstance(resp, dict) else str(resp)[:500]
                 await compliance_repo.store_decision(
                     {
                         "decision_id": str(uuid4()),
@@ -320,12 +312,18 @@ async def execute_workflow(
                         "entity_id": entity_id,
                         "entity_type": entity_type,
                         "confidence": float(confidence),
-                        "input_summary": {"entity_id": entity_id, "prompt_preview": prompt[:300]},
+                        "input_summary": {
+                            "entity_id": entity_id,
+                            "prompt_length": len(prompt),
+                            "step": step.name,
+                        },
                         "output": resp if isinstance(resp, dict) else {"raw": str(resp)[:500]},
-                        "reasoning": str(resp.get("reasoning", "")) if isinstance(resp, dict) else "",
+                        "reasoning": reasoning,
                         "model_used": "gpt-5.1",
                         "execution_time_ms": result.get("execution_time_ms"),
-                        "human_oversight": oversight,
+                        "human_oversight": (
+                            "required" if confidence < 0.7 else "recommended" if needs_human_review else "none"
+                        ),
                         "created_at": datetime.now(UTC).isoformat(),
                     }
                 )
