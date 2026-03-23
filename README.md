@@ -406,12 +406,33 @@ Core insurance workflows are ~75% complete. See [Process Completeness Assessment
 
 OpenInsure ships a standards-compliant **MCP server** with 16 tools and 5 resources, enabling any MCP-compatible agent (Copilot CLI, Claude Desktop, custom orchestrators) to interact with the platform. See [MCP Integration](docs/architecture/mcp-integration.md) for details.
 
+**White-label ready:** each tenant points the MCP server at their own Azure backend — no code changes needed.
+
 ```bash
 # stdio transport (Copilot CLI, Claude Desktop)
 python -m openinsure.mcp
 
+# With explicit backend URL (for white-label / multi-tenant)
+python -m openinsure.mcp --api-url https://acme-insurance.azurecontainerapps.io
+
 # SSE transport (web clients)
 python -m openinsure.mcp --sse
+```
+
+**MCP client config** (`.copilot/mcp-config.json`, `claude_desktop_config.json`, etc.):
+
+```json
+{
+  "mcpServers": {
+    "openinsure": {
+      "command": "python",
+      "args": ["-m", "openinsure.mcp"],
+      "env": {
+        "OPENINSURE_API_BASE_URL": "https://your-backend.azurecontainerapps.io"
+      }
+    }
+  }
+}
 ```
 
 ## Tech Stack

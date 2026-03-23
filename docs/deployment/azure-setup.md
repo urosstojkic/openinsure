@@ -352,6 +352,89 @@ requests
 
 ---
 
+## 6. MCP Server Configuration (White-Label)
+
+After deploying the backend to Azure Container Apps, configure the **MCP server** so
+that MCP clients (Copilot CLI, Claude Desktop, custom orchestrators) connect to the
+tenant's backend.
+
+### Find your backend URL
+
+```bash
+# Get the backend's FQDN from Container Apps
+az containerapp show \
+  --name openinsure-backend \
+  --resource-group $RESOURCE_GROUP \
+  --query "properties.configuration.ingress.fqdn" -o tsv
+```
+
+This returns something like: `openinsure-backend.proudplant-9550e5a5.swedencentral.azurecontainerapps.io`
+
+### Option A: Environment variable (recommended)
+
+Set `OPENINSURE_API_BASE_URL` in the MCP client config. This is the standard way
+for white-label deployments — each tenant sets their own URL.
+
+**Copilot CLI** (`.copilot/mcp-config.json`):
+
+```json
+{
+  "mcpServers": {
+    "openinsure": {
+      "command": "python",
+      "args": ["-m", "openinsure.mcp"],
+      "env": {
+        "OPENINSURE_API_BASE_URL": "https://openinsure-backend.proudplant-9550e5a5.swedencentral.azurecontainerapps.io"
+      }
+    }
+  }
+}
+```
+
+**Claude Desktop** (`claude_desktop_config.json`):
+
+```json
+{
+  "mcpServers": {
+    "openinsure": {
+      "command": "python",
+      "args": ["-m", "openinsure.mcp"],
+      "env": {
+        "OPENINSURE_API_BASE_URL": "https://openinsure-backend.proudplant-9550e5a5.swedencentral.azurecontainerapps.io"
+      }
+    }
+  }
+}
+```
+
+### Option B: CLI argument
+
+```bash
+python -m openinsure.mcp --api-url https://openinsure-backend.proudplant-9550e5a5.swedencentral.azurecontainerapps.io
+```
+
+### Verify connectivity
+
+```bash
+# Health check against the backend
+curl https://openinsure-backend.proudplant-9550e5a5.swedencentral.azurecontainerapps.io/health
+```
+
+### Resolution order
+
+The MCP server resolves the backend URL in this order:
+
+| Priority | Source | Use case |
+|----------|--------|----------|
+| 1 | `OPENINSURE_API_BASE_URL` env var | White-label / production |
+| 2 | `--api-url` CLI argument | Ad-hoc / testing |
+| 3 | `http://localhost:${OPENINSURE_PORT}` | Local development only |
+
+> **⚠️** The localhost fallback emits a warning log. Always set `OPENINSURE_API_BASE_URL`
+> for production deployments.
+
+---
+
 ## Troubleshooting
 
 | Issue | Resolution |
@@ -361,3 +444,6 @@ requests
 | Cosmos DB 403 | Check RBAC role assignment for the managed identity |
 | Event Grid events not arriving | Verify Event Grid subscription exists and endpoint is active |
 | Container App not starting | Check `az containerapp logs show` for startup errors |
+| MCP: "using_localhost_fallback" warning | Set `OPENINSURE_API_BASE_URL` env var in your MCP client config |
+| MCP: connection refused | Verify the backend URL is correct and the Container App is running |
+| MCP: triage returns empty response | Check the Foundry agent is deployed and `OPENINSURE_OPENAI_ENDPOINT` is set on the backend |

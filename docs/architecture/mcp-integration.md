@@ -33,9 +33,8 @@ OpenInsure ships a **standards-compliant MCP server** at `src/openinsure/mcp/ser
 ### Known limitations
 
 1. **No auth on MCP transport** — the MCP server does not check API keys. In production, MCP access should be gated by transport-level auth (SSH tunnel, mTLS, or API gateway).
-2. **Resource handlers** read from repositories but return `{"error": ...}` if the entity doesn't exist (no stub fallback).
-3. **No Foundry agent delegation** — tools call domain repositories and the rating engine directly, bypassing Foundry AI agents. Phase 2 should wire tools through the agent orchestrator.
-4. **Single-process** — the MCP server runs as its own process, separate from the FastAPI server. No shared state unless both use the same `storage_mode=azure` backend.
+2. **Resource handlers** read from the backend API but return `{"error": ...}` if the entity doesn't exist (no stub fallback).
+3. **Single-process** — the MCP server runs as its own process, separate from the FastAPI server. Both connect to the same Azure backend.
 
 ---
 
@@ -101,19 +100,39 @@ Resources use the `insurance://` URI scheme and return JSON.
 
 ## D. Usage Guide
 
+### Backend URL Configuration (White-Label)
+
+The MCP server is **white-label ready**. Each tenant points the MCP server
+at their own Azure Container Apps backend — no code changes needed.
+
+**Resolution order:**
+
+| Priority | Method | Example |
+|----------|--------|---------|
+| 1 | `OPENINSURE_API_BASE_URL` env var | `https://acme-insurance.azurecontainerapps.io` |
+| 2 | `--api-url` CLI argument | `python -m openinsure.mcp --api-url https://...` |
+| 3 | Localhost fallback (dev only) | `http://localhost:8000` |
+
+> **⚠️ Production:** Always set `OPENINSURE_API_BASE_URL`. The localhost fallback
+> emits a warning log and is intended for local development only.
+
 ### Running the MCP server
 
 ```bash
 # stdio transport (for Copilot CLI, Claude Desktop)
 python -m openinsure.mcp
 
+# With explicit backend URL
+python -m openinsure.mcp --api-url https://acme-insurance.swedencentral.azurecontainerapps.io
+
 # SSE transport (for web clients)
 python -m openinsure.mcp --sse
 ```
 
-### Copilot CLI configuration
+### Copilot CLI configuration (white-label)
 
-Add to `.copilot/mcp-config.json`:
+Add to `.copilot/mcp-config.json`, setting `OPENINSURE_API_BASE_URL` to
+the tenant's Azure Container Apps backend URL:
 
 ```json
 {
@@ -122,15 +141,14 @@ Add to `.copilot/mcp-config.json`:
       "command": "python",
       "args": ["-m", "openinsure.mcp"],
       "env": {
-        "OPENINSURE_STORAGE_MODE": "memory",
-        "OPENINSURE_DEBUG": "true"
+        "OPENINSURE_API_BASE_URL": "https://acme-insurance.swedencentral.azurecontainerapps.io"
       }
     }
   }
 }
 ```
 
-### Claude Desktop configuration
+### Claude Desktop configuration (white-label)
 
 Add to `claude_desktop_config.json`:
 
@@ -141,7 +159,7 @@ Add to `claude_desktop_config.json`:
       "command": "python",
       "args": ["-m", "openinsure.mcp"],
       "env": {
-        "OPENINSURE_STORAGE_MODE": "memory"
+        "OPENINSURE_API_BASE_URL": "https://acme-insurance.swedencentral.azurecontainerapps.io"
       }
     }
   }

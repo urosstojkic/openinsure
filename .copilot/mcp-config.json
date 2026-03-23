@@ -4,8 +4,7 @@
       "command": "python",
       "args": ["-m", "openinsure.mcp"],
       "env": {
-        "OPENINSURE_STORAGE_MODE": "memory",
-        "OPENINSURE_DEBUG": "true"
+        "OPENINSURE_API_BASE_URL": "https://your-backend.swedencentral.azurecontainerapps.io"
       }
     },
     "EXAMPLE-github": {

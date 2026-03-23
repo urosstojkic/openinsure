@@ -5,11 +5,15 @@ that any MCP client (GitHub Copilot, Claude Desktop, custom orchestrators)
 can interact with the insurance platform through a standardised tool /
 resource interface.
 
-**Architecture:** All tools delegate to the FastAPI REST API
-(``http://localhost:{port}/api/v1/...``) which is backed by Microsoft
-Foundry agents, RBAC / authority checks, compliance audit trails, and
-the real Azure SQL / Cosmos DB persistence layer.  This ensures MCP
-consumers get the same AI-powered results as dashboard users.
+**White-label ready:** The backend API URL is configured via the
+``OPENINSURE_API_BASE_URL`` environment variable.  Each tenant sets this
+to their own Azure Container Apps deployment — no code changes needed.
+
+**Architecture:** All tools delegate to the tenant's FastAPI REST API
+which is backed by Microsoft Foundry agents, RBAC / authority checks,
+compliance audit trails, and the real Azure SQL / Cosmos DB persistence
+layer.  This ensures MCP consumers get the same AI-powered results as
+dashboard users.
 
 Tools (16):
     Submission: create_submission, get_submission, list_submissions,
@@ -53,13 +57,58 @@ mcp = FastMCP(
 )
 
 # ======================================================================
-# HTTP client — talks to the FastAPI backend
+# HTTP client — talks to the tenant's FastAPI backend
 # ======================================================================
 
-_BASE_URL = os.environ.get(
-    "OPENINSURE_API_BASE_URL",
-    f"http://localhost:{os.environ.get('OPENINSURE_PORT', '8000')}",
-)
+
+def _resolve_base_url() -> str:
+    """Resolve the backend API base URL.
+
+    Resolution order:
+      1. ``OPENINSURE_API_BASE_URL`` env var  (recommended for white-label)
+      2. ``--api-url <url>`` CLI argument      (set by __main__.py)
+      3. ``http://localhost:{OPENINSURE_PORT}`` (local dev fallback)
+
+    For white-label / multi-tenant deployments, each tenant sets
+    ``OPENINSURE_API_BASE_URL`` in their MCP client config:
+
+    .. code-block:: json
+
+        {
+          "mcpServers": {
+            "openinsure": {
+              "command": "python",
+              "args": ["-m", "openinsure.mcp"],
+              "env": {
+                "OPENINSURE_API_BASE_URL": "https://acme-insurance.azurecontainerapps.io"
+              }
+            }
+          }
+        }
+    """
+    url = os.environ.get("OPENINSURE_API_BASE_URL")
+    if url:
+        return url.rstrip("/")
+
+    # Local dev fallback
+    port = os.environ.get("OPENINSURE_PORT", "8000")
+    fallback = f"http://localhost:{port}"
+    logger.warning(
+        "mcp.config.using_localhost_fallback",
+        hint="Set OPENINSURE_API_BASE_URL for production / white-label deployments",
+        fallback_url=fallback,
+    )
+    return fallback
+
+
+_BASE_URL: str = _resolve_base_url()
+
+
+def configure_base_url(url: str) -> None:
+    """Override the backend URL at runtime (used by ``--api-url`` CLI arg)."""
+    global _BASE_URL  # noqa: PLW0603
+    _BASE_URL = url.rstrip("/")
+    logger.info("mcp.config.base_url_set", url=_BASE_URL)
 
 
 def _api_url(path: str) -> str:
