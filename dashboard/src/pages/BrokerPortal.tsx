@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import StatusBadge from '../components/StatusBadge';
 import { getBrokerSubmissions, getBrokerPolicies, getBrokerClaims } from '../api/workbench';
-import type { LOB, SubmissionStatus, ClaimStatus, BrokerSubmission } from '../types';
+import { createSubmission } from '../api/submissions';
+import { createClaim } from '../api/claims';
+import type { LOB, SubmissionStatus, ClaimStatus, BrokerSubmission, BrokerPolicy } from '../types';
 
 const lobLabels: Record<LOB, string> = {
   cyber: 'Cyber',
@@ -52,6 +54,26 @@ const formatDate = (dateStr: string) => {
 
 type PortalTab = 'submissions' | 'policies' | 'claims' | 'documents';
 
+const lifecycleSteps: { key: SubmissionStatus; label: string }[] = [
+  { key: 'received', label: 'Received' },
+  { key: 'triaging', label: 'Triaging' },
+  { key: 'underwriting', label: 'Underwriting' },
+  { key: 'quoted', label: 'Quoted' },
+  { key: 'bound', label: 'Bound' },
+];
+
+const industries = ['Technology', 'Healthcare', 'Financial Services', 'Retail', 'Manufacturing', 'Education', 'Energy', 'Media', 'Legal', 'Logistics'] as const;
+
+const lobOptions: { value: LOB; label: string }[] = [
+  { value: 'cyber', label: 'Cyber' },
+  { value: 'professional_liability', label: 'Professional Liability' },
+  { value: 'dnol', label: 'D&O' },
+  { value: 'epli', label: 'EPLI' },
+  { value: 'general_liability', label: 'General Liability' },
+];
+
+const lossTypes = ['Data Breach', 'Ransomware', 'Business Interruption', 'Third Party Liability', 'Social Engineering', 'Other'] as const;
+
 const BrokerPortal: React.FC = () => {
   const { data: submissions = [] } = useQuery({ queryKey: ['broker-submissions'], queryFn: getBrokerSubmissions });
   const { data: policies = [] } = useQuery({ queryKey: ['broker-policies'], queryFn: getBrokerPolicies });
@@ -59,6 +81,82 @@ const BrokerPortal: React.FC = () => {
 
   const [activeTab, setActiveTab] = useState<PortalTab>('submissions');
   const [selectedSubmission, setSelectedSubmission] = useState<BrokerSubmission | null>(null);
+  const [showNewSubmission, setShowNewSubmission] = useState(false);
+  const [showFNOL, setShowFNOL] = useState(false);
+  const [fnolSuccess, setFnolSuccess] = useState(false);
+  const [acceptedQuotes, setAcceptedQuotes] = useState<Set<string>>(new Set());
+
+  const [newSub, setNewSub] = useState({
+    applicant_name: '',
+    industry: 'Technology',
+    annual_revenue: '',
+    employee_count: '',
+    lob: 'cyber' as LOB,
+    mfa_enabled: false,
+    encryption_at_rest: false,
+    incident_response_plan: false,
+  });
+
+  const [fnolForm, setFnolForm] = useState({
+    policy_id: '',
+    loss_type: 'Data Breach',
+    loss_date: '',
+    description: '',
+  });
+
+  const queryClient = useQueryClient();
+
+  const submitMutation = useMutation({
+    mutationFn: createSubmission,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['broker-submissions'] });
+      setShowNewSubmission(false);
+      setNewSub({
+        applicant_name: '', industry: 'Technology', annual_revenue: '', employee_count: '',
+        lob: 'cyber', mfa_enabled: false, encryption_at_rest: false, incident_response_plan: false,
+      });
+    },
+  });
+
+  const claimMutation = useMutation({
+    mutationFn: createClaim,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['broker-claims'] });
+      setShowFNOL(false);
+      setFnolSuccess(true);
+      setTimeout(() => setFnolSuccess(false), 4000);
+      setFnolForm({ policy_id: '', loss_type: 'Data Breach', loss_date: '', description: '' });
+    },
+  });
+
+  const handleSubmitNew = () => {
+    submitMutation.mutate({
+      applicant_name: newSub.applicant_name,
+      industry: newSub.industry,
+      annual_revenue: Number(newSub.annual_revenue),
+      employee_count: Number(newSub.employee_count),
+      lob: newSub.lob,
+      mfa_enabled: newSub.mfa_enabled,
+      encryption_at_rest: newSub.encryption_at_rest,
+      incident_response_plan: newSub.incident_response_plan,
+    });
+  };
+
+  const handleSubmitFNOL = () => {
+    const policy = policies.find((p: BrokerPolicy) => p.id === fnolForm.policy_id);
+    claimMutation.mutate({
+      policy_id: fnolForm.policy_id,
+      policy_number: policy?.policy_number ?? '',
+      loss_type: fnolForm.loss_type,
+      loss_date: fnolForm.loss_date,
+      description: fnolForm.description,
+    });
+  };
+
+  const effectiveStatus: SubmissionStatus = selectedSubmission
+    ? (acceptedQuotes.has(selectedSubmission.id) ? 'bound' : selectedSubmission.status)
+    : 'received';
+  const currentStepIndex = lifecycleSteps.findIndex(s => s.key === effectiveStatus);
 
   return (
     <div className="-m-6 flex h-[calc(100vh-3.5rem)] flex-col">
@@ -95,7 +193,7 @@ const BrokerPortal: React.FC = () => {
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="text-xl font-bold text-slate-900">My Submissions</h2>
-              <button className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm shadow-indigo-500/20 hover:bg-indigo-700 active:scale-[0.98] transition-all">
+              <button onClick={() => setShowNewSubmission(true)} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm shadow-indigo-500/20 hover:bg-indigo-700 active:scale-[0.98] transition-all">
                 New Submission
               </button>
             </div>
@@ -128,7 +226,7 @@ const BrokerPortal: React.FC = () => {
           </div>
         )}
 
-        {/* ── Submission Detail (simplified — no internal data) ── */}
+        {/* ── Submission Detail ── */}
         {activeTab === 'submissions' && selectedSubmission && (
           <div className="space-y-4">
             <button onClick={() => setSelectedSubmission(null)} className="text-sm text-indigo-600 hover:text-indigo-800">← Back to submissions</button>
@@ -136,10 +234,76 @@ const BrokerPortal: React.FC = () => {
               <h2 className="text-xl font-bold text-slate-900">{selectedSubmission.applicant_name}</h2>
               <p className="text-sm text-slate-500">{formatSubId(selectedSubmission)} · {lobLabels[selectedSubmission.lob] ?? selectedSubmission.lob}</p>
               <div className="mt-2">
-                <StatusBadge label={selectedSubmission.status} variant={statusVariant[selectedSubmission.status]} />
+                <StatusBadge label={effectiveStatus} variant={statusVariant[effectiveStatus]} />
               </div>
 
-              <h3 className="mt-6 mb-3 text-sm font-semibold text-slate-800">Status Timeline</h3>
+              {/* ── Lifecycle Progress Bar ── */}
+              <div className="mt-6 mb-6">
+                <div className="flex items-center justify-between">
+                  {lifecycleSteps.map((step, i) => (
+                    <React.Fragment key={step.key}>
+                      <div className="flex flex-col items-center gap-1">
+                        <div className={`flex h-8 w-8 items-center justify-center rounded-full border-2 transition-colors ${
+                          currentStepIndex >= 0 && i < currentStepIndex
+                            ? 'border-indigo-600 bg-indigo-600 text-white'
+                            : currentStepIndex >= 0 && i === currentStepIndex
+                            ? 'border-indigo-600 bg-indigo-50 text-indigo-600'
+                            : 'border-slate-300 bg-white text-slate-400'
+                        }`}>
+                          {currentStepIndex >= 0 && i < currentStepIndex ? (
+                            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                            </svg>
+                          ) : (
+                            <span className={`h-2.5 w-2.5 rounded-full ${
+                              currentStepIndex >= 0 && i === currentStepIndex ? 'bg-indigo-600' : 'bg-slate-300'
+                            }`} />
+                          )}
+                        </div>
+                        <span className={`text-xs font-medium ${
+                          currentStepIndex >= 0 && i <= currentStepIndex ? 'text-indigo-600' : 'text-slate-400'
+                        }`}>{step.label}</span>
+                      </div>
+                      {i < lifecycleSteps.length - 1 && (
+                        <div className={`mx-1 h-0.5 flex-1 ${
+                          currentStepIndex >= 0 && i < currentStepIndex ? 'bg-indigo-600' : 'bg-slate-200'
+                        }`} />
+                      )}
+                    </React.Fragment>
+                  ))}
+                </div>
+              </div>
+
+              {/* ── Quote Card ── */}
+              {effectiveStatus === 'quoted' && (
+                <div className="mb-6 rounded-xl border border-green-200 bg-green-50 p-5">
+                  <h3 className="text-sm font-semibold text-green-800">Quote Available</h3>
+                  <p className="mt-2 text-2xl font-bold text-green-900">
+                    {money(12500)}
+                    <span className="ml-1 text-sm font-normal text-green-700">annual premium</span>
+                  </p>
+                  <div className="mt-4 flex gap-3">
+                    <button
+                      onClick={() => setAcceptedQuotes(prev => new Set(prev).add(selectedSubmission.id))}
+                      className="rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-green-700 active:scale-[0.98] transition-all"
+                    >
+                      Accept Quote
+                    </button>
+                    <button className="rounded-lg border border-green-300 bg-white px-4 py-2 text-sm font-medium text-green-700 hover:bg-green-50 active:scale-[0.98] transition-all">
+                      Download Quote PDF
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {effectiveStatus === 'bound' && acceptedQuotes.has(selectedSubmission.id) && (
+                <div className="mb-6 rounded-xl border border-purple-200 bg-purple-50 p-5">
+                  <h3 className="text-sm font-semibold text-purple-800">Quote Accepted</h3>
+                  <p className="mt-1 text-sm text-purple-700">This submission has been bound. A policy document will be issued shortly.</p>
+                </div>
+              )}
+
+              <h3 className="mt-2 mb-3 text-sm font-semibold text-slate-800">Timeline Events</h3>
               {selectedSubmission.status_timeline.length > 0 ? (
                 <div className="space-y-3">
                   {selectedSubmission.status_timeline.map((ev, i) => (
@@ -160,7 +324,7 @@ const BrokerPortal: React.FC = () => {
                 </div>
               ) : (
                 <div className="rounded-xl border border-slate-200/60 p-4 text-center text-sm text-slate-400 shadow-[var(--shadow-xs)]">
-                  <p>Current status: <StatusBadge label={selectedSubmission.status} variant={statusVariant[selectedSubmission.status]} /></p>
+                  <p>Current status: <StatusBadge label={effectiveStatus} variant={statusVariant[effectiveStatus]} /></p>
                   <p className="mt-1 text-xs">Submitted {formatDate(selectedSubmission.submitted_date)}</p>
                 </div>
               )}
@@ -214,10 +378,15 @@ const BrokerPortal: React.FC = () => {
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="text-xl font-bold text-slate-900">My Claims</h2>
-              <button className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm shadow-indigo-500/20 hover:bg-indigo-700 active:scale-[0.98] transition-all">
+              <button onClick={() => setShowFNOL(true)} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm shadow-indigo-500/20 hover:bg-indigo-700 active:scale-[0.98] transition-all">
                 File FNOL
               </button>
             </div>
+            {fnolSuccess && (
+              <div className="rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-800">
+                ✓ FNOL submitted successfully. Your claim is being processed.
+              </div>
+            )}
             <div className="overflow-x-auto rounded-xl border border-slate-200/60 bg-white shadow-[var(--shadow-xs)]">
               <table className="min-w-full divide-y divide-slate-200">
                 <thead className="sticky top-0 z-10 bg-slate-50/80 backdrop-blur-sm">
@@ -254,6 +423,111 @@ const BrokerPortal: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* ── New Submission Modal ── */}
+      {showNewSubmission && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="w-full max-w-lg rounded-xl bg-white p-6 shadow-xl">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-bold text-slate-900">New Submission</h2>
+              <button onClick={() => setShowNewSubmission(false)} className="text-slate-400 hover:text-slate-600 text-xl leading-none">&times;</button>
+            </div>
+            <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-1">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Applicant Name</label>
+                <input type="text" value={newSub.applicant_name} onChange={e => setNewSub(s => ({ ...s, applicant_name: e.target.value }))} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500" placeholder="Company name" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Industry</label>
+                <select value={newSub.industry} onChange={e => setNewSub(s => ({ ...s, industry: e.target.value }))} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500">
+                  {industries.map(ind => <option key={ind} value={ind}>{ind}</option>)}
+                </select>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Annual Revenue ($)</label>
+                  <input type="number" value={newSub.annual_revenue} onChange={e => setNewSub(s => ({ ...s, annual_revenue: e.target.value }))} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500" placeholder="1000000" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Employee Count</label>
+                  <input type="number" value={newSub.employee_count} onChange={e => setNewSub(s => ({ ...s, employee_count: e.target.value }))} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500" placeholder="50" />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Line of Business</label>
+                <select value={newSub.lob} onChange={e => setNewSub(s => ({ ...s, lob: e.target.value as LOB }))} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500">
+                  {lobOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
+              </div>
+              <fieldset>
+                <legend className="text-sm font-medium text-slate-700 mb-2">Security Details</legend>
+                <div className="space-y-2">
+                  <label className="flex items-center gap-2 text-sm text-slate-700">
+                    <input type="checkbox" checked={newSub.mfa_enabled} onChange={e => setNewSub(s => ({ ...s, mfa_enabled: e.target.checked }))} className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" />
+                    MFA Enabled
+                  </label>
+                  <label className="flex items-center gap-2 text-sm text-slate-700">
+                    <input type="checkbox" checked={newSub.encryption_at_rest} onChange={e => setNewSub(s => ({ ...s, encryption_at_rest: e.target.checked }))} className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" />
+                    Encryption at Rest
+                  </label>
+                  <label className="flex items-center gap-2 text-sm text-slate-700">
+                    <input type="checkbox" checked={newSub.incident_response_plan} onChange={e => setNewSub(s => ({ ...s, incident_response_plan: e.target.checked }))} className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" />
+                    Incident Response Plan
+                  </label>
+                </div>
+              </fieldset>
+            </div>
+            <div className="mt-5 flex justify-end gap-3">
+              <button onClick={() => setShowNewSubmission(false)} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">Cancel</button>
+              <button onClick={handleSubmitNew} disabled={submitMutation.isPending || !newSub.applicant_name} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm shadow-indigo-500/20 hover:bg-indigo-700 disabled:opacity-50 active:scale-[0.98] transition-all">
+                {submitMutation.isPending ? 'Submitting\u2026' : 'Submit'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── FNOL Modal ── */}
+      {showFNOL && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="w-full max-w-lg rounded-xl bg-white p-6 shadow-xl">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-bold text-slate-900">File FNOL — First Notice of Loss</h2>
+              <button onClick={() => setShowFNOL(false)} className="text-slate-400 hover:text-slate-600 text-xl leading-none">&times;</button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Policy</label>
+                <select value={fnolForm.policy_id} onChange={e => setFnolForm(s => ({ ...s, policy_id: e.target.value }))} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500">
+                  <option value="">Select a policy…</option>
+                  {policies.map((p: BrokerPolicy) => <option key={p.id} value={p.id}>{p.policy_number} — {p.insured_name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Loss Type</label>
+                <select value={fnolForm.loss_type} onChange={e => setFnolForm(s => ({ ...s, loss_type: e.target.value }))} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500">
+                  {lossTypes.map(lt => <option key={lt} value={lt}>{lt}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Date of Loss</label>
+                <input type="date" value={fnolForm.loss_date} onChange={e => setFnolForm(s => ({ ...s, loss_date: e.target.value }))} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Description</label>
+                <textarea value={fnolForm.description} onChange={e => setFnolForm(s => ({ ...s, description: e.target.value }))} rows={4} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500" placeholder="Describe the loss event…" />
+              </div>
+            </div>
+            <div className="mt-5 flex justify-end gap-3">
+              <button onClick={() => setShowFNOL(false)} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">Cancel</button>
+              <button onClick={handleSubmitFNOL} disabled={claimMutation.isPending || !fnolForm.policy_id || !fnolForm.loss_date} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm shadow-indigo-500/20 hover:bg-indigo-700 disabled:opacity-50 active:scale-[0.98] transition-all">
+                {claimMutation.isPending ? 'Submitting\u2026' : 'Submit FNOL'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };
