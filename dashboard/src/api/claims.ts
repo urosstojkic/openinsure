@@ -65,3 +65,35 @@ export async function processClaim(id: string): Promise<{ message: string; [key:
   const { data } = await client.post(`/claims/${id}/process`);
   return data;
 }
+
+// --- Subrogation (#79) ---
+
+export interface SubrogationRecord {
+  id: string;
+  claim_id: string;
+  status: string;
+  liable_party: string;
+  basis: string;
+  estimated_recovery: number;
+  actual_recovery: number;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export async function getSubrogation(claimId: string): Promise<SubrogationRecord[]> {
+  try {
+    const { data } = await client.get<SubrogationRecord[]>(`/claims/${claimId}/subrogation`);
+    return data;
+  } catch {
+    return [];
+  }
+}
+
+export async function createSubrogation(
+  claimId: string,
+  payload: { liable_party: string; basis: string; estimated_recovery: number; notes?: string },
+): Promise<SubrogationRecord> {
+  const { data } = await client.post<SubrogationRecord>(`/claims/${claimId}/subrogation`, payload);
+  return data;
+}

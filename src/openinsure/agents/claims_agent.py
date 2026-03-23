@@ -73,6 +73,12 @@ class ClaimsAgent(InsuranceAgent):
                 required_inputs=["claim_id"],
                 produces=["investigation_support"],
             ),
+            AgentCapability(
+                name="subrogation_analysis",
+                description="Analyze claim for third-party liability and subrogation potential",
+                required_inputs=["claim_data"],
+                produces=["subrogation_score", "subrogation_basis"],
+            ),
         ]
 
     # ------------------------------------------------------------------

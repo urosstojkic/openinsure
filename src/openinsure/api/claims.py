@@ -122,6 +122,7 @@ class ClaimResponse(BaseModel):
     total_incurred: float = 0.0
     assigned_to: str = ""
     fraud_score: float | None = None
+    subrogation_score: float | None = None
     lob: str = "cyber"
     reported_date: str = ""
     metadata: dict[str, Any] = Field(default_factory=dict)
@@ -273,6 +274,95 @@ async def get_claims_queue(limit: int = Query(20, ge=1, le=100)) -> dict[str, An
 
     queue.sort(key=lambda x: ({"urgent": 0, "high": 1, "medium": 2, "low": 3}.get(x.get("priority", "medium"), 2),))
     return {"items": queue[:limit], "total": len(queue)}
+
+
+# ---------------------------------------------------------------------------
+# Subrogation models
+# ---------------------------------------------------------------------------
+
+
+class SubrogationStatus(StrEnum):
+    IDENTIFIED = "identified"
+    REFERRED = "referred"
+    DEMAND_SENT = "demand_sent"
+    NEGOTIATING = "negotiating"
+    SETTLED = "settled"
+    COLLECTED = "collected"
+    CLOSED = "closed"
+
+
+class SubrogationCreate(BaseModel):
+    liable_party: str
+    basis: str = ""
+    estimated_recovery: float = 0
+    notes: str | None = None
+
+
+class SubrogationResponse(BaseModel):
+    id: str
+    claim_id: str
+    status: str = "identified"
+    liable_party: str
+    basis: str = ""
+    estimated_recovery: float = 0
+    actual_recovery: float = 0
+    notes: str | None = None
+    created_at: str = ""
+    updated_at: str = ""
+
+
+class SubrogationQueueItem(BaseModel):
+    id: str
+    claim_id: str
+    claim_number: str = ""
+    status: str = "identified"
+    liable_party: str
+    estimated_recovery: float = 0
+    actual_recovery: float = 0
+    days_open: int = 0
+    created_at: str = ""
+
+
+# In-memory subrogation store
+_subrogation_records: list[dict[str, Any]] = []
+
+
+@router.get("/subrogation/queue", response_model=list[SubrogationQueueItem])
+async def subrogation_queue(
+    status: str | None = Query(None),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=200),
+) -> list[SubrogationQueueItem]:
+    """List all active subrogation pursuits."""
+    from datetime import date
+
+    records = _subrogation_records
+    if status:
+        records = [r for r in records if r.get("status") == status]
+    items = []
+    for r in records:
+        claim = await _repo.get_by_id(r["claim_id"])
+        days_open = 0
+        if r.get("created_at"):
+            try:
+                created = datetime.fromisoformat(r["created_at"]).date()
+                days_open = (date.today() - created).days
+            except (ValueError, TypeError):
+                pass
+        items.append(
+            SubrogationQueueItem(
+                id=r["id"],
+                claim_id=r["claim_id"],
+                claim_number=claim.get("claim_number", "") if claim else "",
+                status=r.get("status", "identified"),
+                liable_party=r.get("liable_party", ""),
+                estimated_recovery=r.get("estimated_recovery", 0),
+                actual_recovery=r.get("actual_recovery", 0),
+                days_open=days_open,
+                created_at=r.get("created_at", ""),
+            )
+        )
+    return items[skip : skip + limit]
 
 
 @router.post("", response_model=ClaimResponse, status_code=201)
@@ -868,3 +958,41 @@ async def process_claim(claim_id: str, user: CurrentUser = Depends(get_current_u
         },
     }
     return json.loads(json.dumps(result, default=str))
+
+
+# ---------------------------------------------------------------------------
+# Per-claim subrogation endpoints
+# ---------------------------------------------------------------------------
+
+
+@router.post("/{claim_id}/subrogation", response_model=SubrogationResponse, status_code=201)
+async def create_subrogation(claim_id: str, body: SubrogationCreate) -> SubrogationResponse:
+    """Create a subrogation referral for a claim."""
+    claim = await _repo.get_by_id(claim_id)
+    if claim is None:
+        raise HTTPException(status_code=404, detail=f"Claim {claim_id} not found")
+    now = datetime.now(UTC).isoformat()
+    record = {
+        "id": str(uuid.uuid4()),
+        "claim_id": claim_id,
+        "status": "identified",
+        "liable_party": body.liable_party,
+        "basis": body.basis,
+        "estimated_recovery": body.estimated_recovery,
+        "actual_recovery": 0,
+        "notes": body.notes,
+        "created_at": now,
+        "updated_at": now,
+    }
+    _subrogation_records.append(record)
+    return SubrogationResponse(**record)
+
+
+@router.get("/{claim_id}/subrogation", response_model=list[SubrogationResponse])
+async def get_subrogation(claim_id: str) -> list[SubrogationResponse]:
+    """Get subrogation records for a claim."""
+    claim = await _repo.get_by_id(claim_id)
+    if claim is None:
+        raise HTTPException(status_code=404, detail=f"Claim {claim_id} not found")
+    records = [r for r in _subrogation_records if r["claim_id"] == claim_id]
+    return [SubrogationResponse(**r) for r in records]

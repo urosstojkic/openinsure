@@ -1,10 +1,10 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, DollarSign, XCircle } from 'lucide-react';
 import StatusBadge from '../components/StatusBadge';
 import { StatCardSkeleton } from '../components/Skeleton';
-import { getClaim } from '../api/claims';
+import { getClaim, getSubrogation, createSubrogation } from '../api/claims';
 import type { ClaimStatus, ClaimSeverity } from '../types';
 
 const statusVariant: Record<ClaimStatus, 'blue' | 'yellow' | 'orange' | 'green' | 'red' | 'purple' | 'cyan'> = {
@@ -41,6 +41,141 @@ const fmtDate = (d: string) => {
   if (isNaN(date.getTime())) return d;
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 };
+
+function SubrogationSection({ claimId }: { claimId: string }) {
+  const queryClient = useQueryClient();
+  const [showForm, setShowForm] = useState(false);
+  const [liableParty, setLiableParty] = useState('');
+  const [basis, setBasis] = useState('');
+  const [estimatedRecovery, setEstimatedRecovery] = useState('');
+
+  const { data: records = [], isLoading } = useQuery({
+    queryKey: ['subrogation', claimId],
+    queryFn: () => getSubrogation(claimId),
+  });
+
+  const createMutation = useMutation({
+    mutationFn: () =>
+      createSubrogation(claimId, {
+        liable_party: liableParty,
+        basis,
+        estimated_recovery: parseFloat(estimatedRecovery) || 0,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['subrogation', claimId] });
+      setShowForm(false);
+      setLiableParty('');
+      setBasis('');
+      setEstimatedRecovery('');
+    },
+  });
+
+  const statusColors: Record<string, string> = {
+    identified: 'bg-blue-100 text-blue-700',
+    referred: 'bg-indigo-100 text-indigo-700',
+    demand_sent: 'bg-yellow-100 text-yellow-700',
+    negotiating: 'bg-orange-100 text-orange-700',
+    settled: 'bg-emerald-100 text-emerald-700',
+    collected: 'bg-green-100 text-green-700',
+    closed: 'bg-slate-100 text-slate-600',
+  };
+
+  return (
+    <div className="rounded-2xl border border-slate-200/60 bg-white p-6 shadow-[var(--shadow-card)]">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-lg font-bold text-slate-900">Subrogation</h2>
+        <button
+          onClick={() => setShowForm(!showForm)}
+          className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-700 transition-colors"
+        >
+          {showForm ? 'Cancel' : '+ New Referral'}
+        </button>
+      </div>
+
+      {showForm && (
+        <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50/50 p-4 space-y-3">
+          <div>
+            <label className="text-xs font-medium text-slate-500">Liable Party</label>
+            <input
+              value={liableParty}
+              onChange={(e) => setLiableParty(e.target.value)}
+              className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+              placeholder="e.g., Vendor Inc."
+            />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-slate-500">Basis</label>
+            <input
+              value={basis}
+              onChange={(e) => setBasis(e.target.value)}
+              className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+              placeholder="e.g., Vendor negligence caused data breach"
+            />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-slate-500">Estimated Recovery ($)</label>
+            <input
+              value={estimatedRecovery}
+              onChange={(e) => setEstimatedRecovery(e.target.value)}
+              className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+              type="number"
+              placeholder="50000"
+            />
+          </div>
+          <button
+            onClick={() => createMutation.mutate()}
+            disabled={!liableParty || createMutation.isPending}
+            className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+          >
+            {createMutation.isPending ? 'Creating...' : 'Create Referral'}
+          </button>
+        </div>
+      )}
+
+      {isLoading ? (
+        <div className="animate-pulse space-y-2">
+          {[1, 2].map((i) => (
+            <div key={i} className="h-16 rounded-lg bg-slate-100" />
+          ))}
+        </div>
+      ) : records.length === 0 ? (
+        <p className="text-sm text-slate-400">No subrogation records for this claim.</p>
+      ) : (
+        <div className="space-y-3">
+          {records.map((r) => (
+            <div key={r.id} className="rounded-xl border border-slate-200/60 bg-slate-50/30 p-4">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm font-semibold text-slate-800">{r.liable_party}</span>
+                <span
+                  className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                    statusColors[r.status] || 'bg-slate-100 text-slate-600'
+                  }`}
+                >
+                  {r.status.replace(/_/g, ' ')}
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 mb-2">{r.basis}</p>
+              <div className="flex gap-4 text-xs">
+                <span className="text-slate-400">
+                  Est. Recovery:{' '}
+                  <span className="font-semibold text-slate-700">
+                    {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(r.estimated_recovery)}
+                  </span>
+                </span>
+                <span className="text-slate-400">
+                  Actual:{' '}
+                  <span className="font-semibold text-emerald-600">
+                    {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(r.actual_recovery)}
+                  </span>
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 const ClaimDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -159,6 +294,9 @@ const ClaimDetail: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Subrogation (#79) */}
+      <SubrogationSection claimId={claim.id} />
     </div>
   );
 };
