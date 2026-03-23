@@ -26,6 +26,8 @@ import ActuarialWorkbench from './pages/ActuarialWorkbench';
 import Escalations from './pages/Escalations';
 import FinanceDashboard from './pages/FinanceDashboard';
 import KnowledgePage from './pages/KnowledgePage';
+import UWAnalytics from './pages/UWAnalytics';
+import ClaimsAnalytics from './pages/ClaimsAnalytics';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -93,6 +95,8 @@ function AppRoutes() {
         <Route path="workbench/actuarial" element={<RouteGuard path="workbench/actuarial"><ActuarialWorkbench /></RouteGuard>} />
         <Route path="executive" element={<RouteGuard path="executive"><ExecutiveDashboard /></RouteGuard>} />
         <Route path="knowledge" element={<RouteGuard path="knowledge"><KnowledgePage /></RouteGuard>} />
+        <Route path="analytics/underwriting" element={<RouteGuard path="analytics/underwriting"><UWAnalytics /></RouteGuard>} />
+        <Route path="analytics/claims" element={<RouteGuard path="analytics/claims"><ClaimsAnalytics /></RouteGuard>} />
         <Route path="portal/broker" element={<RouteGuard path="portal/broker"><BrokerPortal /></RouteGuard>} />
         <Route path="*" element={<DefaultRedirect />} />
       </Route>

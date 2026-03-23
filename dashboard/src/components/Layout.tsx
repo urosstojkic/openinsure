@@ -45,6 +45,8 @@ const navItems = [
   { to: '/finance',     label: 'Finance',          icon: Banknote },
   { to: '/compliance',  label: 'Compliance',       icon: ShieldCheck },
   { to: '/knowledge',   label: 'Knowledge',        icon: BookOpen },
+  { to: '/analytics/underwriting', label: 'UW Analytics',     icon: BarChart3 },
+  { to: '/analytics/claims',       label: 'Claims Analytics', icon: BarChart3 },
 ];
 
 const workbenchItems = [
@@ -84,6 +86,8 @@ function getBreadcrumb(pathname: string): string {
     '/workbench/reinsurance': 'Reinsurance Dashboard',
     '/workbench/actuarial': 'Actuarial Workbench',
     '/knowledge': 'Knowledge Base',
+    '/analytics/underwriting': 'UW Performance Analytics',
+    '/analytics/claims': 'Claims Analytics',
     '/executive': 'Executive Dashboard',
     '/portal/broker': 'Broker Portal',
   };

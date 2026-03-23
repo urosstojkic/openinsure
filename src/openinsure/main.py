@@ -27,6 +27,7 @@ openapi_tags = [
     {"name": "renewals", "description": "Policy renewal identification, terms generation, processing"},
     {"name": "mga-oversight", "description": "MGA authority tracking, bordereaux, compliance (carrier-only)"},
     {"name": "finance", "description": "Financial summary, cash flow, commissions, reconciliation"},
+    {"name": "analytics", "description": "Underwriting, claims, and AI-powered portfolio analytics"},
     {"name": "demo", "description": "Live demo endpoints for showcasing the full platform"},
     {"name": "health", "description": "Health and readiness probes"},
 ]
