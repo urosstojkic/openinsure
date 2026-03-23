@@ -46,16 +46,14 @@ Full routing rules including issue triage and @copilot assignment: `.squad/routi
 5. **Record decisions** in `.squad/decisions.md` if architectural choices were made
 6. **Label GitHub issues** with `squad:{agent}` for tracking
 
-### Quality Gates (ALL must pass before merge/deploy)
+### Quality Gates (MANDATORY before deploy)
 
-```bash
-ruff check src/ tests/ --fix && ruff format src/ tests/   # Lint + format
-mypy src/openinsure/                                       # Type check (strict)
-bandit -r src/openinsure/ -ll                              # Security scan
-pytest tests/ -x -q --ignore=tests/e2e/test_full_lifecycle.py  # 448+ tests
-cd dashboard && npm run build                              # Dashboard build
-python scripts/smoke_test.py {backend_url}                 # 15 checks must pass
-```
+1. **CI must be green** — Check `gh run list --limit 1` before deploying. If CI is red, fix it first. Never deploy with failing CI. No exceptions.
+2. `python -m ruff check src/ tests/ --fix && python -m ruff format src/ tests/`
+3. `python -m pytest tests/ -x -q --ignore=tests/e2e/test_full_lifecycle.py`
+4. `cd dashboard && npm run build`
+5. `python scripts/smoke_test.py {backend_url}` — 15 checks must pass
+6. Deploy: `pwsh scripts/deploy.ps1` (auto-versioning, sequential builds)
 
 Quality compromises MUST be documented as GitHub issues with `quality` label.
 
