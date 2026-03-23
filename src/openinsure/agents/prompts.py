@@ -229,6 +229,8 @@ def build_claims_assessment_prompt(
         '  "severity_tier": "simple" | "moderate" | "complex" | "catastrophe",\n'
         '  "initial_reserve": <number>,\n'
         '  "fraud_score": <0.0-1.0>,\n'
+        '  "subrogation_score": <0.0-1.0>,\n'
+        '  "subrogation_basis": "explanation if third-party liability detected",\n'
         '  "coverage_analysis": "explanation of coverage determination",\n'
         '  "confidence": <0.0-1.0>,\n'
         '  "reasoning": "detailed assessment rationale"\n'
@@ -289,6 +291,153 @@ def build_orchestration_prompt(
 
 
 # ---------------------------------------------------------------------------
+# Billing prompt builder (#77)
+# ---------------------------------------------------------------------------
+
+
+def build_billing_prompt(policy: dict[str, Any], payment_history: list[dict[str, Any]]) -> str:
+    """Build a structured prompt for the billing agent.
+
+    Predicts payment default probability, suggests optimal installment
+    schedule, and recommends collection strategy for overdue accounts.
+    """
+    prompt = (
+        "SYSTEM: You are the OpenInsure Billing Agent for commercial insurance.\n"
+        "You analyze payment patterns, predict default risk, and recommend\n"
+        "collection strategies for insurance billing accounts.\n\n"
+    )
+
+    prompt += f"POLICY DATA:\n{json.dumps(policy, default=str, indent=2)}\n\n"
+    prompt += f"PAYMENT HISTORY:\n{json.dumps(payment_history, default=str, indent=2)}\n\n"
+
+    prompt += (
+        "ANALYSIS GUIDELINES:\n"
+        "- Assess payment default probability based on: payment timeliness, industry risk,\n"
+        "  company size, claims frequency, and coverage complexity\n"
+        "- Recommend installment schedule: full_pay (low risk), quarterly (medium), monthly (high)\n"
+        "- For overdue accounts, recommend escalation path:\n"
+        "  reminder (1-15 days) → demand (16-30 days) → cancellation notice (31-45 days) → cancel (45+ days)\n"
+        "- Flag accounts needing proactive outreach\n\n"
+    )
+
+    prompt += (
+        "RESPOND WITH JSON ONLY:\n"
+        "{\n"
+        '  "default_probability": <0.0-1.0>,\n'
+        '  "risk_tier": "low" | "medium" | "high" | "critical",\n'
+        '  "recommended_billing_plan": "full_pay" | "quarterly" | "monthly",\n'
+        '  "collection_priority": "routine" | "watch" | "action_required" | "escalate",\n'
+        '  "recommended_action": "none" | "reminder" | "demand_letter" |'
+        ' "cancellation_notice" | "cancel_for_nonpayment",\n'
+        '  "grace_period_days": <integer>,\n'
+        '  "reasoning": "detailed explanation of risk assessment and recommended actions",\n'
+        '  "confidence": <0.0-1.0>\n'
+        "}\n"
+    )
+    return prompt
+
+
+# ---------------------------------------------------------------------------
+# Document prompt builder (#78)
+# ---------------------------------------------------------------------------
+
+
+def build_document_prompt(policy: dict[str, Any], submission: dict[str, Any], doc_type: str) -> str:
+    """Build a structured prompt for the document generation agent.
+
+    Generates policy document content — executive summary, coverage
+    descriptions, conditions, and exclusions — in natural insurance language.
+    """
+    prompt = (
+        "SYSTEM: You are the OpenInsure Document Generation Agent.\n"
+        "You produce professional insurance document content including declarations pages,\n"
+        "certificates of insurance, and coverage schedules.\n"
+        "Write in clear, formal insurance language suitable for policyholders and brokers.\n\n"
+    )
+
+    prompt += f"DOCUMENT TYPE: {doc_type}\n\n"
+    prompt += f"POLICY DATA:\n{json.dumps(policy, default=str, indent=2)}\n\n"
+    prompt += f"SUBMISSION DATA:\n{json.dumps(submission, default=str, indent=2)}\n\n"
+
+    if doc_type == "declaration":
+        prompt += (
+            "Generate a declarations page including:\n"
+            "- Named insured and policy number\n"
+            "- Policy period (effective and expiration dates)\n"
+            "- Coverage summary with limits and deductibles\n"
+            "- Premium breakdown by coverage\n"
+            "- Agent/broker information\n"
+            "- Special conditions or endorsements\n\n"
+        )
+    elif doc_type == "certificate":
+        prompt += (
+            "Generate a Certificate of Insurance including:\n"
+            "- Certificate holder information\n"
+            "- Insured name and address\n"
+            "- Policy number and period\n"
+            "- Coverage types and limits\n"
+            "- Description of operations\n"
+            "- Cancellation notice provisions\n\n"
+        )
+    elif doc_type == "schedule":
+        prompt += (
+            "Generate a Coverage Schedule including:\n"
+            "- Detailed coverage listing with codes\n"
+            "- Per-coverage limits, sublimits, and deductibles\n"
+            "- Aggregate limits\n"
+            "- Coverage territory and jurisdiction\n"
+            "- Retroactive dates where applicable\n"
+            "- Coverage conditions and waiting periods\n\n"
+        )
+
+    prompt += (
+        "RESPOND WITH JSON ONLY:\n"
+        "{\n"
+        '  "title": "Document title",\n'
+        '  "document_type": "declaration" | "certificate" | "schedule",\n'
+        '  "sections": [\n'
+        "    {\n"
+        '      "heading": "Section title",\n'
+        '      "content": "Section body text in professional insurance language",\n'
+        '      "data": {<optional structured data for tables/grids>}\n'
+        "    }\n"
+        "  ],\n"
+        '  "effective_date": "YYYY-MM-DD",\n'
+        '  "summary": "One-paragraph executive summary",\n'
+        '  "confidence": <0.0-1.0>\n'
+        "}\n"
+    )
+    return prompt
+
+
+def build_enrichment_prompt(
+    submission: dict[str, Any],
+    enrichment_data: dict[str, Any] | None = None,
+) -> str:
+    """Build a prompt for the Enrichment Agent to synthesize risk signals."""
+    prompt = (
+        "SYSTEM: You are the OpenInsure Enrichment Agent.\n"
+        "You synthesize external data enrichment results into actionable risk signals\n"
+        "for the underwriting team. Assess data quality and highlight key findings.\n\n"
+    )
+    prompt += f"SUBMISSION DATA:\n{json.dumps(submission, default=str, indent=2)}\n\n"
+    if enrichment_data:
+        prompt += f"ENRICHMENT DATA:\n{json.dumps(enrichment_data, default=str, indent=2)}\n\n"
+    prompt += (
+        "RESPOND WITH JSON ONLY:\n"
+        "{\n"
+        '  "risk_signals": [{"signal": "...", "severity": "high|medium|low", "source": "provider_name"}],\n'
+        '  "composite_risk_score": <0.0-1.0>,\n'
+        '  "data_quality": "high" | "medium" | "low",\n'
+        '  "recommendations": ["..."],\n'
+        '  "confidence": <0.0-1.0>,\n'
+        '  "summary": "natural language risk context for underwriter"\n'
+        "}\n"
+    )
+    return prompt
+
+
+# ---------------------------------------------------------------------------
 # Unified dispatcher used by workflow_engine
 # ---------------------------------------------------------------------------
 
@@ -309,6 +458,10 @@ async def build_prompt_for_step(
 
     if step_name == "orchestration":
         return build_orchestration_prompt(entity_data)
+
+    if step_name == "enrichment":
+        enrichment_data = context.get("enrichment_result")
+        return build_enrichment_prompt(entity_data, enrichment_data=enrichment_data)
 
     if step_name == "intake":
         guidelines = await get_triage_context(entity_data)

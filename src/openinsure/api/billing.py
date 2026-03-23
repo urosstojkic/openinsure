@@ -1,22 +1,26 @@
 """Billing API endpoints for OpenInsure.
 
-Manages billing accounts, invoices, and payment recording.
+Manages billing accounts, invoices, payment recording, and ledger history.
 Uses in-memory storage as a placeholder until the database adapter is wired in.
+
+Addresses #77: Billing Pipeline API & AI-Native Billing Agent.
 """
 
 from __future__ import annotations
 
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 from typing import Any
 
+import structlog
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from openinsure.infrastructure.factory import get_billing_repository
 
 router = APIRouter()
+logger = structlog.get_logger()
 
 # ---------------------------------------------------------------------------
 # Repository — resolved by factory (in-memory or SQL depending on config)
@@ -148,6 +152,27 @@ class InvoiceList(BaseModel):
     limit: int
 
 
+class LedgerEntry(BaseModel):
+    """A single ledger transaction."""
+
+    entry_id: str
+    account_id: str
+    entry_type: str  # invoice_issued | payment_received | invoice_voided
+    amount: float
+    balance_after: float
+    description: str
+    reference_id: str
+    created_at: str
+
+
+class LedgerResponse(BaseModel):
+    """Transaction history for a billing account."""
+
+    account_id: str
+    entries: list[LedgerEntry]
+    total: int
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -162,6 +187,120 @@ async def _get_account(account_id: str) -> dict[str, Any]:
 
 def _now() -> str:
     return datetime.now(UTC).isoformat()
+
+
+def _build_ledger(record: dict[str, Any]) -> list[dict[str, Any]]:
+    """Build a chronological ledger from invoices and payments."""
+    entries: list[dict[str, Any]] = []
+    for inv in record.get("invoices", []):
+        entries.append(
+            {
+                "entry_type": "invoice_issued",
+                "amount": inv["amount"],
+                "description": inv.get("description", "Invoice"),
+                "reference_id": inv["invoice_id"],
+                "created_at": inv["created_at"],
+            }
+        )
+    for pmt in record.get("payments", []):
+        entries.append(
+            {
+                "entry_type": "payment_received",
+                "amount": -pmt["amount"],
+                "description": f"Payment via {pmt.get('method', 'unknown')}",
+                "reference_id": pmt["payment_id"],
+                "created_at": pmt["created_at"],
+            }
+        )
+    entries.sort(key=lambda e: e["created_at"])
+
+    # Compute running balance
+    balance = 0.0
+    for entry in entries:
+        balance += entry["amount"]
+        entry["balance_after"] = round(balance, 2)
+    return entries
+
+
+# ---------------------------------------------------------------------------
+# Auto-invoice on bind helper (called from submissions.py)
+# ---------------------------------------------------------------------------
+
+
+async def create_billing_account_on_bind(
+    *,
+    policy_id: str,
+    policyholder_name: str,
+    total_premium: float,
+    installments: int = 1,
+    effective_date: str | None = None,
+) -> dict[str, Any]:
+    """Create a billing account and first invoice(s) when a policy is bound.
+
+    If ``installments > 1``, generates an installment schedule with evenly
+    spaced due dates across the policy term (default: quarterly).
+    """
+    aid = str(uuid.uuid4())
+    now = _now()
+    record: dict[str, Any] = {
+        "id": aid,
+        "policy_id": policy_id,
+        "policyholder_name": policyholder_name,
+        "status": BillingAccountStatus.ACTIVE,
+        "total_premium": total_premium,
+        "total_paid": 0.0,
+        "balance_due": total_premium,
+        "installments": installments,
+        "currency": "USD",
+        "billing_email": None,
+        "payments": [],
+        "invoices": [],
+        "metadata": {"auto_created": True, "source": "policy_bind"},
+        "created_at": now,
+        "updated_at": now,
+    }
+
+    # Generate invoice schedule
+    base_date = datetime.fromisoformat(effective_date) if effective_date else datetime.now(UTC)
+    installment_amount = round(total_premium / installments, 2)
+    remainder = round(total_premium - installment_amount * installments, 2)
+
+    for i in range(installments):
+        due = base_date + timedelta(days=30 * i)
+        amount = installment_amount + (remainder if i == 0 else 0.0)
+        inv_id = str(uuid.uuid4())
+        inv_num = i + 1
+        record["invoices"].append(
+            {
+                "invoice_id": inv_id,
+                "account_id": aid,
+                "amount": round(amount, 2),
+                "status": InvoiceStatus.ISSUED,
+                "due_date": due.strftime("%Y-%m-%d"),
+                "description": f"Premium installment {inv_num}/{installments}"
+                if installments > 1
+                else "Full premium payment",
+                "line_items": [
+                    {
+                        "item": "Premium",
+                        "amount": round(amount, 2),
+                        "installment": inv_num,
+                        "total_installments": installments,
+                    }
+                ],
+                "created_at": now,
+            }
+        )
+
+    await _repo.create(record)
+    logger.info(
+        "billing.account_created_on_bind",
+        account_id=aid,
+        policy_id=policy_id,
+        installments=installments,
+        total_premium=total_premium,
+    )
+    return record
 
 
 # ---------------------------------------------------------------------------
@@ -201,7 +340,7 @@ async def get_billing_account(account_id: str) -> BillingAccountResponse:
     return BillingAccountResponse(**await _get_account(account_id))
 
 
-@router.post("/accounts/{account_id}/payment", response_model=PaymentResponse, status_code=201)
+@router.post("/accounts/{account_id}/payments", response_model=PaymentResponse, status_code=201)
 async def record_payment(account_id: str, body: PaymentRequest) -> PaymentResponse:
     """Record a payment against a billing account."""
     record = await _get_account(account_id)
@@ -227,6 +366,15 @@ async def record_payment(account_id: str, body: PaymentRequest) -> PaymentRespon
         record["status"] = BillingAccountStatus.PAID_IN_FULL
     record["updated_at"] = now
 
+    # Auto-mark matching invoices as paid
+    remaining = body.amount
+    for inv in record.get("invoices", []):
+        if inv["status"] == InvoiceStatus.ISSUED and remaining >= inv["amount"]:
+            inv["status"] = InvoiceStatus.PAID
+            remaining -= inv["amount"]
+            if remaining <= 0:
+                break
+
     return PaymentResponse(
         account_id=account_id,
         payment_id=pid,
@@ -237,6 +385,13 @@ async def record_payment(account_id: str, body: PaymentRequest) -> PaymentRespon
         status=record["status"],
         created_at=now,
     )
+
+
+# Keep the old path working as an alias
+@router.post("/accounts/{account_id}/payment", response_model=PaymentResponse, status_code=201, include_in_schema=False)
+async def record_payment_alias(account_id: str, body: PaymentRequest) -> PaymentResponse:
+    """Alias for backward compatibility."""
+    return await record_payment(account_id, body)
 
 
 @router.get("/accounts/{account_id}/invoices", response_model=InvoiceList)
@@ -287,3 +442,19 @@ async def generate_invoice(account_id: str, body: InvoiceCreate) -> InvoiceRespo
     record["updated_at"] = now
 
     return InvoiceResponse(**invoice_entry)
+
+
+@router.get("/accounts/{account_id}/ledger", response_model=LedgerResponse)
+async def get_ledger(account_id: str) -> LedgerResponse:
+    """Return chronological transaction history for a billing account."""
+    record = await _get_account(account_id)
+    raw_entries = _build_ledger(record)
+    entries = [
+        LedgerEntry(
+            entry_id=str(uuid.uuid4()),
+            account_id=account_id,
+            **e,
+        )
+        for e in raw_entries
+    ]
+    return LedgerResponse(account_id=account_id, entries=entries, total=len(entries))

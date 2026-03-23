@@ -769,7 +769,7 @@ async def generate_quote(submission_id: str, user: CurrentUser = Depends(get_cur
 @router.post("/{submission_id}/bind", response_model=BindResponse)
 async def bind_submission(submission_id: str, user: CurrentUser = Depends(get_current_user)) -> BindResponse:
     """Bind the submission, creating a real policy and billing account."""
-    from openinsure.infrastructure.factory import get_billing_repository, get_policy_repository
+    from openinsure.infrastructure.factory import get_policy_repository
     from openinsure.services.event_publisher import publish_domain_event
 
     record = await _get_submission(submission_id)
@@ -893,18 +893,19 @@ async def bind_submission(submission_id: str, user: CurrentUser = Depends(get_cu
 
     await policy_repo.create(policy_data)
 
-    # Create billing account
-    billing_repo = get_billing_repository()
-    billing_data = {
-        "id": str(uuid.uuid4()),
-        "policy_id": policy_id,
-        "billing_plan": "direct_bill",
-        "total_premium": premium,
-        "balance_due": premium,
-        "created_at": now,
-        "updated_at": now,
-    }
-    await billing_repo.create(billing_data)
+    # Create billing account with auto-invoicing (#77)
+    from openinsure.api.billing import create_billing_account_on_bind
+
+    billing_plan = record.get("billing_plan", "full_pay")
+    installments = {"full_pay": 1, "quarterly": 4, "monthly": 12}.get(billing_plan, 1)
+    applicant = record.get("applicant_name", "") or record.get("insured_name", "Unknown")
+    await create_billing_account_on_bind(
+        policy_id=policy_id,
+        policyholder_name=applicant,
+        total_premium=premium,
+        installments=installments,
+        effective_date=policy_data.get("effective_date"),
+    )
 
     # Auto-calculate cessions based on active treaties
     try:
@@ -1166,6 +1167,38 @@ async def add_subjectivity(submission_id: str, body: SubjectivityRequest) -> Sub
         due_date=body.due_date,
         created_at=now,
     )
+
+
+@router.post("/{submission_id}/enrich")
+async def enrich_submission_endpoint(submission_id: str) -> dict[str, Any]:
+    """Enrich a submission with external data sources."""
+    record = await _repo.get_by_id(submission_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail=f"Submission {submission_id} not found")
+
+    from openinsure.services.enrichment import enrich_submission
+
+    enrichment_result = await enrich_submission(record)
+
+    # Store enrichment data on the submission metadata
+    metadata = record.get("metadata", record.get("extracted_data", {}))
+    if isinstance(metadata, str):
+        import json as _json
+
+        try:
+            metadata = _json.loads(metadata)
+        except (ValueError, TypeError):
+            metadata = {}
+    metadata["enrichment_data"] = enrichment_result.get("enrichment_data", {})
+    metadata["risk_summary"] = enrichment_result.get("risk_summary", {})
+
+    await _repo.update(submission_id, {"metadata": metadata, "extracted_data": metadata})
+
+    return {
+        "submission_id": submission_id,
+        "status": "enriched",
+        **enrichment_result,
+    }
 
 
 @router.post("/{submission_id}/process")

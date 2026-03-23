@@ -49,6 +49,24 @@ AGENTS = [
         "Multi-agent workflow orchestrator. New Business: Submission->Underwriting->Policy->Billing->Compliance. "
         "Claims: FNOL->Reserve/Triage->Compliance. Collects DecisionRecords, checks escalations (confidence<0.7).",
     ),
+    (
+        "openinsure-billing",
+        "AI-native billing agent for commercial insurance. Auto-generates invoices on policy bind, "
+        "predicts payment defaults based on customer profile (industry, size, payment history, claims frequency), "
+        "assigns payment risk scores, recommends collection actions (reminder→demand→cancellation notice→cancel), "
+        "and suggests optimal installment schedules (full_pay/quarterly/monthly). "
+        "Responds with: default_probability, risk_tier, recommended_billing_plan, collection_priority, "
+        "recommended_action, grace_period_days, reasoning, confidence.",
+    ),
+    (
+        "openinsure-document",
+        "AI-native document generation agent for insurance policies. Generates declarations pages, "
+        "certificates of insurance, and coverage schedules from structured policy and submission data. "
+        "Produces professional insurance language for executive summaries, coverage descriptions, "
+        "conditions, and exclusions. Handles conditional sections (e.g., ransomware sublimit rider). "
+        "Responds with: title, document_type, sections (heading, content, data), effective_date, "
+        "summary, confidence.",
+    ),
 ]
 
 
