@@ -7,13 +7,13 @@ Uses in-memory storage as a placeholder until the database adapter is wired in.
 from __future__ import annotations
 
 import json
-import logging
 import uuid
 from datetime import UTC, datetime
 from decimal import Decimal
 from enum import StrEnum
 from typing import Any
 
+import structlog
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from pydantic import BaseModel, Field
 
@@ -22,7 +22,7 @@ from openinsure.rbac.auth import CurrentUser, get_current_user
 from openinsure.rbac.authority import AuthorityDecision, AuthorityEngine
 
 router = APIRouter()
-_logger = logging.getLogger(__name__)
+_logger = structlog.get_logger(__name__)
 
 # ---------------------------------------------------------------------------
 # Repository — resolved by factory (in-memory or SQL depending on config)
