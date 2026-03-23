@@ -7,16 +7,16 @@ Falls back to the static dictionaries when Cosmos DB is not configured.
 
 from __future__ import annotations
 
-import logging
 from typing import Any
 
+import structlog
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from openinsure.infrastructure.factory import get_knowledge_store
 
 router = APIRouter()
-_log = logging.getLogger(__name__)
+_log = structlog.get_logger(__name__)
 
 
 # ---------------------------------------------------------------------------
