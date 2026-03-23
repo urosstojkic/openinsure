@@ -39,9 +39,7 @@ import httpx
 BASE_URL = "http://localhost:8000"
 API_KEY = "dev-key-change-me"
 
-DEFAULT_REMOTE_URL = (
-    "https://openinsure-backend.proudplant-9550e5a5.swedencentral.azurecontainerapps.io"
-)
+DEFAULT_REMOTE_URL = "https://openinsure-backend.proudplant-9550e5a5.swedencentral.azurecontainerapps.io"
 
 
 def _set_base_url(url: str) -> None:
@@ -56,14 +54,8 @@ def _set_base_url(url: str) -> None:
 
 def _make_jwt(payload: dict[str, Any]) -> str:
     """Craft a JWT token with the given payload (no signature verification)."""
-    header = (
-        base64.urlsafe_b64encode(json.dumps({"alg": "none", "typ": "JWT"}).encode())
-        .rstrip(b"=")
-        .decode()
-    )
-    body = (
-        base64.urlsafe_b64encode(json.dumps(payload).encode()).rstrip(b"=").decode()
-    )
+    header = base64.urlsafe_b64encode(json.dumps({"alg": "none", "typ": "JWT"}).encode()).rstrip(b"=").decode()
+    body = base64.urlsafe_b64encode(json.dumps(payload).encode()).rstrip(b"=").decode()
     return f"{header}.{body}.nosig"
 
 
@@ -196,14 +188,10 @@ def run(base_url: str, *, start_backend: bool = True) -> None:
                 "8000",
             ],
             env=env,
-            cwd=os.path.dirname(
-                os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            ),
+            cwd=os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
             stdout=subprocess.DEVNULL,
             stderr=subprocess.PIPE,
-            creationflags=(
-                subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0
-            ),
+            creationflags=(subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0),
         )
         if not _wait_for_backend(30):
             stderr_out = ""
@@ -572,10 +560,7 @@ def _run_workflow() -> None:
                 if resp.status_code == 201:
                     esc_data = resp.json()
                     escalation_count += 1
-                    print(
-                        f"  ✓ Created [{rec['action']}] ${rec['amount']:,.0f}"
-                        f" → {esc_data.get('id', '?')}"
-                    )
+                    print(f"  ✓ Created [{rec['action']}] ${rec['amount']:,.0f} → {esc_data.get('id', '?')}")
                 else:
                     print(f"  ✗ POST /escalations → {resp.status_code}: {resp.text[:200]}")
 
@@ -623,9 +608,7 @@ def _run_workflow() -> None:
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description="Trigger escalations in the OpenInsure backend"
-    )
+    parser = argparse.ArgumentParser(description="Trigger escalations in the OpenInsure backend")
     parser.add_argument(
         "--url",
         default=DEFAULT_REMOTE_URL,

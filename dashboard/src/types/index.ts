@@ -19,13 +19,16 @@ export type ClaimSeverity = 'low' | 'medium' | 'high' | 'critical';
 
 export type DecisionType =
   | 'triage'
+  | 'underwriting'
   | 'risk_assessment'
   | 'quote'
   | 'bind'
   | 'decline'
+  | 'claims'
   | 'claim_assessment'
   | 'fraud_detection'
-  | 'coverage_analysis';
+  | 'coverage_analysis'
+  | 'policy_review';
 
 export type AgentName =
   | 'triage_agent'
