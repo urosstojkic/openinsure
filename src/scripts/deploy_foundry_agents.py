@@ -23,17 +23,15 @@ from __future__ import annotations
 
 import os
 
-from azure.ai.projects import AIProjectClient
-from azure.ai.projects.models import (
+from azure.ai.agents.models import (
     AISearchIndexResource,
     AzureAISearchToolDefinition,
     AzureAISearchToolResource,
     FunctionDefinition,
     FunctionToolDefinition,
-    MemoryToolDefinition,
-    PromptAgentDefinition,
-    WebSearchPreviewToolDefinition,
 )
+from azure.ai.projects import AIProjectClient
+from azure.ai.projects.models import PromptAgentDefinition
 from azure.identity import DefaultAzureCredential
 
 # ---------------------------------------------------------------------------
@@ -200,7 +198,7 @@ def _build_tools(agent_name: str, search_connection_id: str | None) -> list:
         tools.append(
             AzureAISearchToolDefinition(
                 azure_ai_search=AzureAISearchToolResource(
-                    indexes=[
+                    index_list=[
                         AISearchIndexResource(
                             index_connection_id=search_connection_id,
                             index_name="openinsure-knowledge",
@@ -212,10 +210,10 @@ def _build_tools(agent_name: str, search_connection_id: str | None) -> list:
 
     # Agent-specific tools
     if agent_name == "openinsure-enrichment":
-        tools.append(WebSearchPreviewToolDefinition())
+        pass  # tools.append(WebSearchPreviewToolDefinition()) — not available in current SDK
 
     if agent_name in ("openinsure-underwriting", "openinsure-claims"):
-        tools.append(MemoryToolDefinition())
+        pass  # tools.append(MemoryToolDefinition()) — not available in current SDK
 
     if agent_name == "openinsure-underwriting":
         tools.append(FunctionToolDefinition(function=get_rating_factors))
@@ -233,10 +231,6 @@ def _describe_tools(tools: list) -> str:
     for t in tools:
         if isinstance(t, AzureAISearchToolDefinition):
             labels.append("ai_search")
-        elif isinstance(t, WebSearchPreviewToolDefinition):
-            labels.append("web_search")
-        elif isinstance(t, MemoryToolDefinition):
-            labels.append("memory")
         elif isinstance(t, FunctionToolDefinition):
             func_names.append(t.function.name)
         else:
@@ -293,3 +287,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+

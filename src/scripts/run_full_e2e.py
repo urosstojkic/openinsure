@@ -112,8 +112,11 @@ def step3_process() -> tuple[str, str | None]:
     outcome = body.get("outcome", "?")
     pid = body.get("policy_id")
     premium = body.get("premium", 0)
-    print(f"  Outcome: {outcome}  policy_id={pid}  premium=${premium:,.2f}" if premium else
-          f"  Outcome: {outcome}  policy_id={pid}")
+    print(
+        f"  Outcome: {outcome}  policy_id={pid}  premium=${premium:,.2f}"
+        if premium
+        else f"  Outcome: {outcome}  policy_id={pid}"
+    )
 
     # steps is a dict keyed by step name (orchestration, intake, underwriting, …)
     steps = body.get("steps", {})
@@ -199,16 +202,8 @@ def step5_claims(pid: str) -> None:
 
     # The reserve endpoint calls Foundry; extract source from response or
     # nested authority, and look for AI recommendation fields.
-    source = (
-        body.get("source")
-        or body.get("ai_source")
-        or (body.get("authority", {}) or {}).get("source")
-    )
-    ai_rec = (
-        body.get("ai_recommended_reserve")
-        or body.get("ai_recommendation")
-        or body.get("ai_recommended")
-    )
+    source = body.get("source") or body.get("ai_source") or (body.get("authority", {}) or {}).get("source")
+    ai_rec = body.get("ai_recommended_reserve") or body.get("ai_recommendation") or body.get("ai_recommended")
     # Even when the response doesn't surface a top-level "source", the
     # endpoint invokes Foundry internally — track it.
     tracking_resp = {"source": source or "foundry"}
@@ -239,10 +234,7 @@ def step6_analytics() -> None:
     print(f"  Insights: {len(insights)}")
     for ins in insights[:3]:
         if isinstance(ins, dict):
-            print(
-                f"    → [{ins.get('category', '?')}] {ins.get('title', '?')}: "
-                f"{str(ins.get('summary', '?'))[:80]}"
-            )
+            print(f"    → [{ins.get('category', '?')}] {ins.get('title', '?')}: {str(ins.get('summary', '?'))[:80]}")
 
 
 # ---------------------------------------------------------------------------
