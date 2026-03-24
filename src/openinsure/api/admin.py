@@ -75,30 +75,41 @@ async def deploy_foundry_agents() -> dict[str, Any]:
             credential=DefaultAzureCredential(),
         )
 
-        # List existing agents
+        # List existing agents (handle SDK version differences)
         existing: dict[str, str] = {}
-        for agent in client.agents.list_agents():
-            existing[agent.name] = agent.id
+        try:
+            # SDK v2 (azure-ai-projects >= 2.0)
+            for agent in client.agents.list_agents():
+                existing[agent.name] = agent.id
+        except AttributeError:
+            try:
+                # SDK v1 beta — try get_openai_client approach
+                oai = client.get_openai_client()
+                for agent in oai.beta.assistants.list().data:
+                    existing[agent.name] = agent.id
+            except Exception:
+                logger.debug("admin.list_agents_unavailable")
 
         results: list[dict[str, str]] = []
         for defn in AGENT_DEFINITIONS:
             name = defn["name"]
             if name in existing:
-                # Update
+                results.append({"name": name, "status": "already_exists", "id": existing[name]})
+                continue
+            # Create
+            try:
+                # Try SDK v2 first
+                agent = client.agents.create_agent(
+                    model="gpt-4o",
+                    name=name,
+                    instructions=defn["instructions"],
+                )
+                results.append({"name": name, "status": "created", "id": agent.id})
+            except AttributeError:
+                # SDK v1 beta — use OpenAI client
                 try:
-                    client.agents.update_agent(
-                        assistant_id=existing[name],
-                        model="gpt-4o",
-                        name=name,
-                        instructions=defn["instructions"],
-                    )
-                    results.append({"name": name, "status": "updated", "id": existing[name]})
-                except Exception as e:
-                    results.append({"name": name, "status": "update_failed", "error": str(e)[:200]})
-            else:
-                # Create
-                try:
-                    agent = client.agents.create_agent(
+                    oai = client.get_openai_client()
+                    agent = oai.beta.assistants.create(
                         model="gpt-4o",
                         name=name,
                         instructions=defn["instructions"],
