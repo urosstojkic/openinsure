@@ -139,6 +139,29 @@ class AIInsightsResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Response models — Decision Accuracy (#86)
+# ---------------------------------------------------------------------------
+
+
+class DecisionAccuracyMetric(BaseModel):
+    agent_name: str
+    period_days: int = 90
+    total_decisions: int = 0
+    correct_predictions: int = 0
+    accuracy_rate: float = 0.0
+    avg_deviation: float = 0.0
+    metrics: dict[str, Any] = Field(default_factory=dict)
+
+
+class DecisionAccuracyResponse(BaseModel):
+    period_days: int
+    agents: dict[str, DecisionAccuracyMetric] = Field(default_factory=dict)
+    total_outcomes_tracked: int = 0
+    generated_at: str = ""
+    improvement_signals: list[dict[str, Any]] = Field(default_factory=list)
+
+
+# ---------------------------------------------------------------------------
 # UW Analytics endpoint (#81)
 # ---------------------------------------------------------------------------
 
@@ -434,3 +457,63 @@ async def get_ai_insights(
         ),
         source="system",
     )
+
+
+# ---------------------------------------------------------------------------
+# Decision Accuracy endpoint (#86 — Learning Loop)
+# ---------------------------------------------------------------------------
+
+
+@router.get("/decision-accuracy", response_model=DecisionAccuracyResponse)
+async def get_decision_accuracy(
+    period_days: int = Query(90, ge=1, le=365, description="Look-back period in days"),
+    agent_name: str | None = Query(None, description="Filter by agent name"),
+) -> DecisionAccuracyResponse:
+    """Decision accuracy metrics — how well AI agents predicted outcomes.
+
+    Compares predicted risk scores and premiums against actual claims and
+    loss ratios.  Used by the decision learning loop to identify systematic
+    biases and feed accuracy context back into agent prompts.
+    """
+    from openinsure.services.learning_loop import get_decision_tracker
+
+    tracker = get_decision_tracker()
+
+    if agent_name:
+        metrics = await tracker.get_accuracy_metrics(agent_name, period_days)
+        signals = await tracker.get_improvement_signals(agent_name)
+        return DecisionAccuracyResponse(
+            period_days=period_days,
+            agents={agent_name: DecisionAccuracyMetric(**metrics)},
+            total_outcomes_tracked=metrics.get("total_decisions", 0),
+            generated_at=datetime.now(UTC).isoformat(),
+            improvement_signals=signals,
+        )
+
+    all_metrics = await tracker.get_all_metrics(period_days)
+    agents = {}
+    all_signals: list[dict[str, Any]] = []
+    for name, data in all_metrics.get("agents", {}).items():
+        agents[name] = DecisionAccuracyMetric(**data)
+        signals = await tracker.get_improvement_signals(name)
+        all_signals.extend(signals)
+
+    return DecisionAccuracyResponse(
+        period_days=period_days,
+        agents=agents,
+        total_outcomes_tracked=all_metrics.get("total_outcomes_tracked", 0),
+        generated_at=datetime.now(UTC).isoformat(),
+        improvement_signals=all_signals,
+    )
+
+
+@router.post("/decision-outcome")
+async def record_decision_outcome(
+    decision_id: str = Query(..., description="Decision ID to record outcome for"),
+    outcome: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Record the outcome of a prior AI decision for the learning loop."""
+    from openinsure.services.learning_loop import get_decision_tracker
+
+    tracker = get_decision_tracker()
+    return await tracker.record_outcome(decision_id, outcome or {})
