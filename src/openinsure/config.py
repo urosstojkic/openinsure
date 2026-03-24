@@ -31,11 +31,13 @@ class Settings(BaseSettings):
     cosmos_endpoint: str = ""
     cosmos_database_name: str = "openinsure-knowledge"
     cosmos_graph_name: str = "insurance-graph"
+    cosmos_key: str = ""  # Fallback key-based auth when RBAC is unavailable
 
     # Azure AI Search
     search_endpoint: str = ""
     search_index_name: str = "openinsure-knowledge"
     search_connection_id: str = ""  # Foundry project connection ID for AI Search
+    search_admin_key: str = ""  # Fallback admin key for AI Search indexer setup
 
     # Azure Blob Storage
     storage_account_url: str = ""

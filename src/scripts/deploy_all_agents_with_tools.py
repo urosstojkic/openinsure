@@ -272,7 +272,7 @@ def main() -> None:
     print("Discovering Azure AI Search connection...")
     search_connection_id = discover_search_connection(client)
     if search_connection_id:
-        print(f"  => Will attach AI Search to all agents")
+        print("  => Will attach AI Search to all agents")
     else:
         print("  => No search connection found — deploying without AI Search")
     print()
@@ -307,7 +307,7 @@ def main() -> None:
         if a.name and a.name.startswith("openinsure"):
             print(f"  {a.name}")
 
-    print(f"\nDone. Verify at: https://ai.azure.com")
+    print("\nDone. Verify at: https://ai.azure.com")
 
 
 if __name__ == "__main__":

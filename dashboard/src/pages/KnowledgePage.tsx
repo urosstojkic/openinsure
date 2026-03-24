@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { BookOpen, FileText, ShieldCheck, Scale, Shield, Loader2, Search, Pencil, X, Check } from 'lucide-react';
-import { getGuidelines, getRatingFactors, getCoverageOptions, getClaimsPrecedents, getComplianceRules, searchKnowledge, updateGuidelines } from '../api/knowledge';
+import { BookOpen, FileText, ShieldCheck, Scale, Shield, Loader2, Search, Pencil, X, Check, Globe, Building2, RefreshCw } from 'lucide-react';
+import { getGuidelines, getRatingFactors, getCoverageOptions, getClaimsPrecedents, getComplianceRules, searchKnowledge, updateGuidelines, getIndustryProfiles, getJurisdictionRules, getSyncStatus } from '../api/knowledge';
 import EmptyState from '../components/EmptyState';
 
-type KnowledgeTab = 'guidelines' | 'rating' | 'coverage' | 'claims' | 'compliance';
+type KnowledgeTab = 'guidelines' | 'rating' | 'coverage' | 'claims' | 'compliance' | 'industry' | 'jurisdiction';
 
 const TABS: { key: KnowledgeTab; label: string; icon: typeof BookOpen }[] = [
   { key: 'guidelines', label: 'Guidelines', icon: BookOpen },
@@ -12,6 +12,8 @@ const TABS: { key: KnowledgeTab; label: string; icon: typeof BookOpen }[] = [
   { key: 'coverage', label: 'Coverage Options', icon: Shield },
   { key: 'claims', label: 'Claims Precedents', icon: Scale },
   { key: 'compliance', label: 'Compliance Rules', icon: ShieldCheck },
+  { key: 'industry', label: 'Industry Profiles', icon: Building2 },
+  { key: 'jurisdiction', label: 'Jurisdiction Rules', icon: Globe },
 ];
 
 const LOBS = ['cyber', 'general_liability', 'property'] as const;
@@ -478,6 +480,98 @@ function ComplianceRulesTab() {
   );
 }
 
+/* ── Industry Profiles Tab ── */
+function IndustryProfilesTab() {
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ['knowledge-industry-profiles'],
+    queryFn: getIndustryProfiles,
+    retry: 1,
+  });
+
+  if (isLoading) return <LoadingState />;
+  if (isError) return <ErrorState message="Failed to load industry profiles." />;
+  if (!data?.profiles?.length) return <EmptyState icon={Building2} title="No industry profiles" description="Industry-specific risk profiles will appear here once configured." />;
+
+  return (
+    <div className="grid gap-5 sm:grid-cols-1 lg:grid-cols-2 xl:grid-cols-3">
+      {data.profiles.map((p: Record<string, unknown>, i: number) => (
+        <Card key={i}>
+          <div className="flex items-center gap-2 mb-3">
+            <h3 className="text-sm font-semibold text-slate-800">{formatLabel(String(p.industry || `Industry ${i + 1}`))}</h3>
+            {p.premium_adjustment != null && (
+              <Badge color={(p.premium_adjustment as number) > 1 ? 'red' : 'green'}>
+                {(p.premium_adjustment as number)}x premium
+              </Badge>
+            )}
+          </div>
+          <FieldRow label="regulatory_frameworks" value={p.regulatory_frameworks} />
+          <FieldRow label="key_risks" value={p.key_risks} />
+          <FieldRow label="required_controls" value={p.required_controls} />
+          <FieldRow label="typical_claim_types" value={p.typical_claim_types} />
+          {p.avg_breach_cost_per_record != null && (
+            <FieldRow label="avg_breach_cost_per_record" value={`$${String(p.avg_breach_cost_per_record)}`} />
+          )}
+          <FieldRow label="regulatory_fine_exposure" value={p.regulatory_fine_exposure} />
+        </Card>
+      ))}
+    </div>
+  );
+}
+
+/* ── Jurisdiction Rules Tab ── */
+function JurisdictionRulesTab() {
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ['knowledge-jurisdiction-rules'],
+    queryFn: getJurisdictionRules,
+    retry: 1,
+  });
+
+  if (isLoading) return <LoadingState />;
+  if (isError) return <ErrorState message="Failed to load jurisdiction rules." />;
+  if (!data?.rules?.length) return <EmptyState icon={Globe} title="No jurisdiction rules" description="Jurisdiction-specific compliance rules will appear here once configured." />;
+
+  return (
+    <div className="grid gap-5 sm:grid-cols-1 lg:grid-cols-2 xl:grid-cols-3">
+      {data.rules.map((r: Record<string, unknown>, i: number) => (
+        <Card key={i}>
+          <div className="flex items-center gap-2 mb-3">
+            <h3 className="text-sm font-semibold text-slate-800">{String(r.territory || `Territory ${i + 1}`)}</h3>
+            <Badge>{String(r.framework || 'Unknown')}</Badge>
+          </div>
+          <FieldRow label="requirements" value={r.requirements} />
+          <FieldRow label="notification_deadline" value={r.notification_deadline} />
+          <FieldRow label="key_regulations" value={r.key_regulations} />
+        </Card>
+      ))}
+    </div>
+  );
+}
+
+/* ── Sync Status Badge ── */
+function SyncStatusBadge() {
+  const { data, isLoading } = useQuery({
+    queryKey: ['knowledge-sync-status'],
+    queryFn: getSyncStatus,
+    refetchInterval: 30_000,
+    retry: 1,
+  });
+
+  if (isLoading) return null;
+
+  const source = data?.source || 'unknown';
+  const cosmosAvailable = data?.cosmos_available || false;
+
+  return (
+    <div className="flex items-center gap-2 text-xs">
+      <RefreshCw size={12} className={cosmosAvailable ? 'text-emerald-500' : 'text-amber-500'} />
+      <span className={cosmosAvailable ? 'text-emerald-600 font-medium' : 'text-amber-600 font-medium'}>
+        {cosmosAvailable ? 'Cosmos DB synced' : 'In-memory fallback'}
+      </span>
+      <span className="text-slate-400">Source: {source}</span>
+    </div>
+  );
+}
+
 /* ── Main Page ── */
 export default function KnowledgePage() {
   const [activeTab, setActiveTab] = useState<KnowledgeTab>('guidelines');
@@ -489,7 +583,10 @@ export default function KnowledgePage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-900">Knowledge Base</h1>
-          <p className="mt-1 text-sm text-slate-500">Browse underwriting guidelines, rating factors, coverage options, claims precedents, and compliance rules.</p>
+          <p className="mt-1 text-sm text-slate-500">Browse underwriting guidelines, rating factors, coverage options, claims precedents, compliance rules, industry profiles, and jurisdiction rules.</p>
+          <div className="mt-2">
+            <SyncStatusBadge />
+          </div>
         </div>
         <SearchBar onSearch={(q) => setSearchQuery(q)} />
       </div>
@@ -520,6 +617,8 @@ export default function KnowledgePage() {
       {activeTab === 'coverage' && <CoverageOptionsTab />}
       {activeTab === 'claims' && <ClaimsPrecedentsTab />}
       {activeTab === 'compliance' && <ComplianceRulesTab />}
+      {activeTab === 'industry' && <IndustryProfilesTab />}
+      {activeTab === 'jurisdiction' && <JurisdictionRulesTab />}
     </div>
   );
 }

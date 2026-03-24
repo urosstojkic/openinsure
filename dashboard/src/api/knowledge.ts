@@ -49,3 +49,30 @@ export async function searchKnowledge(query: string) {
   const { data } = await client.get('/knowledge/search', { params: { q: query } });
   return data;
 }
+
+// --- Unified Knowledge Architecture (v0.7.0) ---
+
+export async function getIndustryProfiles() {
+  const { data } = await client.get('/knowledge/industry-profiles');
+  return data;
+}
+
+export async function getIndustryProfile(industry: string) {
+  const { data } = await client.get(`/knowledge/industry-profiles/${industry}`);
+  return data;
+}
+
+export async function getJurisdictionRules() {
+  const { data } = await client.get('/knowledge/jurisdiction-rules');
+  return data;
+}
+
+export async function getJurisdictionRule(territory: string) {
+  const { data } = await client.get(`/knowledge/jurisdiction-rules/${territory}`);
+  return data;
+}
+
+export async function getSyncStatus() {
+  const { data } = await client.get('/knowledge/sync-status');
+  return data;
+}

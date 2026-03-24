@@ -161,6 +161,9 @@ def get_blob_storage():
 def get_knowledge_store():
     """Return a CosmosKnowledgeStore when configured, otherwise ``None``.
 
+    Tries RBAC (``DefaultAzureCredential``) first.  When that fails and a
+    ``cosmos_key`` is configured, falls back to key-based auth automatically.
+
     For the rich in-memory knowledge store (always available), use
     ``get_in_memory_knowledge_store()`` instead.
     """
@@ -172,6 +175,7 @@ def get_knowledge_store():
             settings.cosmos_endpoint,
             settings.cosmos_database_name,
             settings.cosmos_graph_name,
+            cosmos_key=settings.cosmos_key,
         )
     return None  # Fall back to InMemoryKnowledgeStore
 

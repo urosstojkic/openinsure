@@ -5,6 +5,45 @@ All notable changes to OpenInsure will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] — Unified Knowledge Architecture
+
+### Added
+- **Cosmos DB as Single Source of Truth**: All knowledge data (guidelines, rating factors, coverage options, claims precedents, compliance rules, industry profiles, jurisdiction rules) is stored in Cosmos DB. The API reads/writes Cosmos first, falling back to the in-memory store when Cosmos is unavailable.
+- **Key-Based Auth Fallback**: `CosmosKnowledgeStore` now accepts an optional `cosmos_key` parameter. When RBAC (`DefaultAzureCredential`) fails, the system falls back to key-based authentication — resolving the months-long RBAC access issue.
+- **Cosmos → AI Search Auto-Sync**: `src/scripts/setup_cosmos_search_sync.py` creates an AI Search **data source** and **indexer** that auto-syncs from Cosmos every 5 minutes. Changes made in the portal propagate to Foundry agents automatically.
+- **Comprehensive Knowledge Seeder**: `src/scripts/seed_cosmos_knowledge.py` reads ALL knowledge from YAML files (`knowledge/`) AND the rich in-memory store (`knowledge_store.py`) — industry profiles, jurisdiction rules, billing rules, workflow rules — and uploads everything to Cosmos DB.
+- **New API Endpoints**:
+  - `GET /knowledge/industry-profiles` — list all industry risk profiles
+  - `GET /knowledge/industry-profiles/{industry}` — get profile by industry
+  - `GET /knowledge/jurisdiction-rules` — list all jurisdiction compliance rules
+  - `GET /knowledge/jurisdiction-rules/{territory}` — get rules by territory
+  - `PUT /knowledge/claims-precedents/{claim_type}` — update claims precedent (writes to Cosmos)
+  - `PUT /knowledge/compliance-rules/{framework}` — update compliance rule (writes to Cosmos)
+  - `GET /knowledge/sync-status` — check Cosmos availability and active data source
+- **Dashboard Enhancements**: Knowledge page now has 7 tabs (added Industry Profiles and Jurisdiction Rules), a live sync-status badge showing Cosmos vs in-memory source, and all existing tabs now read Cosmos-first.
+- **Full CRUD on CosmosKnowledgeStore**: `bulk_upsert`, `query_rating_factors`, `query_coverage_options`, `query_claims_precedents`, `query_compliance_rules`, `query_industry_profiles`, `query_jurisdiction_rules`, `delete_document`
+
+### Changed
+- `config.py`: Added `cosmos_key` and `search_admin_key` settings for fallback auth
+- `factory.py`: `get_knowledge_store()` now passes `cosmos_key` to `CosmosKnowledgeStore`
+- `cosmos_nosql.py`: Rewritten with key-based auth fallback, `updated_at` timestamps, all entity-type query methods
+- `api/knowledge.py`: All endpoints now try Cosmos first with graceful in-memory fallback; PUT endpoints write to Cosmos; new `/sync-status` endpoint
+- `dashboard/src/api/knowledge.ts`: Added API calls for industry profiles, jurisdiction rules, and sync status
+- `dashboard/src/pages/KnowledgePage.tsx`: Added Industry Profiles tab, Jurisdiction Rules tab, and SyncStatusBadge component
+
+### Architecture
+```
+Portal (React) → REST API → Cosmos DB (source of truth)
+                                  ↓ (indexer, every 5 min)
+                           AI Search Index
+                                  ↓ (AI Search tool)
+                           Foundry Agents (10)
+```
+- **Write path**: Portal → API → Cosmos DB → Indexer → AI Search → Agents see it
+- **Read path**: API → Cosmos DB (or in-memory fallback) → Portal
+- **Agent path**: Agent → AI Search tool → openinsure-knowledge index (auto-synced from Cosmos)
+- **Graceful degradation**: When Cosmos is unavailable, all reads fall back to the in-memory knowledge store seamlessly
+
 ## [0.6.0] — 10/10 AI-Native with Foundry Tools
 
 ### Added
