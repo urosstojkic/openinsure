@@ -238,10 +238,14 @@ class SqlSubmissionRepository(BaseRepository):
 
         sets: list[str] = []
         params: list[Any] = []
+        seen_cols: set[str] = set()
         for key, val in updates.items():
             if key in ("id", "created_at", "updated_at") or key in _SKIP_IN_SQL:
                 continue
             col = _API_TO_SQL_KEY.get(key, key)
+            if col in seen_cols:
+                continue  # Prevent duplicate SET clause
+            seen_cols.add(col)
             sets.append(f"{col} = ?")
             params.append(val if not isinstance(val, (dict, list)) else json.dumps(val))
         sets.append("updated_at = ?")
