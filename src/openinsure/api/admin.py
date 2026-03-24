@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 from typing import Any
 
 import structlog
@@ -141,4 +142,98 @@ async def deploy_foundry_agents() -> dict[str, Any]:
     except ImportError as e:
         return {"error": f"Missing SDK: {e}"}
     except Exception as e:
+        return {"error": str(e)[:500]}
+
+
+@router.post("/seed-knowledge")
+async def seed_knowledge() -> dict[str, Any]:
+    """Seed Cosmos DB with knowledge base data from YAML files and in-memory store.
+
+    Uses the backend's managed identity which has Cosmos DB access via the VNet.
+    """
+    try:
+        from openinsure.config import get_settings
+        from openinsure.infrastructure.knowledge_store import InMemoryKnowledgeStore
+
+        settings = get_settings()
+        if not settings.cosmos_endpoint:
+            return {"error": "COSMOS_ENDPOINT not configured"}
+
+        from azure.cosmos import CosmosClient
+        from azure.identity import DefaultAzureCredential
+
+        credential = DefaultAzureCredential()
+        cosmos = CosmosClient(settings.cosmos_endpoint, credential=credential)
+        db = cosmos.get_database_client(settings.cosmos_database_name or "openinsure-knowledge")
+
+        # Ensure containers exist
+        containers = [
+            "guidelines",
+            "rating_factors",
+            "claims_precedents",
+            "compliance_rules",
+            "coverage_options",
+            "industry_profiles",
+            "jurisdiction_rules",
+        ]
+        for name in containers:
+            with contextlib.suppress(Exception):
+                db.create_container_if_not_exists(id=name, partition_key={"paths": ["/category"], "kind": "Hash"})
+
+        # Load knowledge from in-memory store
+        store = InMemoryKnowledgeStore()
+        results: dict[str, int] = {}
+
+        # Guidelines
+        for lob in ["cyber", "general_liability", "property"]:
+            data = store.get_guidelines(lob)
+            if data:
+                container = db.get_container_client("guidelines")
+                doc = {"id": f"guidelines-{lob}", "category": "guidelines", "lob": lob, "content": data}
+                container.upsert_item(doc)
+                results[f"guidelines-{lob}"] = 1
+
+        # Rating factors
+        for lob in ["cyber", "general_liability", "property"]:
+            data = store.get_rating_factors(lob)
+            if data:
+                container = db.get_container_client("rating_factors")
+                doc = {"id": f"rating-{lob}", "category": "rating_factors", "lob": lob, "content": data}
+                container.upsert_item(doc)
+                results[f"rating-{lob}"] = 1
+
+        # Claims precedents
+        for ctype in ["ransomware", "data_breach", "business_interruption", "social_engineering"]:
+            data = store.get_claims_precedents(ctype)
+            if data:
+                container = db.get_container_client("claims_precedents")
+                doc = {
+                    "id": f"precedent-{ctype}",
+                    "category": "claims_precedents",
+                    "claim_type": ctype,
+                    "content": data,
+                }
+                container.upsert_item(doc)
+                results[f"precedent-{ctype}"] = 1
+
+        # Compliance rules
+        for framework in ["eu_ai_act", "naic_model_bulletin", "gdpr"]:
+            data = store.get_compliance_rules(framework)
+            if data:
+                container = db.get_container_client("compliance_rules")
+                doc = {
+                    "id": f"compliance-{framework}",
+                    "category": "compliance_rules",
+                    "framework": framework,
+                    "content": data,
+                }
+                container.upsert_item(doc)
+                results[f"compliance-{framework}"] = 1
+
+        total = sum(results.values())
+        logger.info("admin.seed_knowledge", total=total, results=results)
+        return {"total": total, "seeded": results}
+
+    except Exception as e:
+        logger.exception("admin.seed_knowledge_failed")
         return {"error": str(e)[:500]}
