@@ -75,15 +75,14 @@ async def deploy_foundry_agents() -> dict[str, Any]:
             credential=DefaultAzureCredential(),
         )
 
-        # List existing agents (handle SDK version differences)
+        # List existing agents
         existing: dict[str, str] = {}
         try:
-            # SDK v2 (azure-ai-projects >= 2.0)
             for agent in client.agents.list_agents():
                 existing[agent.name] = agent.id
-        except AttributeError:
+        except (AttributeError, Exception):
+            # SDK might not support list — try OpenAI path
             try:
-                # SDK v1 beta — try get_openai_client approach
                 oai = client.get_openai_client()
                 for agent in oai.beta.assistants.list().data:
                     existing[agent.name] = agent.id
@@ -96,17 +95,15 @@ async def deploy_foundry_agents() -> dict[str, Any]:
             if name in existing:
                 results.append({"name": name, "status": "already_exists", "id": existing[name]})
                 continue
-            # Create
+            # Create — try multiple SDK paths
             try:
-                # Try SDK v2 first
                 agent = client.agents.create_agent(
                     model="gpt-4o",
                     name=name,
                     instructions=defn["instructions"],
                 )
                 results.append({"name": name, "status": "created", "id": agent.id})
-            except AttributeError:
-                # SDK v1 beta — use OpenAI client
+            except (AttributeError, Exception) as e1:
                 try:
                     oai = client.get_openai_client()
                     agent = oai.beta.assistants.create(
@@ -114,9 +111,25 @@ async def deploy_foundry_agents() -> dict[str, Any]:
                         name=name,
                         instructions=defn["instructions"],
                     )
-                    results.append({"name": name, "status": "created", "id": agent.id})
-                except Exception as e:
-                    results.append({"name": name, "status": "create_failed", "error": str(e)[:200]})
+                    results.append({"name": name, "status": "created_oai", "id": agent.id})
+                except Exception as e2:
+                    # Last resort: use Responses API to "register" the agent
+                    # by invoking it once — Foundry auto-creates prompt agents
+                    try:
+                        oai = client.get_openai_client()
+                        oai.responses.create(
+                            input=[{"role": "user", "content": "Initialize agent. Respond with: ready"}],
+                            extra_body={"agent_reference": {"name": name, "type": "agent_reference"}},
+                        )
+                        results.append({"name": name, "status": "created_via_invoke"})
+                    except Exception as e3:
+                        results.append(
+                            {
+                                "name": name,
+                                "status": "all_methods_failed",
+                                "error": f"agents: {str(e1)[:80]} | oai: {str(e2)[:80]} | invoke: {str(e3)[:80]}",
+                            }
+                        )
 
         logger.info("admin.deploy_agents", total=len(results), results=results)
         return {
