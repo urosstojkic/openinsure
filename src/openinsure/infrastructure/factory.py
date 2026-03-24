@@ -159,7 +159,11 @@ def get_blob_storage():
 
 @lru_cache
 def get_knowledge_store():
-    """Return a CosmosKnowledgeStore, or ``None`` when Cosmos DB is not configured."""
+    """Return a CosmosKnowledgeStore when configured, otherwise ``None``.
+
+    For the rich in-memory knowledge store (always available), use
+    ``get_in_memory_knowledge_store()`` instead.
+    """
     settings = get_settings()
     if settings.storage_mode == "azure" and settings.cosmos_endpoint:
         from openinsure.infrastructure.cosmos_nosql import CosmosKnowledgeStore
@@ -169,7 +173,15 @@ def get_knowledge_store():
             settings.cosmos_database_name,
             settings.cosmos_graph_name,
         )
-    return None  # Fall back to static dicts in KnowledgeAgent
+    return None  # Fall back to InMemoryKnowledgeStore
+
+
+@lru_cache
+def get_in_memory_knowledge_store():
+    """Return the always-available in-memory knowledge store."""
+    from openinsure.infrastructure.knowledge_store import get_knowledge_store as _get_mem
+
+    return _get_mem()
 
 
 @lru_cache

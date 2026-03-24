@@ -788,6 +788,72 @@ async def enrich_submission(submission_id: str) -> str:
 
 
 # ======================================================================
+# Knowledge tools
+# ======================================================================
+
+
+@mcp.tool()
+async def search_knowledge(query: str) -> str:
+    """Search the OpenInsure knowledge base across all categories.
+
+    Searches underwriting guidelines, rating factors, claims precedents,
+    compliance rules, billing rules, and workflow routing rules.
+
+    Args:
+        query: Search text (e.g. "ransomware", "MFA", "GDPR").
+
+    Returns:
+        JSON array of matching knowledge entries with category and context.
+    """
+    result = await _request("GET", "/knowledge/search", params={"q": query})
+    return json.dumps(result, default=str)
+
+
+@mcp.tool()
+async def get_guidelines(line_of_business: str = "cyber") -> str:
+    """Retrieve underwriting guidelines for a line of business.
+
+    Returns appetite criteria, target industries, SIC codes, security
+    requirements, coverage options, exclusions, and subjectivities.
+
+    Args:
+        line_of_business: LOB key (cyber, general_liability, property).
+
+    Returns:
+        JSON with comprehensive underwriting guidelines.
+    """
+    try:
+        result = await _request("GET", f"/knowledge/guidelines/{line_of_business}")
+        return json.dumps(result, default=str)
+    except httpx.HTTPStatusError as exc:
+        if exc.response.status_code == 404:
+            return json.dumps({"error": f"No guidelines for LOB: {line_of_business}"})
+        raise
+
+
+@mcp.tool()
+async def get_rating_factors(line_of_business: str = "cyber") -> str:
+    """Retrieve rating factor tables for a line of business.
+
+    Returns base rates, industry multipliers, security discounts,
+    revenue factors, and incident surcharges used in premium calculation.
+
+    Args:
+        line_of_business: LOB key (cyber, general_liability, property).
+
+    Returns:
+        JSON with rating factor tables and multipliers.
+    """
+    try:
+        result = await _request("GET", f"/knowledge/rating-factors/{line_of_business}")
+        return json.dumps(result, default=str)
+    except httpx.HTTPStatusError as exc:
+        if exc.response.status_code == 404:
+            return json.dumps({"error": f"No rating factors for LOB: {line_of_business}"})
+        raise
+
+
+# ======================================================================
 # Analytics tools (#81, #82, #83)
 # ======================================================================
 
@@ -955,6 +1021,9 @@ class OpenInsureMCPServer:
         "get_claims_analytics": get_claims_analytics,
         "get_ai_insights": get_ai_insights,
         "get_upcoming_renewals": get_upcoming_renewals,
+        "search_knowledge": search_knowledge,
+        "get_guidelines": get_guidelines,
+        "get_rating_factors": get_rating_factors,
     }
 
     async def list_tools(self) -> list[dict[str, Any]]:

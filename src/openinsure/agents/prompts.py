@@ -6,7 +6,8 @@ Each builder assembles a complete prompt with:
   - Entity data (submission, claim, policy)
   - Output schema (JSON format the agent must return)
 
-Addresses #67: Wire Foundry agents with structured prompts and knowledge retrieval.
+All 10 agents query the in-memory knowledge store before reasoning,
+making it the core competitive advantage of the platform.
 """
 
 from __future__ import annotations
@@ -23,12 +24,20 @@ logger = structlog.get_logger()
 # ---------------------------------------------------------------------------
 
 
+def _knowledge_store():
+    """Return the always-available in-memory knowledge store."""
+    from openinsure.infrastructure.knowledge_store import get_knowledge_store
+
+    return get_knowledge_store()
+
+
 async def get_triage_context(submission: dict[str, Any]) -> list[dict[str, Any]]:
     """Retrieve underwriting guidelines relevant to this submission."""
+    # Try Cosmos DB first
     try:
-        from openinsure.infrastructure.factory import get_knowledge_store
+        from openinsure.infrastructure.factory import get_knowledge_store as get_cosmos
 
-        store = get_knowledge_store()
+        store = get_cosmos()
         if store is not None:
             lob = submission.get("line_of_business", "cyber")
             guidelines = await store.query(f"underwriting_guidelines_{lob}")
@@ -37,16 +46,17 @@ async def get_triage_context(submission: dict[str, Any]) -> list[dict[str, Any]]
     except Exception:
         logger.debug("prompts.knowledge_retrieval_failed", exc_info=True)
 
-    # Fall back to static knowledge from KnowledgeAgent
+    # Fall back to rich in-memory knowledge store
     return _static_guidelines(submission)
 
 
 async def get_claims_context(claim: dict[str, Any]) -> list[dict[str, Any]]:
     """Retrieve precedents and coverage rules relevant to this claim."""
+    # Try Cosmos DB first
     try:
-        from openinsure.infrastructure.factory import get_knowledge_store
+        from openinsure.infrastructure.factory import get_knowledge_store as get_cosmos
 
-        store = get_knowledge_store()
+        store = get_cosmos()
         if store is not None:
             claim_type = claim.get("claim_type", "cyber_incident")
             precedents = await store.query(f"claims_precedents_{claim_type}")
@@ -54,21 +64,72 @@ async def get_claims_context(claim: dict[str, Any]) -> list[dict[str, Any]]:
                 return precedents
     except Exception:
         logger.debug("prompts.claims_knowledge_failed", exc_info=True)
+
+    # Fall back to rich in-memory knowledge store
+    mem = _knowledge_store()
+    claim_type = claim.get("claim_type", claim.get("cause_of_loss", ""))
+    precedent = mem.get_claims_precedents(claim_type)
+    if precedent:
+        return [{"title": f"{claim_type.title()} Precedents", "content": json.dumps(precedent, default=str)}]
     return []
 
 
 def _static_guidelines(submission: dict[str, Any]) -> list[dict[str, Any]]:
-    """Return built-in underwriting guidelines when the knowledge store is unavailable."""
+    """Return built-in underwriting guidelines from the in-memory knowledge store."""
     lob = submission.get("line_of_business", "cyber")
-    try:
-        from openinsure.agents.knowledge_agent import UNDERWRITING_GUIDELINES
-
-        if lob in UNDERWRITING_GUIDELINES:
-            raw = UNDERWRITING_GUIDELINES[lob]
-            return [{"title": f"{lob.title()} Guidelines", "content": json.dumps(raw, default=str)}]
-    except Exception:
-        logger.debug("prompts.static_guidelines_failed", exc_info=True)
+    mem = _knowledge_store()
+    gl = mem.get_guidelines(lob)
+    if gl:
+        return [{"title": f"{lob.title()} Guidelines", "content": json.dumps(gl, default=str)}]
     return []
+
+
+def _get_knowledge_context_for_lob(lob: str = "cyber") -> str:
+    """Build a comprehensive knowledge context string for a LOB."""
+    mem = _knowledge_store()
+    gl = mem.get_guidelines(lob)
+    if not gl:
+        return ""
+
+    parts: list[str] = []
+
+    appetite = gl.get("appetite", {})
+    if appetite:
+        parts.append(
+            f"APPETITE: Target industries: {appetite.get('target_industries', [])}. "
+            f"SIC codes preferred: {appetite.get('sic_codes', {}).get('preferred', [])}. "
+            f"Revenue range: ${appetite.get('revenue_range', {}).get('min', 0):,} - "
+            f"${appetite.get('revenue_range', {}).get('max', 0):,}. "
+            f"Security min score: {appetite.get('security_requirements', {}).get('minimum_score', 'N/A')}. "
+            f"Required controls: {appetite.get('security_requirements', {}).get('required_controls', [])}. "
+            f"Max prior incidents: {appetite.get('max_prior_incidents', 'N/A')}."
+        )
+
+    rf = gl.get("rating_factors", {})
+    if rf:
+        parts.append(
+            f"RATING: Base rate ${rf.get('base_rate_per_1000', 0)}/1000 revenue. "
+            f"Industry factors: {json.dumps(rf.get('industry_factors', {}), default=str)}. "
+            f"Security factors: {json.dumps(rf.get('security_factors', {}), default=str)}. "
+            f"Revenue factors: {json.dumps(rf.get('revenue_factors', {}), default=str)}. "
+            f"Incident factors: {json.dumps(rf.get('incident_factors', {}), default=str)}. "
+            f"Min premium: ${rf.get('minimum_premium', 0):,}."
+        )
+
+    cov = gl.get("coverage_options", [])
+    if cov:
+        cov_strs = [f"{c['name']} (limit ${c['default_limit']:,}): {c['description']}" for c in cov]
+        parts.append("COVERAGES: " + " | ".join(cov_strs))
+
+    excl = gl.get("exclusions", [])
+    if excl:
+        parts.append(f"EXCLUSIONS: {', '.join(excl)}")
+
+    subj = gl.get("subjectivities", [])
+    if subj:
+        parts.append(f"SUBJECTIVITIES: {', '.join(subj)}")
+
+    return "\n".join(parts)
 
 
 # ---------------------------------------------------------------------------
@@ -81,6 +142,7 @@ def build_triage_prompt(
     guidelines: list[dict[str, Any]] | None = None,
 ) -> str:
     """Build a structured prompt for the submission triage agent."""
+    lob = submission.get("line_of_business", "cyber")
     prompt = (
         "SYSTEM: You are the OpenInsure Submission Triage Agent for cyber insurance.\n"
         "You assess whether submissions match the carrier's appetite and risk profile.\n\n"
@@ -93,14 +155,19 @@ def build_triage_prompt(
             prompt += f"- {g.get('title', '')}: {g.get('content', '')}\n"
         prompt += "\n"
     else:
-        prompt += (
-            "UNDERWRITING GUIDELINES:\n"
-            "- Appetite: IT/Tech (SIC 7xxx), Financial (SIC 6xxx), Professional Services\n"
-            "- Revenue range: $500K to $50M\n"
-            "- Security maturity: 4+ out of 10\n"
-            "- Max prior incidents: 3\n"
-            "- Required: MFA, endpoint protection\n\n"
-        )
+        # Rich knowledge-store context
+        kb_ctx = _get_knowledge_context_for_lob(lob)
+        if kb_ctx:
+            prompt += f"UNDERWRITING GUIDELINES (from knowledge base):\n{kb_ctx}\n\n"
+        else:
+            prompt += (
+                "UNDERWRITING GUIDELINES:\n"
+                "- Appetite: IT/Tech (SIC 7xxx), Financial (SIC 6xxx), Professional Services\n"
+                "- Revenue range: $500K to $50M\n"
+                "- Security maturity: 4+ out of 10\n"
+                "- Max prior incidents: 3\n"
+                "- Required: MFA, endpoint protection\n\n"
+            )
 
     # Submission data
     prompt += f"SUBMISSION DATA:\n{json.dumps(submission, default=str, indent=2)}\n\n"
@@ -127,6 +194,7 @@ def build_underwriting_prompt(
     rating_breakdown: dict[str, Any] | None = None,
 ) -> str:
     """Build a structured prompt for the underwriting / pricing agent."""
+    lob = submission.get("line_of_business", "cyber")
     prompt = (
         "SYSTEM: You are the OpenInsure Underwriting Agent for cyber insurance.\n"
         "You assess risk and calculate premium pricing.\n\n"
@@ -138,14 +206,18 @@ def build_underwriting_prompt(
             prompt += f"- {g.get('title', '')}: {g.get('content', '')}\n"
         prompt += "\n"
     else:
-        prompt += (
-            "PRICING GUIDELINES:\n"
-            "- Base rate: $1.50 per $1,000 revenue\n"
-            "- Adjust for: industry SIC code, security maturity, prior incidents\n"
-            "- Min premium: $2,500 | Max premium: $500,000\n"
-            "- Security controls (MFA, endpoint, backup, IR plan) earn credits\n"
-            "- Prior incidents: 1 → 1.25x, 2 → 1.5x, 3+ → 2.0x\n\n"
-        )
+        kb_ctx = _get_knowledge_context_for_lob(lob)
+        if kb_ctx:
+            prompt += f"PRICING GUIDELINES (from knowledge base):\n{kb_ctx}\n\n"
+        else:
+            prompt += (
+                "PRICING GUIDELINES:\n"
+                "- Base rate: $1.50 per $1,000 revenue\n"
+                "- Adjust for: industry SIC code, security maturity, prior incidents\n"
+                "- Min premium: $2,500 | Max premium: $500,000\n"
+                "- Security controls (MFA, endpoint, backup, IR plan) earn credits\n"
+                "- Prior incidents: 1 → 1.25x, 2 → 1.5x, 3+ → 2.0x\n\n"
+            )
 
     prompt += f"SUBMISSION DATA:\n{json.dumps(submission, default=str, indent=2)}\n\n"
 
@@ -174,11 +246,32 @@ def build_policy_review_prompt(
     underwriting_result: dict[str, Any] | None = None,
 ) -> str:
     """Build a structured prompt for the policy issuance review agent."""
+    lob = submission.get("line_of_business", "cyber")
+    mem = _knowledge_store()
+
     prompt = (
         "SYSTEM: You are the OpenInsure Policy Review Agent.\n"
         "You verify that coverages are appropriate, terms are complete, and\n"
         "pricing is within guidelines before policy issuance.\n\n"
     )
+
+    # Coverage knowledge
+    cov = mem.get_coverage_options(lob)
+    if cov:
+        prompt += "AVAILABLE COVERAGES (from knowledge base):\n"
+        for c in cov:
+            prompt += f"- {c['name']} (default limit ${c['default_limit']:,}): {c['description']}\n"
+        prompt += "\n"
+
+    gl = mem.get_guidelines(lob)
+    if gl:
+        excl = gl.get("exclusions", [])
+        if excl:
+            prompt += f"STANDARD EXCLUSIONS: {', '.join(excl)}\n"
+        subj = gl.get("subjectivities", [])
+        if subj:
+            prompt += f"SUBJECTIVITIES REQUIRED: {', '.join(subj)}\n"
+        prompt += "\n"
 
     prompt += f"SUBMISSION DATA:\n{json.dumps(submission, default=str, indent=2)}\n\n"
 
@@ -205,11 +298,35 @@ def build_claims_assessment_prompt(
     precedents: list[dict[str, Any]] | None = None,
 ) -> str:
     """Build a structured prompt for the claims assessment agent."""
+    mem = _knowledge_store()
+    claim_type = claim.get("claim_type", claim.get("cause_of_loss", ""))
+
     prompt = (
         "SYSTEM: You are the OpenInsure Claims Assessment Agent.\n"
         "You verify coverage, estimate severity, recommend reserves, and\n"
         "flag potential fraud for cyber insurance claims.\n\n"
     )
+
+    # Claims precedent knowledge
+    prec_data = mem.get_claims_precedents(claim_type)
+    if prec_data:
+        prompt += (
+            f"CLAIMS PRECEDENTS (from knowledge base — {claim_type}):\n"
+            f"- Typical reserve range: ${prec_data.get('typical_reserve_range', [0, 0])[0]:,} "
+            f"- ${prec_data.get('typical_reserve_range', [0, 0])[1]:,}\n"
+            f"- Average resolution: {prec_data.get('average_resolution_days', 'N/A')} days\n"
+            f"- Common costs: {', '.join(prec_data.get('common_costs', []))}\n"
+            f"- Red flags: {', '.join(prec_data.get('red_flags', []))}\n"
+        )
+        examples = prec_data.get("case_examples", [])
+        if examples:
+            prompt += "- Case examples:\n"
+            for ex in examples:
+                prompt += (
+                    f"  * {ex['description']} — reserve ${ex['reserve']:,}, "
+                    f"settlement ${ex['settlement']:,}, {ex['duration_days']} days\n"
+                )
+        prompt += "\n"
 
     prompt += f"CLAIM DATA:\n{json.dumps(claim, default=str, indent=2)}\n\n"
 
@@ -243,11 +360,27 @@ def build_compliance_audit_prompt(
     workflow_results: dict[str, Any],
 ) -> str:
     """Build a structured prompt for the EU AI Act compliance audit agent."""
+    mem = _knowledge_store()
+
     prompt = (
         "SYSTEM: You are the OpenInsure Compliance Audit Agent.\n"
         "You audit AI-driven decisions for EU AI Act compliance (Art. 12-14).\n"
         "Check transparency, explainability, human oversight, and record-keeping.\n\n"
     )
+
+    # Compliance knowledge from store
+    eu_ai = mem.get_compliance_rules("eu_ai_act")
+    if eu_ai:
+        articles = eu_ai.get("articles", {})
+        if articles:
+            prompt += "EU AI ACT REQUIREMENTS (from knowledge base):\n"
+            for key, art in articles.items():
+                prompt += f"- {key}: {art.get('title', '')} — {art.get('requirement', '')}\n"
+            prompt += "\n"
+
+    naic = mem.get_compliance_rules("naic_model_bulletin")
+    if naic:
+        prompt += f"NAIC MODEL BULLETIN: {naic.get('requirement', '')}\n\n"
 
     prompt += f"WORKFLOW RESULTS:\n{json.dumps(workflow_results, default=str, indent=2)}\n\n"
 
@@ -270,11 +403,31 @@ def build_orchestration_prompt(
     submission: dict[str, Any],
 ) -> str:
     """Build a structured prompt for the workflow orchestration agent."""
+    mem = _knowledge_store()
+
     prompt = (
         "SYSTEM: You are the OpenInsure Orchestration Agent.\n"
         "You determine the processing path, priority, and routing for\n"
         "insurance submissions and claims.\n\n"
     )
+
+    # Workflow routing knowledge
+    wf = mem.get_workflow_rules()
+    routing = wf.get("routing", {})
+    if routing:
+        prompt += "ROUTING RULES (from knowledge base):\n"
+        for path_name, path_info in routing.items():
+            prompt += f"- {path_name}: {path_info.get('description', '')} → steps: {path_info.get('steps', [])}\n"
+        prompt += "\n"
+
+    authority = wf.get("authority_tiers", {})
+    if authority:
+        prompt += "AUTHORITY TIERS:\n"
+        for tier, limits in authority.items():
+            max_p = limits.get("max_premium", 0)
+            max_l = limits.get("max_limit", 0)
+            prompt += f"- {tier}: max premium ${max_p:,}, max limit ${max_l:,}\n"
+        prompt += "\n"
 
     prompt += f"ENTITY DATA:\n{json.dumps(submission, default=str, indent=2)}\n\n"
 
@@ -301,11 +454,37 @@ def build_billing_prompt(policy: dict[str, Any], payment_history: list[dict[str,
     Predicts payment default probability, suggests optimal installment
     schedule, and recommends collection strategy for overdue accounts.
     """
+    mem = _knowledge_store()
+
     prompt = (
         "SYSTEM: You are the OpenInsure Billing Agent for commercial insurance.\n"
         "You analyze payment patterns, predict default risk, and recommend\n"
         "collection strategies for insurance billing accounts.\n\n"
     )
+
+    # Billing knowledge
+    billing = mem.get_billing_rules()
+    terms = billing.get("payment_terms", {})
+    grace = billing.get("grace_periods", {})
+    escalation = billing.get("collection_escalation", {})
+    if terms:
+        prompt += (
+            "PAYMENT TERMS (from knowledge base):\n"
+            f"- Full pay discount: {terms.get('full_pay_discount', 0) * 100}%\n"
+            f"- Quarterly surcharge: {terms.get('quarterly_surcharge', 0) * 100}%\n"
+            f"- Monthly surcharge: {terms.get('monthly_surcharge', 0) * 100}%\n"
+        )
+    if grace:
+        prompt += (
+            f"- Standard grace period: {grace.get('standard_days', 30)} days\n"
+            f"- Renewal grace period: {grace.get('renewal_days', 15)} days\n"
+            f"- Reinstatement window: {grace.get('reinstatement_window_days', 60)} days\n"
+        )
+    if escalation:
+        prompt += "COLLECTION ESCALATION:\n"
+        for step, info in escalation.items():
+            prompt += f"- {step}: trigger at day {info.get('trigger_days', '?')}\n"
+    prompt += "\n"
 
     prompt += f"POLICY DATA:\n{json.dumps(policy, default=str, indent=2)}\n\n"
     prompt += f"PAYMENT HISTORY:\n{json.dumps(payment_history, default=str, indent=2)}\n\n"
@@ -348,12 +527,29 @@ def build_document_prompt(policy: dict[str, Any], submission: dict[str, Any], do
     Generates policy document content — executive summary, coverage
     descriptions, conditions, and exclusions — in natural insurance language.
     """
+    lob = submission.get("line_of_business", policy.get("line_of_business", "cyber"))
+    mem = _knowledge_store()
+
     prompt = (
         "SYSTEM: You are the OpenInsure Document Generation Agent.\n"
         "You produce professional insurance document content including declarations pages,\n"
         "certificates of insurance, and coverage schedules.\n"
         "Write in clear, formal insurance language suitable for policyholders and brokers.\n\n"
     )
+
+    # Coverage knowledge for document generation
+    cov = mem.get_coverage_options(lob)
+    if cov:
+        prompt += "STANDARD COVERAGES (from knowledge base):\n"
+        for c in cov:
+            prompt += f"- {c['name']}: {c['description']} (default limit ${c['default_limit']:,})\n"
+        prompt += "\n"
+
+    gl = mem.get_guidelines(lob)
+    if gl:
+        excl = gl.get("exclusions", [])
+        if excl:
+            prompt += f"STANDARD EXCLUSIONS: {', '.join(excl)}\n\n"
 
     prompt += f"DOCUMENT TYPE: {doc_type}\n\n"
     prompt += f"POLICY DATA:\n{json.dumps(policy, default=str, indent=2)}\n\n"
@@ -415,11 +611,37 @@ def build_enrichment_prompt(
     enrichment_data: dict[str, Any] | None = None,
 ) -> str:
     """Build a prompt for the Enrichment Agent to synthesize risk signals."""
+    lob = submission.get("line_of_business", "cyber")
+    mem = _knowledge_store()
+
     prompt = (
         "SYSTEM: You are the OpenInsure Enrichment Agent.\n"
         "You synthesize external data enrichment results into actionable risk signals\n"
         "for the underwriting team. Assess data quality and highlight key findings.\n\n"
     )
+
+    # Data quality thresholds and risk signal definitions
+    gl = mem.get_guidelines(lob)
+    if gl:
+        appetite = gl.get("appetite", {})
+        sec_req = appetite.get("security_requirements", {})
+        if sec_req:
+            prompt += (
+                "RISK SIGNAL DEFINITIONS (from knowledge base):\n"
+                f"- Minimum security score: {sec_req.get('minimum_score', 'N/A')}\n"
+                f"- Required controls: {sec_req.get('required_controls', [])}\n"
+                f"- Preferred controls: {sec_req.get('preferred_controls', [])}\n"
+                f"- Max prior incidents: {appetite.get('max_prior_incidents', 'N/A')}\n\n"
+            )
+
+    benchmarks = mem.get_benchmarks()
+    if benchmarks:
+        prompt += (
+            "BENCHMARK THRESHOLDS:\n"
+            f"- Target loss ratio: {benchmarks.get('target_loss_ratio', 0.60)}\n"
+            f"- Target combined ratio: {benchmarks.get('target_combined_ratio', 0.90)}\n"
+            f"- Hit ratio target: {benchmarks.get('hit_ratio_target', 0.25)}\n\n"
+        )
     prompt += f"SUBMISSION DATA:\n{json.dumps(submission, default=str, indent=2)}\n\n"
     if enrichment_data:
         prompt += f"ENRICHMENT DATA:\n{json.dumps(enrichment_data, default=str, indent=2)}\n\n"

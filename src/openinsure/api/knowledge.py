@@ -2,7 +2,8 @@
 
 Exposes the insurance knowledge graph (underwriting guidelines,
 product definitions, regulatory requirements) stored in Cosmos DB.
-Falls back to the static dictionaries when Cosmos DB is not configured.
+Falls back to the rich in-memory knowledge store when Cosmos DB is
+not configured — guaranteeing agents always have comprehensive context.
 """
 
 from __future__ import annotations
@@ -13,7 +14,7 @@ import structlog
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from openinsure.infrastructure.factory import get_knowledge_store
+from openinsure.infrastructure.factory import get_in_memory_knowledge_store, get_knowledge_store
 
 router = APIRouter()
 _log = structlog.get_logger(__name__)
@@ -28,7 +29,8 @@ class KnowledgeSearchResult(BaseModel):
     """Single search hit from the knowledge graph."""
 
     id: str
-    entityType: str
+    entityType: str = ""
+    category: str = ""
     content: str = ""
     extra: dict[str, Any] = Field(default_factory=dict)
 
@@ -37,7 +39,7 @@ class KnowledgeSearchResponse(BaseModel):
     """Search results."""
 
     query: str
-    entity_type: str | None
+    entity_type: str | None = None
     results: list[KnowledgeSearchResult]
     total: int
 
@@ -50,6 +52,21 @@ class GuidelineResponse(BaseModel):
     total: int
 
 
+class RatingFactorsResponse(BaseModel):
+    """Rating factor tables for a line of business."""
+
+    lob: str
+    rating_factors: dict[str, Any]
+
+
+class CoverageOptionsResponse(BaseModel):
+    """Available coverage options for a line of business."""
+
+    lob: str
+    coverage_options: list[dict[str, Any]]
+    total: int
+
+
 class KnowledgeProductResponse(BaseModel):
     """Product definitions from the knowledge graph."""
 
@@ -57,59 +74,27 @@ class KnowledgeProductResponse(BaseModel):
     total: int
 
 
+class ClaimsPrecedentResponse(BaseModel):
+    """Claims precedents for adjuster guidance."""
+
+    claim_type: str
+    precedents: list[dict[str, Any]]
+    total: int
+
+
+class ComplianceRulesResponse(BaseModel):
+    """Compliance framework rules."""
+
+    framework: str
+    rules: list[dict[str, Any]]
+    total: int
+
+
 # ---------------------------------------------------------------------------
-# Static fallback data (mirrors KnowledgeAgent dictionaries)
+# Static product data (retained for /products endpoint)
 # ---------------------------------------------------------------------------
 
 _COSMOS_META_KEYS = frozenset({"_rid", "_self", "_etag", "_attachments", "_ts"})
-
-_STATIC_GUIDELINES: dict[str, dict[str, Any]] = {
-    "cyber": {
-        "lob": "cyber",
-        "min_revenue": "1000000",
-        "max_revenue": "5000000000",
-        "excluded_industries": ["banking", "gambling"],
-        "required_controls": [
-            "mfa",
-            "endpoint_protection",
-            "backup_strategy",
-            "incident_response_plan",
-        ],
-        "max_prior_incidents": 5,
-        "authority_tiers": {
-            "auto_bind": "500000",
-            "senior_underwriter": "2000000",
-            "committee": "10000000",
-        },
-        "minimum_premium": "5000",
-    },
-    "general_liability": {
-        "lob": "general_liability",
-        "min_revenue": "500000",
-        "max_revenue": "2000000000",
-        "excluded_industries": [],
-        "required_controls": [],
-        "authority_tiers": {
-            "auto_bind": "250000",
-            "senior_underwriter": "1000000",
-            "committee": "5000000",
-        },
-        "minimum_premium": "2500",
-    },
-    "property": {
-        "lob": "property",
-        "min_insured_value": "100000",
-        "max_insured_value": "500000000",
-        "excluded_industries": [],
-        "required_controls": ["sprinkler_system"],
-        "authority_tiers": {
-            "auto_bind": "1000000",
-            "senior_underwriter": "5000000",
-            "committee": "25000000",
-        },
-        "minimum_premium": "3000",
-    },
-}
 
 _STATIC_PRODUCTS: list[dict[str, Any]] = [
     {
@@ -120,6 +105,15 @@ _STATIC_PRODUCTS: list[dict[str, Any]] = [
         "line_of_business": "cyber",
     },
 ]
+
+
+# ---------------------------------------------------------------------------
+# Helper: get data from Cosmos or in-memory store
+# ---------------------------------------------------------------------------
+
+
+def _mem_store():
+    return get_in_memory_knowledge_store()
 
 
 # ---------------------------------------------------------------------------
@@ -154,13 +148,21 @@ async def search_knowledge_endpoint(
     except Exception:
         _log.warning("knowledge.cosmos_unavailable", resource="search", exc_info=True)
 
-    # Static fallback — simple substring match
-    results = []
-    for lob, gl in _STATIC_GUIDELINES.items():
-        if q.lower() in str(gl).lower():
-            if type and type != "guideline":
-                continue
-            results.append(KnowledgeSearchResult(id=f"guideline-{lob}", entityType="guideline", content=str(gl)))
+    # Rich in-memory fallback
+    mem = _mem_store()
+    hits = mem.search(q)
+    if type:
+        hits = [h for h in hits if h.get("category") == type]
+    results = [
+        KnowledgeSearchResult(
+            id=h["id"],
+            category=h.get("category", ""),
+            entityType=h.get("category", ""),
+            content=h.get("match_context", ""),
+            extra=h.get("data", {}),
+        )
+        for h in hits
+    ]
     return KnowledgeSearchResponse(query=q, entity_type=type, results=results, total=len(results))
 
 
@@ -176,11 +178,41 @@ async def get_guidelines(lob: str) -> GuidelineResponse:
     except Exception:
         _log.warning("knowledge.cosmos_unavailable lob=%s", lob, exc_info=True)
 
-    # Static fallback
-    gl = _STATIC_GUIDELINES.get(lob)
+    # In-memory fallback with rich data
+    mem = _mem_store()
+    gl = mem.get_guidelines(lob)
     if gl is None:
         raise HTTPException(status_code=404, detail=f"No guidelines found for LOB: {lob}")
     return GuidelineResponse(lob=lob, guidelines=[gl], total=1)
+
+
+@router.get("/rating-factors/{lob}", response_model=RatingFactorsResponse)
+async def get_rating_factors(lob: str) -> RatingFactorsResponse:
+    """Retrieve rating factor tables for a line of business."""
+    mem = _mem_store()
+    rf = mem.get_rating_factors(lob)
+    if rf is None:
+        raise HTTPException(status_code=404, detail=f"No rating factors found for LOB: {lob}")
+    return RatingFactorsResponse(lob=lob, rating_factors=rf)
+
+
+@router.get("/coverage-options/{lob}", response_model=CoverageOptionsResponse)
+async def get_coverage_options(lob: str) -> CoverageOptionsResponse:
+    """Retrieve available coverage options for a line of business."""
+    mem = _mem_store()
+    opts = mem.get_coverage_options(lob)
+    if opts is None:
+        raise HTTPException(status_code=404, detail=f"No coverage options found for LOB: {lob}")
+    return CoverageOptionsResponse(lob=lob, coverage_options=opts, total=len(opts))
+
+
+@router.put("/guidelines/{lob}", response_model=GuidelineResponse)
+async def update_guidelines(lob: str, body: dict[str, Any]) -> GuidelineResponse:
+    """Update underwriting guidelines for a line of business (Product Manager role)."""
+    mem = _mem_store()
+    updated = mem.update_guidelines(lob, body)
+    _log.info("knowledge.guidelines_updated", lob=lob)
+    return GuidelineResponse(lob=lob, guidelines=[updated], total=1)
 
 
 @router.get("/products", response_model=KnowledgeProductResponse)
@@ -197,7 +229,6 @@ async def list_knowledge_products(
     except Exception:
         _log.warning("knowledge.cosmos_unavailable resource=products", exc_info=True)
 
-    # Static fallback
     products = _STATIC_PRODUCTS
     if lob:
         products = [p for p in products if p.get("line_of_business") == lob]
@@ -209,27 +240,9 @@ async def list_knowledge_products(
 # ---------------------------------------------------------------------------
 
 
-class ClaimsPrecedentResponse(BaseModel):
-    """Claims precedents for adjuster guidance."""
-
-    claim_type: str
-    precedents: list[dict[str, Any]]
-    total: int
-
-
-class ComplianceRulesResponse(BaseModel):
-    """Compliance framework rules."""
-
-    framework: str
-    rules: list[dict[str, Any]]
-    total: int
-
-
 @router.get("/claims-precedents/{claim_type}", response_model=ClaimsPrecedentResponse)
 async def get_claims_precedents(claim_type: str) -> ClaimsPrecedentResponse:
     """Retrieve claims precedents by claim type for adjuster guidance."""
-    from openinsure.agents.knowledge_agent import CLAIMS_PRECEDENTS
-
     try:
         store = get_knowledge_store()
         if store:
@@ -240,7 +253,8 @@ async def get_claims_precedents(claim_type: str) -> ClaimsPrecedentResponse:
     except Exception:
         _log.warning("knowledge.cosmos_unavailable resource=claims_precedents", exc_info=True)
 
-    precedent = CLAIMS_PRECEDENTS.get(claim_type)
+    mem = _mem_store()
+    precedent = mem.get_claims_precedents(claim_type)
     if precedent is None:
         raise HTTPException(status_code=404, detail=f"No precedents for claim type: {claim_type}")
     return ClaimsPrecedentResponse(claim_type=claim_type, precedents=[precedent], total=1)
@@ -249,8 +263,6 @@ async def get_claims_precedents(claim_type: str) -> ClaimsPrecedentResponse:
 @router.get("/claims-precedents", response_model=ClaimsPrecedentResponse)
 async def list_claims_precedents() -> ClaimsPrecedentResponse:
     """List all claims precedents."""
-    from openinsure.agents.knowledge_agent import CLAIMS_PRECEDENTS
-
     try:
         store = get_knowledge_store()
         if store:
@@ -260,16 +272,14 @@ async def list_claims_precedents() -> ClaimsPrecedentResponse:
     except Exception:
         _log.warning("knowledge.cosmos_unavailable resource=claims_precedents", exc_info=True)
 
-    return ClaimsPrecedentResponse(
-        claim_type="all", precedents=list(CLAIMS_PRECEDENTS.values()), total=len(CLAIMS_PRECEDENTS)
-    )
+    mem = _mem_store()
+    all_prec = mem.list_claims_precedents()
+    return ClaimsPrecedentResponse(claim_type="all", precedents=list(all_prec.values()), total=len(all_prec))
 
 
 @router.get("/compliance-rules/{framework}", response_model=ComplianceRulesResponse)
 async def get_compliance_rules(framework: str) -> ComplianceRulesResponse:
     """Retrieve compliance framework rules."""
-    from openinsure.agents.knowledge_agent import COMPLIANCE_RULES
-
     try:
         store = get_knowledge_store()
         if store:
@@ -280,7 +290,8 @@ async def get_compliance_rules(framework: str) -> ComplianceRulesResponse:
     except Exception:
         _log.warning("knowledge.cosmos_unavailable resource=compliance_rules", exc_info=True)
 
-    rules = COMPLIANCE_RULES.get(framework)
+    mem = _mem_store()
+    rules = mem.get_compliance_rules(framework)
     if rules is None:
         raise HTTPException(status_code=404, detail=f"No rules for framework: {framework}")
     return ComplianceRulesResponse(framework=framework, rules=[rules], total=1)
@@ -289,8 +300,6 @@ async def get_compliance_rules(framework: str) -> ComplianceRulesResponse:
 @router.get("/compliance-rules", response_model=ComplianceRulesResponse)
 async def list_compliance_rules() -> ComplianceRulesResponse:
     """List all compliance framework rules."""
-    from openinsure.agents.knowledge_agent import COMPLIANCE_RULES
-
     try:
         store = get_knowledge_store()
         if store:
@@ -300,4 +309,6 @@ async def list_compliance_rules() -> ComplianceRulesResponse:
     except Exception:
         _log.warning("knowledge.cosmos_unavailable resource=compliance_rules", exc_info=True)
 
-    return ComplianceRulesResponse(framework="all", rules=list(COMPLIANCE_RULES.values()), total=len(COMPLIANCE_RULES))
+    mem = _mem_store()
+    all_rules = mem.list_compliance_rules()
+    return ComplianceRulesResponse(framework="all", rules=list(all_rules.values()), total=len(all_rules))
