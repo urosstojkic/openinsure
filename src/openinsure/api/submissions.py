@@ -901,6 +901,34 @@ async def bind_submission(submission_id: str, user: CurrentUser = Depends(get_cu
 
     await policy_repo.create(policy_data)
 
+    # Auto-generate declaration page via Foundry document agent
+    if foundry.is_available:
+        try:
+            from openinsure.agents.prompts import build_document_prompt
+
+            doc_prompt = build_document_prompt(policy_data, record, "declaration")
+            doc_result = await foundry.invoke("openinsure-document", doc_prompt)
+            await _pub(
+                "policy.document_generated",
+                f"/policies/{policy_id}",
+                {
+                    "policy_id": policy_id,
+                    "document_type": "declaration",
+                    "source": doc_result.get("source", "unknown"),
+                },
+            )
+            _logger.info(
+                "submissions.bind_document_generated",
+                policy_id=policy_id,
+                source=doc_result.get("source", "unknown"),
+            )
+        except Exception:
+            _logger.warning(
+                "submissions.bind_document_generation_failed",
+                policy_id=policy_id,
+                exc_info=True,
+            )
+
     # Create billing account with auto-invoicing (#77)
     from openinsure.api.billing import create_billing_account_on_bind
 
