@@ -5,6 +5,32 @@ All notable changes to OpenInsure will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] — AI-Native Knowledge Pipeline
+
+### Added
+- **Decision Learning Loop** (`services/learning_loop.py`): Tracks AI decision outcomes for continuous improvement. When claims are filed or policies renew/cancel, outcomes are correlated with the original triage/quote/bind decisions. Computes per-agent accuracy metrics and detects systematic biases (e.g., "Healthcare submissions were underpriced by 15%"). Historical accuracy context is injected into agent prompts so agents self-correct over time.
+  - API: `GET /api/v1/analytics/decision-accuracy`, `POST /api/v1/analytics/decision-outcome`
+  - MCP tool: `get_decision_accuracy`
+  - Closes #86
+- **Comparable Account Retrieval** (`services/comparable_accounts.py`): When assessing a new submission, agents now see how similar past submissions were handled. Matches by LOB, industry (SIC prefix), revenue band (±50%), employee count (±50%), and security maturity. Returns pricing history, claim outcomes, and loss ratios.
+  - API: `GET /api/v1/submissions/{id}/comparables`
+  - MCP tool: `get_comparable_accounts`
+  - Triage prompt includes: "COMPARABLE ACCOUNTS: 3 similar tech companies — 2 proceeded, 1 declined"
+  - Underwriting prompt includes: "COMPARABLE PRICING: Similar companies priced at $8K-$15K. Average loss ratio: 42%"
+  - Closes #87
+- **Dynamic Knowledge Retrieval** (enhanced `agents/prompts.py`): Knowledge retrieval is now contextual per submission. A healthcare company gets HIPAA rules, a fintech gets PCI/GLBA requirements, and a ransomware-heavy industry gets ransomware precedents. Jurisdiction-aware regulatory context (US/EU/UK) is included automatically.
+  - New knowledge store methods: `get_industry_guidelines()`, `get_compliance_rules_for_jurisdiction()`, `get_claims_precedents_by_type()`
+  - 6 industry profiles: healthcare, financial_services, technology, retail, manufacturing, education
+  - 3 jurisdiction profiles: US, EU, UK
+  - Closes #88
+- **55 new unit tests** covering all three features (520 total, up from 465)
+- **2 new MCP tools** (`get_decision_accuracy`, `get_comparable_accounts`) bringing total to 29
+
+### Changed
+- `build_triage_prompt()` and `build_underwriting_prompt()` now accept `dynamic_knowledge`, `comparable_context`, and `learning_context` keyword arguments for AI-native context injection
+- `build_prompt_for_step()` (workflow engine dispatcher) automatically retrieves and injects learning loop context, comparable accounts, and dynamic knowledge for intake and underwriting steps
+- `InMemoryKnowledgeStore` expanded with industry-specific guidelines, jurisdiction compliance rules, and fuzzy claims precedent matching
+
 ## [0.4.0] - 2026-03-19
 
 ### Added

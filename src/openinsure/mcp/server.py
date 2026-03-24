@@ -932,6 +932,68 @@ async def get_upcoming_renewals(days: int = 90) -> str:
 
 
 # ======================================================================
+# AI-Native tools (#86, #87 — Learning Loop + Comparables)
+# ======================================================================
+
+
+@mcp.tool()
+async def get_decision_accuracy(
+    agent_name: str | None = None,
+    period_days: int = 90,
+) -> str:
+    """Get decision accuracy metrics for AI agents.
+
+    Shows how well agent predictions matched actual outcomes — risk scores
+    vs claims frequency, premiums vs loss ratios.  Includes improvement
+    signals identifying systematic biases.
+
+    Args:
+        agent_name: Filter to a specific agent (e.g. "triage", "underwriting").
+            If not provided, returns metrics for all agents.
+        period_days: Look-back period in days (default 90).
+
+    Returns:
+        JSON with accuracy rates, deviation metrics, and improvement signals.
+    """
+    params: dict[str, Any] = {"period_days": period_days}
+    if agent_name:
+        params["agent_name"] = agent_name
+    result = await _request("GET", "/analytics/decision-accuracy", params=params)
+    return json.dumps(result, default=str)
+
+
+@mcp.tool()
+async def get_comparable_accounts(
+    submission_id: str,
+    limit: int = 5,
+) -> str:
+    """Find comparable accounts for a submission.
+
+    Retrieves similar past submissions by industry, revenue, security
+    profile and returns how they were priced, whether claims were filed,
+    and the loss ratio.  Essential context for triage and underwriting.
+
+    Args:
+        submission_id: UUID of the submission to find comparables for.
+        limit: Max number of comparable accounts (default 5).
+
+    Returns:
+        JSON with comparable accounts, pricing history, and claim outcomes.
+    """
+    try:
+        result = await _request(
+            "GET",
+            f"/submissions/{submission_id}/comparables",
+            params={"limit": limit},
+        )
+        return json.dumps(result, default=str)
+    except httpx.HTTPStatusError as exc:
+        if exc.response.status_code == 404:
+            return json.dumps({"error": f"Submission {submission_id} not found"})
+        raise
+
+
+# ======================================================================
 # MCP Resources — read-only context (via API)
 # ======================================================================
 
@@ -1024,6 +1086,8 @@ class OpenInsureMCPServer:
         "search_knowledge": search_knowledge,
         "get_guidelines": get_guidelines,
         "get_rating_factors": get_rating_factors,
+        "get_decision_accuracy": get_decision_accuracy,
+        "get_comparable_accounts": get_comparable_accounts,
     }
 
     async def list_tools(self) -> list[dict[str, Any]]:

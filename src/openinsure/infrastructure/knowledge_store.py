@@ -499,6 +499,175 @@ WORKFLOW_RULES: dict[str, Any] = {
 # Analytics Benchmark Metrics
 # ======================================================================
 
+# ======================================================================
+# Industry-Specific Guidelines (Feature 3: Dynamic Knowledge Retrieval)
+# ======================================================================
+
+INDUSTRY_GUIDELINES: dict[str, dict[str, Any]] = {
+    "healthcare": {
+        "regulatory_frameworks": ["HIPAA", "HITECH", "state_health_privacy"],
+        "key_risks": [
+            "Patient data exposure (PHI)",
+            "Ransomware targeting medical devices",
+            "EHR system compromise",
+            "Telemedicine platform vulnerabilities",
+        ],
+        "required_controls": [
+            "HIPAA Security Rule compliance",
+            "BAA with all vendors handling PHI",
+            "Encrypted PHI at rest and in transit",
+            "Medical device network segmentation",
+        ],
+        "premium_adjustment": 1.40,
+        "typical_claim_types": ["data_breach", "ransomware"],
+        "avg_breach_cost_per_record": 10.93,
+        "regulatory_fine_exposure": "Up to $1.5M per HIPAA violation category per year",
+    },
+    "financial_services": {
+        "regulatory_frameworks": ["GLBA", "SOX", "PCI_DSS", "NYDFS_500"],
+        "key_risks": [
+            "Wire fraud / funds transfer fraud",
+            "Insider trading data exposure",
+            "Payment card data compromise",
+            "Regulatory investigation costs",
+        ],
+        "required_controls": [
+            "PCI DSS compliance (if handling card data)",
+            "SOX IT controls",
+            "GLBA Safeguards Rule compliance",
+            "Anti-money laundering (AML) controls",
+        ],
+        "premium_adjustment": 1.20,
+        "typical_claim_types": ["social_engineering", "data_breach"],
+        "avg_breach_cost_per_record": 5.97,
+        "regulatory_fine_exposure": "NYDFS fines up to $250K per violation",
+    },
+    "technology": {
+        "regulatory_frameworks": ["SOC2", "ISO_27001", "GDPR"],
+        "key_risks": [
+            "Supply chain attacks (SolarWinds-type)",
+            "API vulnerabilities",
+            "Cloud misconfiguration",
+            "IP theft / source code exposure",
+        ],
+        "required_controls": [
+            "SOC 2 Type II certification",
+            "Secure SDLC practices",
+            "Vulnerability management program",
+            "Cloud security posture management",
+        ],
+        "premium_adjustment": 0.85,
+        "typical_claim_types": ["data_breach", "business_interruption"],
+        "avg_breach_cost_per_record": 4.45,
+        "regulatory_fine_exposure": "GDPR up to 4% of global annual turnover",
+    },
+    "retail": {
+        "regulatory_frameworks": ["PCI_DSS", "CCPA", "state_breach_notification"],
+        "key_risks": [
+            "Point-of-sale (POS) system compromise",
+            "E-commerce platform breaches",
+            "Customer payment card data exposure",
+            "Loyalty program data theft",
+        ],
+        "required_controls": [
+            "PCI DSS compliance",
+            "Web application firewall",
+            "Payment tokenization",
+            "Fraud detection systems",
+        ],
+        "premium_adjustment": 1.15,
+        "typical_claim_types": ["data_breach", "social_engineering"],
+        "avg_breach_cost_per_record": 3.28,
+        "regulatory_fine_exposure": "PCI fines $5K-$100K per month of non-compliance",
+    },
+    "manufacturing": {
+        "regulatory_frameworks": ["NIST_CSF", "ICS_CERT"],
+        "key_risks": [
+            "OT/ICS system attacks",
+            "Ransomware disrupting production",
+            "Supply chain compromise",
+            "Trade secret theft",
+        ],
+        "required_controls": [
+            "OT/IT network segmentation",
+            "Industrial control system monitoring",
+            "Supply chain security assessment",
+            "Backup and recovery for OT systems",
+        ],
+        "premium_adjustment": 1.30,
+        "typical_claim_types": ["ransomware", "business_interruption"],
+        "avg_breach_cost_per_record": 4.47,
+        "regulatory_fine_exposure": "Varies by jurisdiction and industry sub-sector",
+    },
+    "education": {
+        "regulatory_frameworks": ["FERPA", "COPPA", "state_student_privacy"],
+        "key_risks": [
+            "Student record exposure",
+            "Research data compromise",
+            "Ransomware targeting school systems",
+            "Phishing targeting faculty/staff",
+        ],
+        "required_controls": [
+            "FERPA compliance program",
+            "Student data encryption",
+            "Phishing awareness training",
+            "Network monitoring for anomalies",
+        ],
+        "premium_adjustment": 1.10,
+        "typical_claim_types": ["ransomware", "data_breach"],
+        "avg_breach_cost_per_record": 3.65,
+        "regulatory_fine_exposure": "Loss of federal funding eligibility for FERPA violations",
+    },
+}
+
+# ======================================================================
+# Jurisdiction-Specific Compliance Rules
+# ======================================================================
+
+JURISDICTION_RULES: dict[str, dict[str, Any]] = {
+    "US": {
+        "framework": "US Federal + State",
+        "requirements": [
+            "State breach notification laws (all 50 states)",
+            "NAIC Model Bulletin on AI in insurance",
+            "State-specific insurance regulations",
+        ],
+        "notification_deadline": "Varies by state (24 hours to 90 days)",
+        "key_regulations": {
+            "federal": ["GLBA", "HIPAA (if applicable)", "CCPA/CPRA (CA)"],
+            "strict_states": ["CA", "NY", "MA", "IL"],
+        },
+    },
+    "EU": {
+        "framework": "EU AI Act + GDPR",
+        "requirements": [
+            "GDPR compliance for all personal data processing",
+            "EU AI Act high-risk system classification (insurance underwriting)",
+            "Right to explanation for automated decisions",
+            "DPIA required for profiling-based underwriting",
+            "72-hour breach notification to supervisory authority",
+        ],
+        "notification_deadline": "72 hours to supervisory authority",
+        "key_regulations": {
+            "primary": ["GDPR", "EU AI Act", "ePrivacy Directive"],
+            "insurance_specific": ["Solvency II", "IDD (Insurance Distribution Directive)"],
+        },
+    },
+    "UK": {
+        "framework": "UK Data Protection Act + FCA",
+        "requirements": [
+            "UK GDPR compliance",
+            "FCA Consumer Duty obligations",
+            "ICO breach notification within 72 hours",
+        ],
+        "notification_deadline": "72 hours to ICO",
+        "key_regulations": {
+            "primary": ["UK GDPR", "Data Protection Act 2018"],
+            "insurance_specific": ["FCA PRIN", "FCA SYSC"],
+        },
+    },
+}
+
 BENCHMARK_METRICS: dict[str, Any] = {
     "target_loss_ratio": 0.60,
     "target_expense_ratio": 0.30,
@@ -533,6 +702,8 @@ class InMemoryKnowledgeStore:
         self._billing_rules = dict(BILLING_RULES)
         self._workflow_rules = dict(WORKFLOW_RULES)
         self._benchmarks = dict(BENCHMARK_METRICS)
+        self._industry_guidelines = dict(INDUSTRY_GUIDELINES)
+        self._jurisdiction_rules = dict(JURISDICTION_RULES)
 
     # -- Guidelines --------------------------------------------------------
 
@@ -586,6 +757,58 @@ class InMemoryKnowledgeStore:
 
     def get_benchmarks(self) -> dict[str, Any]:
         return dict(self._benchmarks)
+
+    # -- Industry guidelines (Feature 3) -----------------------------------
+
+    def get_industry_guidelines(self, industry: str) -> dict[str, Any] | None:
+        """Return industry-specific guidelines, risk factors, and regulatory context."""
+        key = industry.lower().replace(" ", "_")
+        return self._industry_guidelines.get(key)
+
+    def list_industry_guidelines(self) -> dict[str, dict[str, Any]]:
+        return dict(self._industry_guidelines)
+
+    # -- Jurisdiction compliance (Feature 3) --------------------------------
+
+    def get_compliance_rules_for_jurisdiction(self, territory: str) -> dict[str, Any] | None:
+        """Return jurisdiction-specific compliance and regulatory rules."""
+        key = territory.upper().strip()
+        return self._jurisdiction_rules.get(key)
+
+    def list_jurisdiction_rules(self) -> dict[str, dict[str, Any]]:
+        return dict(self._jurisdiction_rules)
+
+    # -- Claims precedents by risk type (Feature 3) -------------------------
+
+    def get_claims_precedents_by_type(self, risk_type: str) -> dict[str, Any] | None:
+        """Return claims precedents most relevant to a given risk type.
+
+        Maps risk types (ransomware, phishing, etc.) to the best matching
+        precedent data.
+        """
+        key = risk_type.lower().replace(" ", "_")
+        direct = self._claims_precedents.get(key)
+        if direct:
+            return direct
+
+        # Fuzzy mapping for common risk descriptions
+        mappings = {
+            "phishing": "social_engineering",
+            "bec": "social_engineering",
+            "wire_fraud": "social_engineering",
+            "ransomware_attack": "ransomware",
+            "encryption": "ransomware",
+            "breach": "data_breach",
+            "data_exposure": "data_breach",
+            "pii_exposure": "data_breach",
+            "downtime": "business_interruption",
+            "outage": "business_interruption",
+            "system_failure": "business_interruption",
+        }
+        mapped_key = mappings.get(key)
+        if mapped_key:
+            return self._claims_precedents.get(mapped_key)
+        return None
 
     # -- Search ------------------------------------------------------------
 

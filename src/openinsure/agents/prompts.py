@@ -8,6 +8,11 @@ Each builder assembles a complete prompt with:
 
 All 10 agents query the in-memory knowledge store before reasoning,
 making it the core competitive advantage of the platform.
+
+Dynamic knowledge retrieval (Feature 3) ensures each submission receives
+contextual knowledge based on industry, jurisdiction, and risk profile.
+Comparable account context (Feature 2) and historical accuracy data
+(Feature 1) are injected into triage and underwriting prompts.
 """
 
 from __future__ import annotations
@@ -132,22 +137,26 @@ def _submission_specific_guidelines(submission: dict[str, Any]) -> list[dict[str
     industry_factors = rf.get("industry_factors", {})
     matched_industry_factor = industry_factors.get(industry)
     if matched_industry_factor is not None:
-        results.append({
-            "title": f"Industry Factor: {industry}",
-            "content": (
-                f"Industry '{industry}' has a rating factor of {matched_industry_factor}. "
-                f"{'This is a favorable rate (below 1.0).' if matched_industry_factor < 1.0 else ''}"
-                f"{'This is an elevated rate (above 1.0) — increased scrutiny required.' if matched_industry_factor > 1.0 else ''}"
-            ),
-        })
+        results.append(
+            {
+                "title": f"Industry Factor: {industry}",
+                "content": (
+                    f"Industry '{industry}' has a rating factor of {matched_industry_factor}. "
+                    f"{'This is a favorable rate (below 1.0).' if matched_industry_factor < 1.0 else ''}"
+                    f"{'This is an elevated rate (above 1.0) — increased scrutiny required.' if matched_industry_factor > 1.0 else ''}"
+                ),
+            }
+        )
     elif industry:
-        results.append({
-            "title": f"Industry Factor: {industry}",
-            "content": (
-                f"Industry '{industry}' is not in the standard rating table. "
-                "Apply default factor of 1.0 and flag for underwriter review."
-            ),
-        })
+        results.append(
+            {
+                "title": f"Industry Factor: {industry}",
+                "content": (
+                    f"Industry '{industry}' is not in the standard rating table. "
+                    "Apply default factor of 1.0 and flag for underwriter review."
+                ),
+            }
+        )
 
     # SIC code appetite check
     appetite = gl.get("appetite", {})
@@ -159,19 +168,25 @@ def _submission_specific_guidelines(submission: dict[str, Any]) -> list[dict[str
                 if "-" in r:
                     low, high = r.split("-")
                     if low.strip().isdigit() and high.strip().isdigit():
-                        if int(low.strip()) <= int(sic_code[:4] if len(sic_code) >= 4 else sic_code) <= int(high.strip()):
+                        if (
+                            int(low.strip())
+                            <= int(sic_code[:4] if len(sic_code) >= 4 else sic_code)
+                            <= int(high.strip())
+                        ):
                             sic_status = category
                             break
-        results.append({
-            "title": f"SIC Code {sic_code} Classification",
-            "content": (
-                f"SIC code {sic_code} is classified as '{sic_status}' for this LOB. "
-                f"{'WITHIN APPETITE — proceed normally.' if sic_status == 'preferred' else ''}"
-                f"{'ACCEPTABLE — standard processing.' if sic_status == 'acceptable' else ''}"
-                f"{'DECLINED CLASS — do not proceed.' if sic_status == 'declined' else ''}"
-                f"{'NOT CLASSIFIED — refer to underwriter.' if sic_status == 'unknown' else ''}"
-            ),
-        })
+        results.append(
+            {
+                "title": f"SIC Code {sic_code} Classification",
+                "content": (
+                    f"SIC code {sic_code} is classified as '{sic_status}' for this LOB. "
+                    f"{'WITHIN APPETITE — proceed normally.' if sic_status == 'preferred' else ''}"
+                    f"{'ACCEPTABLE — standard processing.' if sic_status == 'acceptable' else ''}"
+                    f"{'DECLINED CLASS — do not proceed.' if sic_status == 'declined' else ''}"
+                    f"{'NOT CLASSIFIED — refer to underwriter.' if sic_status == 'unknown' else ''}"
+                ),
+            }
+        )
 
     # Revenue tier context
     rev_range = appetite.get("revenue_range", {})
@@ -359,6 +374,189 @@ def _get_knowledge_context_for_lob(lob: str = "cyber") -> str:
 
 
 # ---------------------------------------------------------------------------
+# Feature 3: Dynamic Knowledge Retrieval (contextual RAG)
+# ---------------------------------------------------------------------------
+
+
+def _extract_industry(submission: dict[str, Any]) -> str:
+    """Extract a normalised industry name from submission data."""
+    risk_data = submission.get("risk_data", {})
+    cyber_data = submission.get("cyber_risk_data", {})
+    if isinstance(risk_data, str):
+        try:
+            risk_data = json.loads(risk_data)
+        except (json.JSONDecodeError, TypeError):
+            risk_data = {}
+    if isinstance(cyber_data, str):
+        try:
+            cyber_data = json.loads(cyber_data)
+        except (json.JSONDecodeError, TypeError):
+            cyber_data = {}
+    merged = {**risk_data, **cyber_data}
+    industry = str(merged.get("industry", "")).lower().replace(" ", "_")
+
+    # Map SIC code prefix to industry if no explicit industry given
+    if not industry:
+        sic = str(merged.get("industry_sic_code", merged.get("sic_code", "")))
+        if sic:
+            sic_map = {
+                "73": "technology",
+                "60": "financial_services",
+                "61": "financial_services",
+                "62": "financial_services",
+                "80": "healthcare",
+                "52": "retail",
+                "53": "retail",
+                "54": "retail",
+                "20": "manufacturing",
+                "30": "manufacturing",
+                "82": "education",
+            }
+            industry = sic_map.get(sic[:2], "")
+    return industry
+
+
+def _estimate_primary_risk(submission: dict[str, Any]) -> str:
+    """Estimate the primary risk type for this submission."""
+    risk_data = submission.get("risk_data", {})
+    cyber_data = submission.get("cyber_risk_data", {})
+    if isinstance(risk_data, str):
+        try:
+            risk_data = json.loads(risk_data)
+        except (json.JSONDecodeError, TypeError):
+            risk_data = {}
+    if isinstance(cyber_data, str):
+        try:
+            cyber_data = json.loads(cyber_data)
+        except (json.JSONDecodeError, TypeError):
+            cyber_data = {}
+    merged = {**risk_data, **cyber_data}
+
+    # Heuristic: check security posture and industry to estimate risk
+    has_mfa = merged.get("has_mfa", False)
+    has_endpoint = merged.get("has_endpoint_protection", False)
+    security_score = float(merged.get("security_maturity_score", 5) or 5)
+    prior_incidents = int(merged.get("prior_incidents", 0) or 0)
+
+    if security_score < 4 and not has_endpoint:
+        return "ransomware"
+    if prior_incidents > 0:
+        return "data_breach"
+    if not has_mfa:
+        return "social_engineering"
+    return "data_breach"
+
+
+async def _retrieve_relevant_knowledge(submission: dict[str, Any]) -> dict[str, Any]:
+    """Dynamically retrieve knowledge relevant to THIS submission.
+
+    Unlike static LOB-level retrieval, this function returns contextual
+    knowledge based on the submission's industry, jurisdiction, and risk
+    profile.  A healthcare submission gets HIPAA rules, a fintech gets PCI
+    requirements, and a ransomware-heavy industry gets ransomware precedents.
+
+    Returns:
+        Dict with keys: guidelines, rating_factors, industry_specific,
+        recent_claims, regulatory.
+    """
+    store = _knowledge_store()
+    lob = submission.get("line_of_business", "cyber")
+    industry = _extract_industry(submission)
+    territory = submission.get("territory", "US")
+
+    return {
+        "guidelines": store.get_guidelines(lob),
+        "rating_factors": store.get_rating_factors(lob),
+        "industry_specific": store.get_industry_guidelines(industry) if industry else None,
+        "recent_claims": store.get_claims_precedents_by_type(_estimate_primary_risk(submission)),
+        "regulatory": store.get_compliance_rules_for_jurisdiction(territory),
+    }
+
+
+def _format_dynamic_knowledge(knowledge: dict[str, Any]) -> str:
+    """Format dynamically retrieved knowledge into a prompt-ready string."""
+    parts: list[str] = []
+
+    industry_data = knowledge.get("industry_specific")
+    if industry_data:
+        parts.append("INDUSTRY-SPECIFIC CONTEXT:")
+        parts.append(f"  Key risks: {', '.join(industry_data.get('key_risks', []))}")
+        parts.append(f"  Required controls: {', '.join(industry_data.get('required_controls', []))}")
+        parts.append(f"  Regulatory frameworks: {', '.join(industry_data.get('regulatory_frameworks', []))}")
+        adj = industry_data.get("premium_adjustment")
+        if adj:
+            parts.append(f"  Premium adjustment factor: {adj}")
+        cost = industry_data.get("avg_breach_cost_per_record")
+        if cost:
+            parts.append(f"  Avg breach cost per record: ${cost}")
+        exposure = industry_data.get("regulatory_fine_exposure")
+        if exposure:
+            parts.append(f"  Regulatory fine exposure: {exposure}")
+
+    claims_data = knowledge.get("recent_claims")
+    if claims_data:
+        parts.append("RELEVANT CLAIMS PRECEDENTS:")
+        rr = claims_data.get("typical_reserve_range", [])
+        if rr and len(rr) >= 2:
+            parts.append(f"  Typical reserve range: ${rr[0]:,} - ${rr[1]:,}")
+        parts.append(f"  Avg resolution: {claims_data.get('average_resolution_days', 'N/A')} days")
+        red_flags = claims_data.get("red_flags", [])
+        if red_flags:
+            parts.append(f"  Red flags: {', '.join(red_flags)}")
+
+    regulatory = knowledge.get("regulatory")
+    if regulatory:
+        parts.append("JURISDICTION-SPECIFIC REGULATORY CONTEXT:")
+        parts.append(f"  Framework: {regulatory.get('framework', 'N/A')}")
+        for req in regulatory.get("requirements", []):
+            parts.append(f"  - {req}")
+        parts.append(f"  Notification deadline: {regulatory.get('notification_deadline', 'N/A')}")
+
+    return "\n".join(parts)
+
+
+# ---------------------------------------------------------------------------
+# Feature 1+2: Learning loop and comparable account context helpers
+# ---------------------------------------------------------------------------
+
+
+async def _get_learning_context(agent_name: str) -> str:
+    """Get historical accuracy context for prompt injection (Feature 1)."""
+    try:
+        from openinsure.services.learning_loop import get_decision_tracker
+
+        tracker = get_decision_tracker()
+        return await tracker.get_prompt_context(agent_name)
+    except Exception:
+        logger.debug("prompts.learning_context_failed", exc_info=True)
+        return ""
+
+
+async def _get_comparable_triage_context(submission: dict[str, Any]) -> str:
+    """Get comparable account context for triage (Feature 2)."""
+    try:
+        from openinsure.services.comparable_accounts import get_comparable_finder
+
+        finder = get_comparable_finder()
+        return await finder.get_triage_context(submission)
+    except Exception:
+        logger.debug("prompts.comparable_triage_context_failed", exc_info=True)
+        return ""
+
+
+async def _get_comparable_underwriting_context(submission: dict[str, Any]) -> str:
+    """Get comparable account context for underwriting (Feature 2)."""
+    try:
+        from openinsure.services.comparable_accounts import get_comparable_finder
+
+        finder = get_comparable_finder()
+        return await finder.get_underwriting_context(submission)
+    except Exception:
+        logger.debug("prompts.comparable_uw_context_failed", exc_info=True)
+        return ""
+
+
+# ---------------------------------------------------------------------------
 # Prompt builders
 # ---------------------------------------------------------------------------
 
@@ -366,6 +564,10 @@ def _get_knowledge_context_for_lob(lob: str = "cyber") -> str:
 def build_triage_prompt(
     submission: dict[str, Any],
     guidelines: list[dict[str, Any]] | None = None,
+    *,
+    dynamic_knowledge: str = "",
+    comparable_context: str = "",
+    learning_context: str = "",
 ) -> str:
     """Build a structured prompt for the submission triage agent."""
     lob = submission.get("line_of_business", "cyber")
@@ -373,6 +575,10 @@ def build_triage_prompt(
         "SYSTEM: You are the OpenInsure Submission Triage Agent for cyber insurance.\n"
         "You assess whether submissions match the carrier's appetite and risk profile.\n\n"
     )
+
+    # Historical accuracy (Feature 1)
+    if learning_context:
+        prompt += f"{learning_context}\n\n"
 
     # Underwriting guidelines from knowledge graph
     if guidelines:
@@ -394,6 +600,14 @@ def build_triage_prompt(
                 "- Max prior incidents: 3\n"
                 "- Required: MFA, endpoint protection\n\n"
             )
+
+    # Dynamic industry/jurisdiction knowledge (Feature 3)
+    if dynamic_knowledge:
+        prompt += f"{dynamic_knowledge}\n\n"
+
+    # Comparable accounts (Feature 2)
+    if comparable_context:
+        prompt += f"{comparable_context}\n\n"
 
     # Submission data
     prompt += f"SUBMISSION DATA:\n{json.dumps(submission, default=str, indent=2)}\n\n"
@@ -418,6 +632,10 @@ def build_underwriting_prompt(
     triage_result: dict[str, Any] | None = None,
     guidelines: list[dict[str, Any]] | None = None,
     rating_breakdown: dict[str, Any] | None = None,
+    *,
+    dynamic_knowledge: str = "",
+    comparable_context: str = "",
+    learning_context: str = "",
 ) -> str:
     """Build a structured prompt for the underwriting / pricing agent."""
     lob = submission.get("line_of_business", "cyber")
@@ -425,6 +643,10 @@ def build_underwriting_prompt(
         "SYSTEM: You are the OpenInsure Underwriting Agent for cyber insurance.\n"
         "You assess risk and calculate premium pricing.\n\n"
     )
+
+    # Historical accuracy (Feature 1)
+    if learning_context:
+        prompt += f"{learning_context}\n\n"
 
     if guidelines:
         prompt += "UNDERWRITING GUIDELINES:\n"
@@ -444,6 +666,14 @@ def build_underwriting_prompt(
                 "- Security controls (MFA, endpoint, backup, IR plan) earn credits\n"
                 "- Prior incidents: 1 → 1.25x, 2 → 1.5x, 3+ → 2.0x\n\n"
             )
+
+    # Dynamic industry/jurisdiction knowledge (Feature 3)
+    if dynamic_knowledge:
+        prompt += f"{dynamic_knowledge}\n\n"
+
+    # Comparable pricing (Feature 2)
+    if comparable_context:
+        prompt += f"{comparable_context}\n\n"
 
     prompt += f"SUBMISSION DATA:\n{json.dumps(submission, default=str, indent=2)}\n\n"
 
@@ -913,17 +1143,36 @@ async def build_prompt_for_step(
 
     if step_name == "intake":
         guidelines = await get_triage_context(entity_data)
-        return build_triage_prompt(entity_data, guidelines=guidelines or None)
+        # Feature 1+2+3: Inject learning context, comparables, and dynamic knowledge
+        learning_ctx = await _get_learning_context("triage")
+        comparable_ctx = await _get_comparable_triage_context(entity_data)
+        knowledge = await _retrieve_relevant_knowledge(entity_data)
+        dynamic_kb = _format_dynamic_knowledge(knowledge)
+        return build_triage_prompt(
+            entity_data,
+            guidelines=guidelines or None,
+            dynamic_knowledge=dynamic_kb,
+            comparable_context=comparable_ctx,
+            learning_context=learning_ctx,
+        )
 
     if step_name == "underwriting":
         triage_result = context.get("intake_result")
         guidelines = await get_triage_context(entity_data)
         rating_breakdown = _get_rating_breakdown(entity_data)
+        # Feature 1+2+3: Inject learning context, comparables, and dynamic knowledge
+        learning_ctx = await _get_learning_context("underwriting")
+        comparable_ctx = await _get_comparable_underwriting_context(entity_data)
+        knowledge = await _retrieve_relevant_knowledge(entity_data)
+        dynamic_kb = _format_dynamic_knowledge(knowledge)
         return build_underwriting_prompt(
             entity_data,
             triage_result=triage_result,
             guidelines=guidelines or None,
             rating_breakdown=rating_breakdown,
+            dynamic_knowledge=dynamic_kb,
+            comparable_context=comparable_ctx,
+            learning_context=learning_ctx,
         )
 
     if step_name == "policy_review":

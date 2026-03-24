@@ -1,22 +1,38 @@
 # AI-Native Assessment: OpenInsure
 
-**Date:** 2025-07-25
+**Date:** 2025-07-25 (Updated: v0.5.0)
 **Assessors:** Insurance + Backend Architecture Review (OpenInsure Squad)
-**Verdict:** **AI-Assisted with strong AI-Native scaffolding** — not yet truly AI-Native
+**Verdict:** **AI-Native (8/10)** — closed-loop learning, contextual knowledge, and comparable account retrieval implemented
 
 ---
 
 ## Executive Summary
 
-OpenInsure is **not yet AI-native**, but the gap is smaller than it appears. The
-platform has genuine AI-first architecture (multi-agent workflows, structured
-prompts with knowledge injection, confidence-gated escalation, EU AI Act
-decision records). However, the knowledge pipeline has a critical weakness:
-**knowledge retrieval is LOB-aware but not submission-specific**, meaning every
-cyber submission gets the same guidelines regardless of industry, jurisdiction, or
-risk profile. There is no learning loop, no comparable-account retrieval, and the
-fallback path (when Foundry is down) reduces the system to a deterministic
-rules engine that returns hardcoded defaults.
+OpenInsure has moved from **AI-Assisted** to **AI-Native** with the v0.5.0
+knowledge pipeline release. Three critical gaps identified in the original
+assessment have been closed:
+
+1. **Decision Learning Loop** — Agent decisions are now tracked against real-world
+   outcomes (claims filed, policies renewed/cancelled). Accuracy metrics and
+   improvement signals are computed per agent and injected back into prompts,
+   enabling self-correcting AI behaviour.
+
+2. **Comparable Account Retrieval** — When assessing a new submission, agents now
+   see how similar past submissions were handled (pricing, claim outcomes, loss
+   ratios). This is the strongest signal for pricing and is surfaced in both
+   triage and underwriting prompts.
+
+3. **Dynamic Knowledge Retrieval** — Knowledge is now contextual per submission.
+   A healthcare company gets HIPAA rules and ransomware precedents, a fintech
+   gets PCI/GLBA requirements, and jurisdiction-specific regulatory context
+   (US/EU/UK) is automatically included.
+
+### Remaining Gaps (2/10)
+
+- ❌ **Foundry fallback** still returns hardcoded defaults (flat $5K premium)
+- ❌ **Cross-agent disagreement detection** not yet implemented
+- ❌ **Vector/semantic search** (Azure AI Search RAG) not yet integrated
+- ❌ **Confidence calibration** against historical outcomes pending
 
 ---
 
@@ -110,14 +126,15 @@ subjectivities.
 
 ### Is Knowledge Retrieval Dynamic or Static?
 
-**Semi-dynamic.** Knowledge varies by:
+**Dynamic (v0.5.0).** Knowledge varies by:
 - ✅ **Line of business** — cyber vs. general_liability vs. property get different guidelines
 - ✅ **Claim type** — ransomware vs. data_breach vs. social_engineering get different precedents
-- ❌ **Industry** — a healthcare company and a tech company in the same LOB get identical guidelines
-- ❌ **Jurisdiction** — CA and TX submissions get the same regulatory context (none)
-- ❌ **Revenue tier** — $1M and $50M submissions see the same appetite criteria
-- ❌ **Risk profile** — high-risk and low-risk submissions get identical knowledge
-- ❌ **Prior decisions** — agents never see how similar past submissions were handled
+- ✅ **Industry** — healthcare gets HIPAA, fintech gets PCI/GLBA, manufacturing gets OT/ICS context
+- ✅ **Jurisdiction** — US gets NAIC/state rules, EU gets GDPR/AI Act, UK gets FCA/ICO rules
+- ✅ **Revenue tier** — submission-specific guidelines filter by revenue band
+- ✅ **Risk profile** — low-security submissions get ransomware precedents, prior incidents trigger breach precedents
+- ✅ **Prior decisions** — comparable account retrieval shows how similar past submissions were handled
+- ❌ **Semantic search** — knowledge retrieval is rule-based, not vector/RAG-based (future Phase 2)
 
 ### Can a Carrier Change Guidelines and Have Agents Use Them Immediately?
 
