@@ -57,6 +57,25 @@ Full routing rules including issue triage and @copilot assignment: `.squad/routi
 
 Quality compromises MUST be documented as GitHub issues with `quality` label.
 
+### Feature Block Documentation (MANDATORY after each major feature)
+
+After completing a significant feature block (new process, major fix, architecture change):
+
+1. **Version tag** — Use semantic naming: `v{N}-{feature}` (e.g., `v83-all-10-agents`, `v84-ai-native-knowledge`)
+2. **Changelog entry** — Add to `CHANGELOG.md` with: what changed, which agents/issues, before/after metrics
+3. **Playwright screenshots** — Capture affected portal pages to `test-screenshots/{version}/` with descriptive filenames
+4. **Update `docs/guides/feature-guide.md`** — Add section for the new feature with: description, API endpoints, MCP tools, Foundry agent involvement, screenshot references
+5. **Update `.github/copilot-instructions.md` section 3** — Refresh test counts, endpoint counts, agent counts
+
+### Versioning Convention
+
+| Format | When | Example |
+|--------|------|---------|
+| `v{N}` | Deploy version (auto-incremented) | `v83` |
+| `v{N}-{feature}` | Named milestone | `v84-ai-native-knowledge` |
+| GitHub Release | Major milestone (all issues in a block closed) | `v1.0.0-beta` |
+| CHANGELOG.md | Every feature block | `## v84 — AI-Native Knowledge Pipeline` |
+
 ### Never Do
 
 - Never launch generic unnamed agents — always route through Squad
@@ -65,6 +84,7 @@ Quality compromises MUST be documented as GitHub issues with `quality` label.
 - Never use `Start-Job` for Azure CLI (breaks auth — use sequential commands)
 - Never merge on red CI. "Tests passed locally" is NOT sufficient.
 - Never hardcode credentials, connection strings, or API keys
+- Never skip feature documentation after a major block
 
 ---
 
