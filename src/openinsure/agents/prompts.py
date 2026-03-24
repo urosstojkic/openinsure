@@ -142,8 +142,12 @@ def _submission_specific_guidelines(submission: dict[str, Any]) -> list[dict[str
                 "title": f"Industry Factor: {industry}",
                 "content": (
                     f"Industry '{industry}' has a rating factor of {matched_industry_factor}. "
-                    f"{'This is a favorable rate (below 1.0).' if matched_industry_factor < 1.0 else ''}"
-                    f"{'This is an elevated rate (above 1.0) — increased scrutiny required.' if matched_industry_factor > 1.0 else ''}"
+                    + ("This is a favorable rate (below 1.0). " if matched_industry_factor < 1.0 else "")
+                    + (
+                        "Elevated rate (above 1.0) — increased scrutiny required."
+                        if matched_industry_factor > 1.0
+                        else ""
+                    )
                 ),
             }
         )
@@ -200,7 +204,8 @@ def _submission_specific_guidelines(submission: dict[str, Any]) -> list[dict[str
             if _revenue_matches_tier(revenue, tier_name):
                 matched_rev_factor = (tier_name, factor)
                 break
-        rev_context = f"Revenue ${revenue:,.0f} is {'WITHIN' if in_appetite else 'OUTSIDE'} appetite range (${min_rev:,}-${max_rev:,})."
+        appetite_status = "WITHIN" if in_appetite else "OUTSIDE"
+        rev_context = f"Revenue ${revenue:,.0f} is {appetite_status} appetite range (${min_rev:,}-${max_rev:,})."
         if matched_rev_factor:
             rev_context += f" Revenue tier: {matched_rev_factor[0]}, factor: {matched_rev_factor[1]}."
         results.append({"title": "Revenue Assessment", "content": rev_context})
@@ -269,10 +274,10 @@ def _submission_specific_guidelines(submission: dict[str, Any]) -> list[dict[str
 def _revenue_matches_tier(revenue: float, tier_name: str) -> bool:
     """Check if a revenue amount matches a named tier like 'under_1m' or '5m_15m'."""
     tier = tier_name.lower().replace("$", "").replace(",", "")
-    if tier.startswith("under_") or tier.startswith("below_"):
+    if tier.startswith(("under_", "below_")):
         limit = _parse_tier_value(tier.split("_", 1)[1])
         return revenue < limit
-    if tier.startswith("over_") or tier.startswith("above_"):
+    if tier.startswith(("over_", "above_")):
         limit = _parse_tier_value(tier.split("_", 1)[1])
         return revenue > limit
     parts = tier.split("_")
