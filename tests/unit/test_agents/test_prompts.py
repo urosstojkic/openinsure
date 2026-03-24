@@ -293,6 +293,76 @@ class TestGetTriageContext:
         guidelines = await get_triage_context(SAMPLE_SUBMISSION)
         assert any(g.get("title") == "Live guideline" for g in guidelines)
 
+    async def test_different_lobs_get_different_guidelines(self) -> None:
+        """Cyber and general_liability submissions must receive different knowledge."""
+        cyber_sub = {
+            "line_of_business": "cyber",
+            "risk_data": {"annual_revenue": 5_000_000, "industry": "Technology"},
+        }
+        gl_sub = {
+            "line_of_business": "general_liability",
+            "risk_data": {"annual_revenue": 5_000_000, "industry": "Retail"},
+        }
+        cyber_guidelines = await get_triage_context(cyber_sub)
+        gl_guidelines = await get_triage_context(gl_sub)
+        # Both should return non-empty results
+        assert len(cyber_guidelines) >= 1
+        assert len(gl_guidelines) >= 1
+        # The base guideline titles should differ by LOB
+        cyber_titles = {g.get("title", "") for g in cyber_guidelines}
+        gl_titles = {g.get("title", "") for g in gl_guidelines}
+        assert cyber_titles != gl_titles, "Cyber and GL submissions got identical guidelines"
+
+    async def test_different_industries_get_industry_context(self) -> None:
+        """A healthcare submission and a tech submission should get different industry factors."""
+        tech_sub = {
+            "line_of_business": "cyber",
+            "risk_data": {"annual_revenue": 5_000_000, "industry": "Technology", "industry_sic_code": "7372"},
+        }
+        healthcare_sub = {
+            "line_of_business": "cyber",
+            "risk_data": {"annual_revenue": 5_000_000, "industry": "Healthcare", "industry_sic_code": "8011"},
+        }
+        tech_guidelines = await get_triage_context(tech_sub)
+        healthcare_guidelines = await get_triage_context(healthcare_sub)
+        # Both should have industry-specific context
+        tech_content = json.dumps(tech_guidelines)
+        healthcare_content = json.dumps(healthcare_guidelines)
+        assert "technology" in tech_content.lower() or "7372" in tech_content
+        assert "healthcare" in healthcare_content.lower() or "8011" in healthcare_content
+        # The industry factor or SIC classification should differ
+        assert tech_content != healthcare_content, "Tech and healthcare got identical guidelines"
+
+    async def test_high_risk_submission_gets_risk_flags(self) -> None:
+        """A submission with 4 prior incidents should get flagged context."""
+        high_risk_sub = {
+            "line_of_business": "cyber",
+            "risk_data": {
+                "annual_revenue": 5_000_000,
+                "prior_incidents": 4,
+                "security_maturity_score": 2,
+            },
+        }
+        guidelines = await get_triage_context(high_risk_sub)
+        content = json.dumps(guidelines).lower()
+        # Should flag the exceeded incident count
+        assert "exceed" in content or "maximum" in content or "incident" in content
+
+    async def test_submission_with_missing_controls_flagged(self) -> None:
+        """A submission missing required security controls should get flagged."""
+        no_mfa_sub = {
+            "line_of_business": "cyber",
+            "risk_data": {
+                "annual_revenue": 5_000_000,
+                "security_maturity_score": 6,
+                "has_mfa": False,
+                "has_endpoint_protection": False,
+            },
+        }
+        guidelines = await get_triage_context(no_mfa_sub)
+        content = json.dumps(guidelines).lower()
+        assert "missing" in content or "mfa" in content or "required" in content
+
 
 # ---------------------------------------------------------------------------
 # Rating breakdown helper

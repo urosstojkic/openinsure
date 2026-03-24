@@ -32,7 +32,11 @@ def _knowledge_store():
 
 
 async def get_triage_context(submission: dict[str, Any]) -> list[dict[str, Any]]:
-    """Retrieve underwriting guidelines relevant to this submission."""
+    """Retrieve underwriting guidelines relevant to this submission.
+
+    Returns guidelines filtered by LOB, industry, and risk profile so that
+    different submissions receive different knowledge context.
+    """
     # Try Cosmos DB first
     try:
         from openinsure.infrastructure.factory import get_knowledge_store as get_cosmos
@@ -46,8 +50,8 @@ async def get_triage_context(submission: dict[str, Any]) -> list[dict[str, Any]]
     except Exception:
         logger.debug("prompts.knowledge_retrieval_failed", exc_info=True)
 
-    # Fall back to rich in-memory knowledge store
-    return _static_guidelines(submission)
+    # Fall back to rich in-memory knowledge store with submission-specific filtering
+    return _submission_specific_guidelines(submission)
 
 
 async def get_claims_context(claim: dict[str, Any]) -> list[dict[str, Any]]:
@@ -82,6 +86,228 @@ def _static_guidelines(submission: dict[str, Any]) -> list[dict[str, Any]]:
     if gl:
         return [{"title": f"{lob.title()} Guidelines", "content": json.dumps(gl, default=str)}]
     return []
+
+
+def _submission_specific_guidelines(submission: dict[str, Any]) -> list[dict[str, Any]]:
+    """Return guidelines filtered by the submission's LOB, industry, and risk profile.
+
+    Unlike ``_static_guidelines`` which returns the entire LOB guideline blob,
+    this function extracts only the factors relevant to the specific submission
+    so that a healthcare company and a tech company receive different knowledge.
+    """
+    lob = submission.get("line_of_business", "cyber")
+    mem = _knowledge_store()
+    gl = mem.get_guidelines(lob)
+    if not gl:
+        return []
+
+    results: list[dict[str, Any]] = []
+
+    # Always include the base LOB guidelines
+    results.append({"title": f"{lob.title()} Guidelines", "content": json.dumps(gl, default=str)})
+
+    # Extract submission attributes for filtering
+    risk_data = submission.get("risk_data", {})
+    cyber_data = submission.get("cyber_risk_data", {})
+    if isinstance(risk_data, str):
+        try:
+            risk_data = json.loads(risk_data)
+        except (json.JSONDecodeError, TypeError):
+            risk_data = {}
+    if isinstance(cyber_data, str):
+        try:
+            cyber_data = json.loads(cyber_data)
+        except (json.JSONDecodeError, TypeError):
+            cyber_data = {}
+    merged = {**risk_data, **cyber_data}
+
+    industry = merged.get("industry", "").lower().replace(" ", "_")
+    sic_code = str(merged.get("industry_sic_code", merged.get("sic_code", "")))
+    revenue = merged.get("annual_revenue", 0) or 0
+    security_score = merged.get("security_maturity_score", 0) or 0
+    prior_incidents = merged.get("prior_incidents", 0) or 0
+
+    # Industry-specific rating factor
+    rf = gl.get("rating_factors", {})
+    industry_factors = rf.get("industry_factors", {})
+    matched_industry_factor = industry_factors.get(industry)
+    if matched_industry_factor is not None:
+        results.append({
+            "title": f"Industry Factor: {industry}",
+            "content": (
+                f"Industry '{industry}' has a rating factor of {matched_industry_factor}. "
+                f"{'This is a favorable rate (below 1.0).' if matched_industry_factor < 1.0 else ''}"
+                f"{'This is an elevated rate (above 1.0) — increased scrutiny required.' if matched_industry_factor > 1.0 else ''}"
+            ),
+        })
+    elif industry:
+        results.append({
+            "title": f"Industry Factor: {industry}",
+            "content": (
+                f"Industry '{industry}' is not in the standard rating table. "
+                "Apply default factor of 1.0 and flag for underwriter review."
+            ),
+        })
+
+    # SIC code appetite check
+    appetite = gl.get("appetite", {})
+    sic_codes = appetite.get("sic_codes", {})
+    if sic_code:
+        sic_status = "unknown"
+        for category, ranges in sic_codes.items():
+            for r in ranges:
+                if "-" in r:
+                    low, high = r.split("-")
+                    if low.strip().isdigit() and high.strip().isdigit():
+                        if int(low.strip()) <= int(sic_code[:4] if len(sic_code) >= 4 else sic_code) <= int(high.strip()):
+                            sic_status = category
+                            break
+        results.append({
+            "title": f"SIC Code {sic_code} Classification",
+            "content": (
+                f"SIC code {sic_code} is classified as '{sic_status}' for this LOB. "
+                f"{'WITHIN APPETITE — proceed normally.' if sic_status == 'preferred' else ''}"
+                f"{'ACCEPTABLE — standard processing.' if sic_status == 'acceptable' else ''}"
+                f"{'DECLINED CLASS — do not proceed.' if sic_status == 'declined' else ''}"
+                f"{'NOT CLASSIFIED — refer to underwriter.' if sic_status == 'unknown' else ''}"
+            ),
+        })
+
+    # Revenue tier context
+    rev_range = appetite.get("revenue_range", {})
+    min_rev = rev_range.get("min", 0)
+    max_rev = rev_range.get("max", 0)
+    if revenue:
+        in_appetite = min_rev <= revenue <= max_rev
+        revenue_factors = rf.get("revenue_factors", {})
+        matched_rev_factor = None
+        for tier_name, factor in revenue_factors.items():
+            if _revenue_matches_tier(revenue, tier_name):
+                matched_rev_factor = (tier_name, factor)
+                break
+        rev_context = f"Revenue ${revenue:,.0f} is {'WITHIN' if in_appetite else 'OUTSIDE'} appetite range (${min_rev:,}-${max_rev:,})."
+        if matched_rev_factor:
+            rev_context += f" Revenue tier: {matched_rev_factor[0]}, factor: {matched_rev_factor[1]}."
+        results.append({"title": "Revenue Assessment", "content": rev_context})
+
+    # Security posture context
+    sec_req = appetite.get("security_requirements", {})
+    min_score = sec_req.get("minimum_score", 0)
+    required_controls = sec_req.get("required_controls", [])
+    if security_score:
+        meets_minimum = security_score >= min_score
+        security_factors = rf.get("security_factors", {})
+        matched_sec_factor = None
+        for tier_name, factor in security_factors.items():
+            if _score_matches_tier(security_score, tier_name):
+                matched_sec_factor = (tier_name, factor)
+                break
+        sec_context = (
+            f"Security maturity score: {security_score}/10. "
+            f"{'MEETS' if meets_minimum else 'BELOW'} minimum requirement of {min_score}. "
+            f"Required controls: {required_controls}."
+        )
+        if matched_sec_factor:
+            sec_context += f" Security tier: {matched_sec_factor[0]}, factor: {matched_sec_factor[1]}."
+
+        # Check which required controls the submission has
+        has_mfa = merged.get("has_mfa", False)
+        has_endpoint = merged.get("has_endpoint_protection", False)
+        missing_controls = []
+        if "MFA" in required_controls and not has_mfa:
+            missing_controls.append("MFA")
+        if "endpoint_protection" in required_controls and not has_endpoint:
+            missing_controls.append("endpoint_protection")
+        if missing_controls:
+            sec_context += f" MISSING REQUIRED CONTROLS: {missing_controls}. May require referral."
+
+        results.append({"title": "Security Posture Assessment", "content": sec_context})
+
+    # Prior incidents context
+    max_incidents = appetite.get("max_prior_incidents", 3)
+    if prior_incidents is not None:
+        incident_factors = rf.get("incident_factors", {})
+        matched_inc_factor = None
+        for tier_name, factor in incident_factors.items():
+            if _incidents_match_tier(prior_incidents, tier_name):
+                matched_inc_factor = (tier_name, factor)
+                break
+        inc_context = (
+            f"Prior incidents: {prior_incidents}. "
+            f"Maximum allowed: {max_incidents}. "
+            f"{'WITHIN LIMITS.' if prior_incidents <= max_incidents else 'EXCEEDS MAXIMUM — decline or refer.'}"
+        )
+        if matched_inc_factor:
+            inc_context += f" Incident tier: {matched_inc_factor[0]}, factor: {matched_inc_factor[1]}."
+        results.append({"title": "Incident History Assessment", "content": inc_context})
+
+    logger.info(
+        "prompts.submission_specific_guidelines",
+        lob=lob,
+        industry=industry,
+        sic_code=sic_code,
+        guidelines_count=len(results),
+    )
+    return results
+
+
+def _revenue_matches_tier(revenue: float, tier_name: str) -> bool:
+    """Check if a revenue amount matches a named tier like 'under_1m' or '5m_15m'."""
+    tier = tier_name.lower().replace("$", "").replace(",", "")
+    if tier.startswith("under_") or tier.startswith("below_"):
+        limit = _parse_tier_value(tier.split("_", 1)[1])
+        return revenue < limit
+    if tier.startswith("over_") or tier.startswith("above_"):
+        limit = _parse_tier_value(tier.split("_", 1)[1])
+        return revenue > limit
+    parts = tier.split("_")
+    if len(parts) == 2:
+        low = _parse_tier_value(parts[0])
+        high = _parse_tier_value(parts[1])
+        if low and high:
+            return low <= revenue <= high
+    return False
+
+
+def _score_matches_tier(score: float, tier_name: str) -> bool:
+    """Check if a score matches a named tier like 'score_9_10' or 'score_3_4'."""
+    tier = tier_name.lower().replace("score_", "")
+    parts = tier.split("_")
+    if len(parts) == 2 and parts[0].isdigit() and parts[1].isdigit():
+        return int(parts[0]) <= score <= int(parts[1])
+    return False
+
+
+def _incidents_match_tier(count: int, tier_name: str) -> bool:
+    """Check if an incident count matches a named tier like '0_incidents' or '3_incidents'."""
+    tier = tier_name.lower().replace("_incidents", "").replace("_incident", "")
+    if tier.endswith("+"):
+        return count >= int(tier[:-1])
+    if tier.isdigit():
+        return count == int(tier)
+    parts = tier.split("_")
+    if len(parts) == 2 and parts[0].isdigit() and parts[1].isdigit():
+        return int(parts[0]) <= count <= int(parts[1])
+    return False
+
+
+def _parse_tier_value(s: str) -> float:
+    """Parse tier boundary like '1m', '15m', '500k' into a number."""
+    s = s.strip().lower()
+    if s.endswith("m"):
+        try:
+            return float(s[:-1]) * 1_000_000
+        except ValueError:
+            return 0
+    if s.endswith("k"):
+        try:
+            return float(s[:-1]) * 1_000
+        except ValueError:
+            return 0
+    try:
+        return float(s)
+    except ValueError:
+        return 0
 
 
 def _get_knowledge_context_for_lob(lob: str = "cyber") -> str:

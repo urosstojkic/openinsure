@@ -545,10 +545,58 @@ async def triage_submission(submission_id: str) -> TriageResult:
                 flags=flags,
             )
 
-    # Local fallback
+    # Local fallback — use knowledge store for rule-based triage
+    from openinsure.infrastructure.knowledge_store import get_knowledge_store as get_mem_store
+
+    mem = get_mem_store()
+    lob = record.get("line_of_business", "cyber")
+    gl = mem.get_guidelines(lob)
+    risk_data = record.get("risk_data", {})
+    cyber_data = record.get("cyber_risk_data", {})
+    if isinstance(risk_data, str):
+        try:
+            risk_data = json.loads(risk_data)
+        except (json.JSONDecodeError, TypeError):
+            risk_data = {}
+    if isinstance(cyber_data, str):
+        try:
+            cyber_data = json.loads(cyber_data)
+        except (json.JSONDecodeError, TypeError):
+            cyber_data = {}
+    merged_risk = {**risk_data, **cyber_data}
+
+    # Rule-based appetite check using knowledge store guidelines
+    fallback_score = 5
+    fallback_recommendation = "proceed_to_quote"
+    fallback_flags: list[str] = ["source:local_fallback"]
+    if gl:
+        appetite = gl.get("appetite", {})
+        revenue = merged_risk.get("annual_revenue", 0) or 0
+        rev_range = appetite.get("revenue_range", {})
+        if revenue and (revenue < rev_range.get("min", 0) or revenue > rev_range.get("max", float("inf"))):
+            fallback_score = 8
+            fallback_flags.append("revenue_outside_appetite")
+            fallback_recommendation = "refer"
+        security_score = merged_risk.get("security_maturity_score", 0) or 0
+        min_security = appetite.get("security_requirements", {}).get("minimum_score", 0)
+        if security_score and security_score < min_security:
+            fallback_score = max(fallback_score, 7)
+            fallback_flags.append("security_below_minimum")
+            fallback_recommendation = "refer"
+        prior_incidents = merged_risk.get("prior_incidents", 0) or 0
+        if prior_incidents > appetite.get("max_prior_incidents", 3):
+            fallback_score = 9
+            fallback_flags.append("incidents_exceed_maximum")
+            fallback_recommendation = "decline"
+
     record["status"] = SubmissionStatus.UNDERWRITING
     record["updated_at"] = _now()
-    fallback_triage = json.dumps({"risk_score": 0.42, "recommendation": "proceed_to_quote", "source": "local"})
+    fallback_triage = json.dumps({
+        "risk_score": fallback_score,
+        "recommendation": fallback_recommendation,
+        "source": "local_rule_based",
+        "flags": fallback_flags,
+    })
     await _repo.update(
         submission_id, {"status": "underwriting", "triage_result": fallback_triage, "updated_at": record["updated_at"]}
     )
@@ -556,9 +604,9 @@ async def triage_submission(submission_id: str) -> TriageResult:
     return TriageResult(
         submission_id=submission_id,
         status=SubmissionStatus.UNDERWRITING,
-        risk_score=0.42,
-        recommendation="proceed_to_quote",
-        flags=[],
+        risk_score=fallback_score,
+        recommendation=fallback_recommendation,
+        flags=fallback_flags,
     )
 
 
@@ -708,8 +756,24 @@ async def generate_quote(submission_id: str, user: CurrentUser = Depends(get_cur
                 rating_breakdown=rating_breakdown,
             )
 
-    # Local fallback
+    # Local fallback — use deterministic rating engine for risk-based pricing
     premium = 5000.00
+    rating_breakdown = None
+    try:
+        from openinsure.agents.prompts import _get_rating_breakdown
+
+        rating_breakdown = _get_rating_breakdown(record)
+        if rating_breakdown and rating_breakdown.get("final_premium"):
+            premium = float(rating_breakdown["final_premium"])
+            _logger.info(
+                "submissions.fallback_quote_rated",
+                submission_id=submission_id,
+                premium=premium,
+                source="rating_engine",
+            )
+    except Exception:
+        _logger.debug("submissions.rating_engine_fallback_failed", exc_info=True)
+
     record["status"] = SubmissionStatus.QUOTED
     record["updated_at"] = _now()
     await _repo.update(
@@ -771,6 +835,7 @@ async def generate_quote(submission_id: str, user: CurrentUser = Depends(get_cur
         coverages=[{"name": "Cyber Liability", "limit": 1_000_000, "deductible": 10_000}],
         valid_until=valid_until,
         authority={"decision": auth_result.decision, "reason": auth_result.reason},
+        rating_breakdown=rating_breakdown,
     )
 
 
