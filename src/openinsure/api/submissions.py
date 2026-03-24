@@ -194,6 +194,9 @@ class SubmissionCreate(BaseModel):
     channel: SubmissionChannel = SubmissionChannel.API
     line_of_business: LineOfBusiness = LineOfBusiness.CYBER
     risk_data: dict[str, Any] = Field(default_factory=dict)
+    cyber_risk_data: dict[str, Any] = Field(default_factory=dict)
+    effective_date: str | None = None
+    expiration_date: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -319,6 +322,8 @@ async def create_submission(body: SubmissionCreate) -> SubmissionResponse:
     """
     sid = str(uuid.uuid4())
     now = _now()
+    # Merge cyber_risk_data into risk_data (both accepted)
+    merged_risk = {**body.risk_data, **body.cyber_risk_data}
     record: dict[str, Any] = {
         "id": sid,
         "applicant_name": body.applicant_name,
@@ -326,7 +331,10 @@ async def create_submission(body: SubmissionCreate) -> SubmissionResponse:
         "status": body.status or SubmissionStatus.RECEIVED,
         "channel": body.channel,
         "line_of_business": body.line_of_business,
-        "risk_data": body.risk_data,
+        "risk_data": merged_risk,
+        "cyber_risk_data": merged_risk,
+        "effective_date": body.effective_date or "",
+        "expiration_date": body.expiration_date or "",
         "metadata": body.metadata,
         "documents": [],
         "created_at": now,
