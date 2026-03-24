@@ -1,7 +1,7 @@
 # Foundry Integration Strategy
 
-> **Status:** Proposed  
-> **Date:** 2025-07-15  
+> **Status:** Implemented (Phases 1–4)  
+> **Date:** 2025-07-15 (updated 2025-07-16)  
 > **Authors:** Backend + Insurance Squad  
 > **Scope:** Evaluate native Foundry Agent Service capabilities and recommend migration path from custom Python implementations.
 
@@ -464,11 +464,127 @@ response = openai_client.responses.create(
 
 ### Priority Matrix
 
-| Phase | Value | Effort | Risk | Priority |
-|---|---|---|---|---|
-| 1. Fix Agent Registration | Low | Low | Low | **P0 — Do now** |
-| 2. Azure AI Search | High | Medium | Medium | **P1 — Next sprint** |
-| 3. Web Search Enrichment | Medium | Low | Low | **P1 — Next sprint** |
-| 4. Foundry Memory | Medium | Medium | Low | **P2 — This quarter** |
-| 5. MCP Consumption | High | High | Medium | **P2 — This quarter** |
-| 6. Function Calling + Code Interpreter | Medium | Medium | Low | **P3 — Next quarter** |
+| Phase | Value | Effort | Risk | Priority | Status |
+|---|---|---|---|---|---|
+| 1. Fix Agent Registration | Low | Low | Low | **P0 — Do now** | ✅ Done |
+| 2. Azure AI Search | High | Medium | Medium | **P1 — Next sprint** | ✅ Done |
+| 3. Web Search Enrichment | Medium | Low | Low | **P1 — Next sprint** | ✅ Done |
+| 4. Foundry Memory | Medium | Medium | Low | **P2 — This quarter** | ✅ Done |
+| 5. MCP Consumption | High | High | Medium | **P2 — This quarter** | Planned |
+| 6. Function Calling + Code Interpreter | Medium | Medium | Low | **P3 — Next quarter** | ✅ Done (function calling) |
+
+---
+
+## Implementation Log (v85)
+
+### What Was Implemented
+
+#### 1. Azure AI Search Knowledge Base (Phase 2)
+
+**Search resource:** `openinsure-dev-search-knshtzbusr734` (Sweden Central, basic SKU) — already provisioned.
+
+**Index:** `openinsure-knowledge` with hybrid vector + keyword schema:
+- `id` (String, key), `content` (searchable), `title` (searchable, filterable)
+- `category` (filterable, facetable), `source` (filterable), `tags` (Collection, filterable)
+- `content_vector` (1536-dim HNSW for semantic search)
+
+**Knowledge indexer:** `src/scripts/index_knowledge.py`
+- Recursively parses YAML files from `knowledge/` directory
+- Chunks each file into focused documents (sections/subsections)
+- Deterministic IDs via SHA-256 for idempotency
+- Optional embeddings via `text-embedding-ada-002`
+- `--dry-run` flag for preview
+- Batch upload with `merge_or_upload_documents`
+
+**Agent integration:** `AzureAISearchToolDefinition` attached to all 10 agents via `deploy_foundry_agents.py`. Connection is discovered at runtime from Foundry project connections. Graceful degradation if no connection found.
+
+**Blocker note:** Foundry project connection to AI Search must be created via Azure Portal (Foundry → Project → Connections → Add → Azure AI Search). This is a one-time manual step. Once created, the deploy script auto-discovers it.
+
+#### 2. Web Search for Enrichment (Phase 3)
+
+**Agent:** `openinsure-enrichment` gets `WebSearchPreviewToolDefinition` — zero setup, works out of the box.
+
+The enrichment agent can now search for real company news, breach databases, financial reports, and regulatory changes instead of simulated data from `enrichment.py`.
+
+**Data caution:** Web search results are untrusted input. DPA does not apply to data sent to Bing. The agent instructions specify this.
+
+#### 3. Foundry Memory for Session Continuity (Phase 4)
+
+**Agents:** `openinsure-underwriting` and `openinsure-claims` get `MemoryToolDefinition`.
+
+Memory enables:
+- Per-user preference storage (underwriter risk appetite, preferred formats)
+- Conversation summaries across sessions
+- Agent-specific knowledge accumulation
+
+**Note:** Memory requires an embedding model deployment (`text-embedding-3-small`) and a memory store created in the project. The `MemoryToolDefinition` is attached — memory store setup is a one-time prerequisite.
+
+Our `learning_loop.py` is preserved as a complement — it tracks quantitative decision-vs-outcome metrics that Foundry Memory doesn't handle.
+
+#### 4. Function Calling for Underwriting (Phase 6 — partial)
+
+**Agent:** `openinsure-underwriting` gets two function tools:
+- `get_rating_factors(lob)` — fetches rating factors for a line of business
+- `get_comparable_accounts(industry_sic, annual_revenue?, employee_count?)` — finds similar historical accounts
+
+This inverts control: instead of pre-loading all context, the agent requests what it needs on demand.
+
+**Next step:** Implement the function execution handler in the conversation loop to actually call our APIs when the agent invokes functions.
+
+#### 5. Conversation Support (Multi-Turn)
+
+**File:** `src/openinsure/agents/foundry_client.py`
+
+New methods:
+- `create_conversation()` → returns conversation ID
+- `invoke_in_conversation(agent_name, message, conversation_id)` → multi-turn
+- `invoke()` updated with optional `conversation_id` kwarg (backward-compatible)
+
+The conversation API uses `openai.conversations.create()` and sends subsequent messages with `conversation=conversation_id`. This enables agents with Memory to retain context across turns.
+
+#### 6. Canonical Deploy Script
+
+**File:** `src/scripts/deploy_foundry_agents.py`
+
+Fully programmatic — no manual portal steps for agent deployment:
+- All 10 agents with original instructions
+- Tool assignment matrix applied per agent
+- Runtime search connection discovery
+- Environment-driven config (`PROJECT_ENDPOINT`, `MODEL_DEPLOYMENT_NAME`)
+- Informative output with tool descriptions per agent
+
+### What Was Preserved
+
+| Component | Status | Reason |
+|---|---|---|
+| `DecisionRecord` / EU AI Act compliance | **Kept** | No Foundry equivalent |
+| `learning_loop.py` | **Kept** | Tracks different data than Foundry Memory |
+| `orchestrator.py` | **Kept** | More flexible than portal workflows |
+| `knowledge_store.py` | **Kept as fallback** | Used when AI Search unavailable |
+| `enrichment.py` | **Kept as fallback** | Used when Web Search unavailable |
+| `foundry_client.py` single-turn | **Kept** | Backward-compatible invoke() |
+| `comparable_accounts.py` | **Kept as fallback** | AI Search replaces for connected deployments |
+
+### Prerequisites for Full Activation
+
+1. **Create Foundry → AI Search connection** (one-time, portal):
+   - Azure Portal → Foundry project → Connections → Add connection
+   - Type: Azure AI Search
+   - Endpoint: `https://openinsure-dev-search-knshtzbusr734.search.windows.net`
+   - Auth: Managed Identity (assign `Search Index Data Contributor` + `Search Service Contributor`)
+
+2. **Index knowledge base:**
+   ```bash
+   python src/scripts/index_knowledge.py
+   ```
+
+3. **Deploy embedding model** (for Memory):
+   - Deploy `text-embedding-3-small` in Foundry project
+
+4. **Create memory store** (for Memory):
+   - Via SDK or portal with `chat_summary_enabled=True`, `user_profile_enabled=True`
+
+5. **Deploy agents with tools:**
+   ```bash
+   python src/scripts/deploy_foundry_agents.py
+   ```

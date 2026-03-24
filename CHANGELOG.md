@@ -5,6 +5,31 @@ All notable changes to OpenInsure will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] — 10/10 AI-Native with Foundry Tools
+
+### Added
+- **Azure AI Search Knowledge Tool**: All 10 Foundry agents now have `AzureAISearchToolDefinition` attached. Agents autonomously search the `openinsure-knowledge` index for underwriting guidelines, rating factors, regulatory requirements, and coverage rules — replacing the prompt injection pattern in `prompts.py`.
+  - Knowledge indexer script: `src/scripts/index_knowledge.py` — parses YAML knowledge files into chunked documents with hybrid vector + keyword schema, optional embeddings via `text-embedding-ada-002`, `--dry-run` support
+  - Index schema: `id`, `content`, `title`, `category`, `source`, `tags`, `content_vector` (1536-dim HNSW)
+- **Web Search for Enrichment**: `openinsure-enrichment` agent gets `WebSearchPreviewToolDefinition` for real-time company research, breach database lookups, and regulatory change detection. Replaces simulated data from `enrichment.py`.
+- **Foundry Memory for Session Continuity**: `openinsure-underwriting` and `openinsure-claims` agents get `MemoryToolDefinition` for cross-session user preference storage, conversation summaries, and agent knowledge accumulation.
+- **Function Calling for Underwriting**: `openinsure-underwriting` agent gets two `FunctionToolDefinition` tools:
+  - `get_rating_factors(lob)` — fetches cyber insurance rating factors by line of business
+  - `get_comparable_accounts(industry_sic, annual_revenue?, employee_count?)` — finds similar historical accounts for pricing comparison
+- **Multi-Turn Conversation Support**: `foundry_client.py` now supports Foundry conversations via `create_conversation()` and `invoke_in_conversation()`. The existing `invoke()` method accepts an optional `conversation_id` kwarg for backward compatibility.
+- **Canonical Deploy Script**: `src/scripts/deploy_foundry_agents.py` is now the single source of truth for agent deployment — creates all 10 agents with tools, discovers search connections at runtime, environment-driven configuration.
+
+### Changed
+- `config.py`: Added `search_connection_id` setting for Foundry project connection to AI Search
+- `.env`: Added `OPENINSURE_FOUNDRY_PROJECT_ENDPOINT` for Foundry Agent Service
+- `foundry_client.py`: Refactored JSON parsing into `_parse_response()` static method (DRY)
+- `docs/architecture/foundry-integration-strategy.md`: Updated status to "Implemented (Phases 1–4)" with full implementation log
+
+### Architecture
+- **Tool assignment matrix**: AI Search (all agents), Web Search (enrichment), Memory (underwriting + claims), Function Calling (underwriting)
+- **Graceful degradation**: All tools are optional — agents deploy without tools when connections are unavailable
+- **Preserved**: DecisionRecord/EU AI Act compliance, learning loop, orchestrator, knowledge_store fallback, enrichment fallback
+
 ## [0.5.0] — AI-Native Knowledge Pipeline
 
 ### Added

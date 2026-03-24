@@ -35,6 +35,7 @@ class Settings(BaseSettings):
     # Azure AI Search
     search_endpoint: str = ""
     search_index_name: str = "openinsure-knowledge"
+    search_connection_id: str = ""  # Foundry project connection ID for AI Search
 
     # Azure Blob Storage
     storage_account_url: str = ""

@@ -83,7 +83,39 @@ class FoundryAgentClient:
     def is_available(self) -> bool:
         return self._enabled and self._openai is not None
 
-    async def invoke(self, agent_name: str, message: str) -> dict[str, Any]:
+    @staticmethod
+    def _parse_response(text: str) -> dict | str:
+        """Parse agent response text, attempting JSON extraction.
+
+        Strips markdown code fences before parsing. Returns the parsed
+        dict/list on success, or the original text on failure.
+        """
+        try:
+            clean = text.strip()
+            if clean.startswith("```"):
+                clean = clean.split("\n", 1)[1] if "\n" in clean else clean[3:]
+                clean = clean.rsplit("```", 1)[0]
+            return json.loads(clean)
+        except (json.JSONDecodeError, ValueError):
+            return text
+
+    async def create_conversation(self) -> str | None:
+        """Create a new Foundry conversation for multi-turn interactions.
+
+        Returns conversation ID or None if Foundry is unavailable.
+        """
+        if not self.is_available or self._openai is None:
+            return None
+
+        try:
+            conversation = self._openai.conversations.create()
+            logger.info("foundry_client.conversation_created", conversation_id=conversation.id)
+            return conversation.id
+        except Exception as e:
+            logger.exception("foundry_client.create_conversation_failed", error=str(e))
+            return None
+
+    async def invoke(self, agent_name: str, message: str, *, conversation_id: str | None = None) -> dict[str, Any]:
         """Invoke a Foundry agent and return parsed response.
 
         Always returns a dict with these keys:
@@ -95,7 +127,13 @@ class FoundryAgentClient:
 
         The consistent shape prevents downstream code from hitting
         KeyError on missing fields.
+
+        If *conversation_id* is provided the message is sent within that
+        conversation, enabling multi-turn context retention.
         """
+        if conversation_id is not None:
+            return await self.invoke_in_conversation(agent_name, message, conversation_id)
+
         base: dict[str, Any] = {
             "response": "",
             "source": "fallback",
@@ -117,29 +155,63 @@ class FoundryAgentClient:
             text = response.output_text
             elapsed_ms = int((time.monotonic() - start) * 1000)
 
-            result: dict[str, Any] = {
+            return {
                 "source": "foundry",
                 "raw": text,
                 "execution_time_ms": elapsed_ms,
+                "response": self._parse_response(text),
             }
-
-            # Try to parse as JSON
-            try:
-                # Strip markdown code fences if present
-                clean = text.strip()
-                if clean.startswith("```"):
-                    clean = clean.split("\n", 1)[1] if "\n" in clean else clean[3:]
-                    clean = clean.rsplit("```", 1)[0]
-                parsed = json.loads(clean)
-                result["response"] = parsed
-            except (json.JSONDecodeError, ValueError):
-                result["response"] = text
-
-            return result
 
         except Exception as e:
             elapsed_ms = int((time.monotonic() - start) * 1000)
             logger.exception("foundry_client.invoke_failed", agent=agent_name, error=str(e))
+            return {**base, "execution_time_ms": elapsed_ms, "error": str(e)}
+
+    async def invoke_in_conversation(self, agent_name: str, message: str, conversation_id: str) -> dict[str, Any]:
+        """Invoke a Foundry agent within an existing conversation.
+
+        Enables multi-turn interactions where the agent retains context
+        from previous messages in the same conversation.
+
+        Returns the same dict shape as :meth:`invoke`.
+        """
+        base: dict[str, Any] = {
+            "response": "",
+            "source": "fallback",
+            "raw": "",
+            "execution_time_ms": 0,
+        }
+
+        if not self.is_available:
+            return {**base, "error": "Foundry not available"}
+
+        start = time.monotonic()
+        try:
+            if self._openai is None:
+                return {**base, "error": "OpenAI client not initialized"}
+            response = self._openai.responses.create(
+                conversation=conversation_id,
+                extra_body={"agent_reference": {"name": agent_name, "type": "agent_reference"}},
+                input=message,
+            )
+            text = response.output_text
+            elapsed_ms = int((time.monotonic() - start) * 1000)
+
+            return {
+                "source": "foundry",
+                "raw": text,
+                "execution_time_ms": elapsed_ms,
+                "response": self._parse_response(text),
+            }
+
+        except Exception as e:
+            elapsed_ms = int((time.monotonic() - start) * 1000)
+            logger.exception(
+                "foundry_client.invoke_in_conversation_failed",
+                agent=agent_name,
+                conversation_id=conversation_id,
+                error=str(e),
+            )
             return {**base, "execution_time_ms": elapsed_ms, "error": str(e)}
 
 
