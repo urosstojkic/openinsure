@@ -591,12 +591,14 @@ async def triage_submission(submission_id: str) -> TriageResult:
 
     record["status"] = SubmissionStatus.UNDERWRITING
     record["updated_at"] = _now()
-    fallback_triage = json.dumps({
-        "risk_score": fallback_score,
-        "recommendation": fallback_recommendation,
-        "source": "local_rule_based",
-        "flags": fallback_flags,
-    })
+    fallback_triage = json.dumps(
+        {
+            "risk_score": fallback_score,
+            "recommendation": fallback_recommendation,
+            "source": "local_rule_based",
+            "flags": fallback_flags,
+        }
+    )
     await _repo.update(
         submission_id, {"status": "underwriting", "triage_result": fallback_triage, "updated_at": record["updated_at"]}
     )
@@ -1299,6 +1301,30 @@ async def enrich_submission_endpoint(submission_id: str) -> dict[str, Any]:
         "submission_id": submission_id,
         "status": "enriched",
         **enrichment_result,
+    }
+
+
+@router.get("/{submission_id}/comparables")
+async def get_submission_comparables(
+    submission_id: str,
+    limit: int = Query(5, ge=1, le=20, description="Max comparable accounts"),
+) -> dict[str, Any]:
+    """Find comparable accounts for a submission — similar past submissions
+    by industry, revenue, security profile, and their outcomes (pricing,
+    claims).  Addresses issue #87.
+    """
+    record = await _repo.get_by_id(submission_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail=f"Submission {submission_id} not found")
+
+    from openinsure.services.comparable_accounts import get_comparable_finder
+
+    finder = get_comparable_finder()
+    comparables = await finder.find_comparables(record, limit=limit)
+    return {
+        "submission_id": submission_id,
+        "comparables": comparables,
+        "count": len(comparables),
     }
 
 
