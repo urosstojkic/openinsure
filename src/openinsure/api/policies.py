@@ -473,31 +473,73 @@ class GeneratedDocument(BaseModel):
 @router.get("/{policy_id}/documents/declaration", response_model=GeneratedDocument)
 async def get_declaration_page(policy_id: str) -> GeneratedDocument:
     """Generate a declarations page for the policy."""
-    from openinsure.services.document_generator import DocumentGenerator
-
     policy = await _get_policy(policy_id)
     submission = policy.get("metadata", {})
-    doc = DocumentGenerator().generate(policy, submission, "declaration")
+    doc = await _generate_document_with_foundry(policy, submission, "declaration")
     return GeneratedDocument(**doc)
 
 
 @router.get("/{policy_id}/documents/certificate", response_model=GeneratedDocument)
 async def get_certificate(policy_id: str) -> GeneratedDocument:
     """Generate a Certificate of Insurance for the policy."""
-    from openinsure.services.document_generator import DocumentGenerator
-
     policy = await _get_policy(policy_id)
     submission = policy.get("metadata", {})
-    doc = DocumentGenerator().generate(policy, submission, "certificate")
+    doc = await _generate_document_with_foundry(policy, submission, "certificate")
     return GeneratedDocument(**doc)
 
 
 @router.get("/{policy_id}/documents/schedule", response_model=GeneratedDocument)
 async def get_coverage_schedule(policy_id: str) -> GeneratedDocument:
     """Generate a coverage schedule for the policy."""
-    from openinsure.services.document_generator import DocumentGenerator
-
     policy = await _get_policy(policy_id)
     submission = policy.get("metadata", {})
-    doc = DocumentGenerator().generate(policy, submission, "schedule")
+    doc = await _generate_document_with_foundry(policy, submission, "schedule")
     return GeneratedDocument(**doc)
+
+
+async def _generate_document_with_foundry(
+    policy: dict[str, Any],
+    submission: dict[str, Any],
+    doc_type: str,
+) -> dict[str, Any]:
+    """Try Foundry document agent, merge AI content; fall back to local generator."""
+    from openinsure.agents.foundry_client import get_foundry_client
+    from openinsure.agents.prompts import build_document_prompt
+    from openinsure.services.document_generator import DocumentGenerator
+
+    foundry = get_foundry_client()
+    if foundry.is_available:
+        try:
+            prompt = build_document_prompt(policy, submission, doc_type)
+            result = await foundry.invoke("openinsure-document", prompt)
+            resp = result.get("response", {})
+            if isinstance(resp, dict) and result.get("source") == "foundry":
+                # Merge AI content into the base document structure
+                base = DocumentGenerator().generate(policy, submission, doc_type)
+                if resp.get("summary"):
+                    base["summary"] = resp["summary"]
+                if resp.get("sections"):
+                    for ai_sec in resp["sections"]:
+                        if not isinstance(ai_sec, dict):
+                            continue
+                        matched = next(
+                            (s for s in base["sections"] if s["heading"] == ai_sec.get("heading")),
+                            None,
+                        )
+                        if matched and ai_sec.get("content"):
+                            matched["content"] = ai_sec["content"]
+                        elif ai_sec.get("heading"):
+                            base["sections"].append(ai_sec)
+                base["source"] = "foundry"
+                return base
+        except Exception:
+            import structlog
+
+            structlog.get_logger().exception(
+                "documents.foundry_generation_failed",
+                policy_id=policy.get("id"),
+                doc_type=doc_type,
+            )
+
+    # Deterministic fallback
+    return DocumentGenerator().generate(policy, submission, doc_type)

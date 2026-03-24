@@ -67,6 +67,24 @@ AGENTS = [
         "Responds with: title, document_type, sections (heading, content, data), effective_date, "
         "summary, confidence.",
     ),
+    (
+        "openinsure-analytics",
+        "Insurance portfolio analytics agent. Generates executive summaries, identifies trends, "
+        "anomalies, and concentration risks across the book of business. Analyzes submission pipelines, "
+        "claims patterns, loss ratios, and underwriting profitability. Produces actionable insights "
+        "with severity ratings and strategic recommendations for portfolio management. "
+        "Responds with: executive_summary, insights (category, title, summary, severity), "
+        "recommendations, confidence.",
+    ),
+    (
+        "openinsure-enrichment",
+        "External data enrichment agent for cyber insurance submissions. Synthesizes risk signals "
+        "from third-party data sources including OSINT, vulnerability databases, breach history, "
+        "financial stability indicators, and industry benchmarks. Assesses data quality and "
+        "produces composite risk scores with sourced evidence for underwriting decisions. "
+        "Responds with: risk_signals (signal, severity, source), composite_risk_score, "
+        "data_quality, recommendations, confidence, summary.",
+    ),
 ]
 
 

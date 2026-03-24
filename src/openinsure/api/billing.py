@@ -292,6 +292,9 @@ async def create_billing_account_on_bind(
             }
         )
 
+    # AI recommendation via Foundry billing agent
+    record["metadata"]["ai_recommendation"] = await _get_billing_ai_recommendation(record)
+
     await _repo.create(record)
     logger.info(
         "billing.account_created_on_bind",
@@ -301,6 +304,45 @@ async def create_billing_account_on_bind(
         total_premium=total_premium,
     )
     return record
+
+
+# ---------------------------------------------------------------------------
+# Foundry AI recommendation helper
+# ---------------------------------------------------------------------------
+
+_BILLING_DEFAULTS: dict[str, Any] = {
+    "default_probability": 0.1,
+    "risk_tier": "low",
+    "recommended_billing_plan": "full_pay",
+    "collection_priority": "routine",
+    "recommended_action": "none",
+    "grace_period_days": 30,
+    "reasoning": "Deterministic default — Foundry unavailable",
+    "confidence": 0.0,
+    "source": "fallback",
+}
+
+
+async def _get_billing_ai_recommendation(record: dict[str, Any]) -> dict[str, Any]:
+    """Call Foundry billing agent for AI recommendations; fall back to defaults."""
+    from openinsure.agents.foundry_client import get_foundry_client
+    from openinsure.agents.prompts import build_billing_prompt
+
+    foundry = get_foundry_client()
+    if not foundry.is_available:
+        return {**_BILLING_DEFAULTS}
+
+    try:
+        prompt = build_billing_prompt(record, record.get("payments", []))
+        result = await foundry.invoke("openinsure-billing", prompt)
+        resp = result.get("response", {})
+        if isinstance(resp, dict) and result.get("source") == "foundry":
+            resp["source"] = "foundry"
+            return resp
+    except Exception:
+        logger.exception("billing.foundry_recommendation_failed", account_id=record.get("id"))
+
+    return {**_BILLING_DEFAULTS}
 
 
 # ---------------------------------------------------------------------------
@@ -330,6 +372,10 @@ async def create_billing_account(body: BillingAccountCreate) -> BillingAccountRe
         "created_at": now,
         "updated_at": now,
     }
+
+    # AI recommendation via Foundry billing agent
+    record["metadata"]["ai_recommendation"] = await _get_billing_ai_recommendation(record)
+
     await _repo.create(record)
     return BillingAccountResponse(**record)
 
