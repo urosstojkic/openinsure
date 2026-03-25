@@ -48,7 +48,7 @@ COSMOS_ENDPOINT = os.environ.get(
     "https://openinsure-dev-cosmos-knshtzbusr734.documents.azure.com:443/",
 )
 COSMOS_DATABASE = os.environ.get("OPENINSURE_COSMOS_DATABASE_NAME", "openinsure-knowledge")
-COSMOS_CONTAINER = os.environ.get("OPENINSURE_COSMOS_GRAPH_NAME", "insurance-graph")
+COSMOS_CONTAINER = os.environ.get("OPENINSURE_COSMOS_CONTAINER", "guidelines")
 COSMOS_KEY = os.environ.get("OPENINSURE_COSMOS_KEY", "")
 
 DATA_SOURCE_NAME = "openinsure-cosmos-datasource"
@@ -90,9 +90,14 @@ def _build_data_source() -> dict[str, Any]:
             f"Database={COSMOS_DATABASE}"
         )
     else:
-        # Managed identity — the search service must have Cosmos DB reader role
+        # Managed identity — use the Cosmos resource ID
+        cosmos_resource_id = os.environ.get(
+            "OPENINSURE_COSMOS_RESOURCE_ID",
+            "/subscriptions/d20aaf79-95bf-45f9-91df-7483ed00c40a/resourceGroups/openinsure-dev-sc"
+            "/providers/Microsoft.DocumentDB/databaseAccounts/openinsure-dev-cosmos-knshtzbusr734",
+        )
         conn_str = (
-            f"ResourceId={COSMOS_ENDPOINT};"
+            f"ResourceId={cosmos_resource_id};"
             f"Database={COSMOS_DATABASE}"
         )
 
@@ -131,11 +136,7 @@ def _build_indexer() -> dict[str, Any]:
             {"sourceFieldName": "entityType", "targetFieldName": "category"},
             {"sourceFieldName": "source", "targetFieldName": "source"},
         ],
-        "parameters": {
-            "configuration": {
-                "parsingMode": "default",
-            }
-        },
+        "parameters": {},
     }
 
 
@@ -148,7 +149,7 @@ def _create_or_update(resource_type: str, name: str, body: dict[str, Any], heade
     """Create or update an AI Search resource via REST API."""
     url = f"{SEARCH_ENDPOINT}/{resource_type}/{name}?api-version={API_VERSION}"
     resp = requests.put(url, headers=headers, json=body, timeout=30)
-    if resp.status_code in (200, 201):
+    if resp.status_code in (200, 201, 204):
         print(f"  ✅ {resource_type}/{name} created/updated")
         return True
     print(f"  ✗ {resource_type}/{name} failed: {resp.status_code} {resp.text[:200]}")
