@@ -1325,7 +1325,30 @@ openinsure/
 └── .github/                       # CI/CD workflows
 ```
 
-## Appendix B: Related Documentation
+## Appendix B: Known Technical Debt
+
+A comprehensive code review was conducted alongside this document. The following issues were filed as GitHub issues (label: `tech-debt`):
+
+| # | Issue | Severity | Category |
+|---|---|---|---|
+| #92 | Split prompts.py god file (1,265 lines) into focused modules | Critical | Over-engineering |
+| #93 | Consolidate duplicate policy lifecycle logic (policy_agent + policy_lifecycle) | Critical | Redundant code |
+| #94 | Rating engine not used as Foundry fallback — flat $5K premium instead | Critical | Missing integration |
+| #95 | Consolidate duplicate bias monitoring (services/ and compliance/) | High | Redundant code |
+| #96 | 5 phantom agents are stubs returning empty defaults | High | Dead code |
+| #97 | 8 redundant knowledge retrieval paths — consolidate into single pipeline | High | Over-engineering |
+| #98 | Compliance repository does not extend BaseRepository | High | Inconsistent patterns |
+| #99 | State machine defines states not in domain enums | High | Inconsistent patterns |
+| #100 | 13 untyped API endpoints return raw dicts | High | Inconsistent patterns |
+| #101 | Duplicate workflow paths for same operation | Medium | Redundant code |
+| #102 | 7 domain events defined but never emitted | Medium | Dead code |
+| #103 | 30+ hardcoded authority/reserve/premium limits | High | Missing abstraction |
+| #104 | Products and Renewals have no SQL implementations | High | Missing implementation |
+| #105 | knowledge_agent.py is 80% embedded data (738 lines) | Medium | Over-engineering |
+| #106 | Hidden duplicate routes with include_in_schema=False | Low | Naming inconsistency |
+| #107 | Inconsistent API naming — mixed plural/singular paths | Low | Naming inconsistency |
+
+## Appendix C: Related Documentation
 
 | Document | Purpose | Audience |
 |---|---|---|
