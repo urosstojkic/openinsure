@@ -11,16 +11,34 @@ if TYPE_CHECKING:
 
 
 class InMemoryProductRepository(BaseRepository):
-    """Dict-backed product store for local development and testing."""
+    """Dict-backed product store for local development and testing.
+
+    Auto-seeds with ``SAMPLE_PRODUCTS`` on first access so the dashboard
+    has content without requiring SQL.
+    """
 
     def __init__(self) -> None:
         self._store: dict[str, dict[str, Any]] = {}
+        self._seeded = False
+
+    def _ensure_seeded(self) -> None:
+        if self._seeded:
+            return
+        self._seeded = True
+        try:
+            from openinsure.infrastructure.seed_data import SAMPLE_PRODUCTS
+
+            for product in SAMPLE_PRODUCTS:
+                self._store[product["id"]] = product
+        except Exception:  # noqa: S110 — defensive for import errors in dev seeding
+            pass
 
     async def create(self, entity: dict[str, Any]) -> dict[str, Any]:
         self._store[entity["id"]] = entity
         return entity
 
     async def update(self, entity_id: UUID | str, updates: dict[str, Any]) -> dict[str, Any] | None:
+        self._ensure_seeded()
         record = self._store.get(str(entity_id))
         if record is None:
             return None
@@ -28,9 +46,11 @@ class InMemoryProductRepository(BaseRepository):
         return record
 
     async def delete(self, entity_id: UUID | str) -> bool:
+        self._ensure_seeded()
         return self._store.pop(str(entity_id), None) is not None
 
     async def get_by_id(self, entity_id: UUID | str) -> dict[str, Any] | None:
+        self._ensure_seeded()
         return self._store.get(str(entity_id))
 
     async def list_all(
@@ -39,6 +59,7 @@ class InMemoryProductRepository(BaseRepository):
         skip: int = 0,
         limit: int = 50,
     ) -> list[dict[str, Any]]:
+        self._ensure_seeded()
         results = list(self._store.values())
         for key, val in (filters or {}).items():
             if val is not None:
@@ -46,6 +67,7 @@ class InMemoryProductRepository(BaseRepository):
         return results[skip : skip + limit]
 
     async def count(self, filters: dict[str, Any] | None = None) -> int:
+        self._ensure_seeded()
         if not filters:
             return len(self._store)
         items = await self.list_all(filters=filters, skip=0, limit=len(self._store) or 1)
