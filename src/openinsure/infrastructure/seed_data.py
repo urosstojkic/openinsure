@@ -398,9 +398,37 @@ def _sample_products() -> list[dict[str, Any]]:
             ],
             "underwriting_rules": {"min_revenue": 500_000, "max_revenue": 100_000_000},
             "appetite_rules": [
-                {"name": "Revenue Range", "field": "annual_revenue", "operator": "between", "value": [500_000, 100_000_000], "description": "Target SMB segment"},
-                {"name": "Acceptable Industries", "field": "industry", "operator": "in", "value": ["technology", "financial_services", "healthcare", "retail", "manufacturing", "education", "media", "legal", "logistics"], "description": "Approved SIC groups"},
-                {"name": "Minimum Security Score", "field": "security_score", "operator": "gte", "value": 0.3, "description": "Decline below 30% security rating"},
+                {
+                    "name": "Revenue Range",
+                    "field": "annual_revenue",
+                    "operator": "between",
+                    "value": [500_000, 100_000_000],
+                    "description": "Target SMB segment",
+                },
+                {
+                    "name": "Acceptable Industries",
+                    "field": "industry",
+                    "operator": "in",
+                    "value": [
+                        "technology",
+                        "financial_services",
+                        "healthcare",
+                        "retail",
+                        "manufacturing",
+                        "education",
+                        "media",
+                        "legal",
+                        "logistics",
+                    ],
+                    "description": "Approved SIC groups",
+                },
+                {
+                    "name": "Minimum Security Score",
+                    "field": "security_score",
+                    "operator": "gte",
+                    "value": 0.3,
+                    "description": "Decline below 30% security rating",
+                },
             ],
             "authority_limits": {
                 "max_auto_bind_premium": 25_000.0,
@@ -413,8 +441,20 @@ def _sample_products() -> list[dict[str, Any]]:
             "expiration_date": _days_from_now(245),
             "forms": ["ACORD 130", "Cyber Supplemental Application", "Security Questionnaire"],
             "version_history": [
-                {"version": "1.0", "created_at": _days_ago(180), "created_by": "Robert Chen", "change_summary": "Initial product filing", "snapshot": {}},
-                {"version": "2.0", "created_at": _days_ago(120), "created_by": "Robert Chen", "change_summary": "Added ransomware coverage part and updated rating factors", "snapshot": {}},
+                {
+                    "version": "1.0",
+                    "created_at": _days_ago(180),
+                    "created_by": "Robert Chen",
+                    "change_summary": "Initial product filing",
+                    "snapshot": {},
+                },
+                {
+                    "version": "2.0",
+                    "created_at": _days_ago(120),
+                    "created_by": "Robert Chen",
+                    "change_summary": "Added ransomware coverage part and updated rating factors",
+                    "snapshot": {},
+                },
             ],
             "metadata": {},
             "created_at": _days_ago(180),
@@ -452,8 +492,20 @@ def _sample_products() -> list[dict[str, Any]]:
             ],
             "underwriting_rules": {"min_revenue": 250_000, "max_revenue": 200_000_000},
             "appetite_rules": [
-                {"name": "Revenue Range", "field": "annual_revenue", "operator": "between", "value": [250_000, 200_000_000], "description": "Professional services firms"},
-                {"name": "Professional Industries", "field": "industry", "operator": "in", "value": ["legal", "accounting", "consulting", "engineering", "architecture"], "description": "Licensed professional services only"},
+                {
+                    "name": "Revenue Range",
+                    "field": "annual_revenue",
+                    "operator": "between",
+                    "value": [250_000, 200_000_000],
+                    "description": "Professional services firms",
+                },
+                {
+                    "name": "Professional Industries",
+                    "field": "industry",
+                    "operator": "in",
+                    "value": ["legal", "accounting", "consulting", "engineering", "architecture"],
+                    "description": "Licensed professional services only",
+                },
             ],
             "authority_limits": {
                 "max_auto_bind_premium": 30_000.0,
@@ -499,7 +551,13 @@ def _sample_products() -> list[dict[str, Any]]:
             "rating_factor_tables": [],
             "underwriting_rules": {"min_revenue": 1_000_000, "max_revenue": 500_000_000},
             "appetite_rules": [
-                {"name": "Revenue Range", "field": "annual_revenue", "operator": "between", "value": [1_000_000, 500_000_000], "description": "Mid-market to large corporates"},
+                {
+                    "name": "Revenue Range",
+                    "field": "annual_revenue",
+                    "operator": "between",
+                    "value": [1_000_000, 500_000_000],
+                    "description": "Mid-market to large corporates",
+                },
             ],
             "authority_limits": {
                 "max_auto_bind_premium": 15_000.0,
@@ -512,8 +570,20 @@ def _sample_products() -> list[dict[str, Any]]:
             "expiration_date": _days_from_now(275),
             "forms": ["ACORD 130", "D&O Supplement"],
             "version_history": [
-                {"version": "1.0", "created_at": _days_ago(150), "created_by": "system", "change_summary": "Initial filing", "snapshot": {}},
-                {"version": "1.1", "created_at": _days_ago(90), "created_by": "Robert Chen", "change_summary": "Added Side B coverage option", "snapshot": {}},
+                {
+                    "version": "1.0",
+                    "created_at": _days_ago(150),
+                    "created_by": "system",
+                    "change_summary": "Initial filing",
+                    "snapshot": {},
+                },
+                {
+                    "version": "1.1",
+                    "created_at": _days_ago(90),
+                    "created_by": "Robert Chen",
+                    "change_summary": "Added Side B coverage option",
+                    "snapshot": {},
+                },
             ],
             "metadata": {},
             "created_at": _days_ago(150),
@@ -559,8 +629,20 @@ def _sample_products() -> list[dict[str, Any]]:
             ],
             "underwriting_rules": {"min_revenue": 500_000, "max_revenue": 150_000_000},
             "appetite_rules": [
-                {"name": "Revenue Range", "field": "annual_revenue", "operator": "between", "value": [500_000, 150_000_000], "description": "Tech SMBs"},
-                {"name": "Tech Industries", "field": "industry", "operator": "in", "value": ["technology", "fintech", "healthtech", "ecommerce", "media"], "description": "Technology sector focus"},
+                {
+                    "name": "Revenue Range",
+                    "field": "annual_revenue",
+                    "operator": "between",
+                    "value": [500_000, 150_000_000],
+                    "description": "Tech SMBs",
+                },
+                {
+                    "name": "Tech Industries",
+                    "field": "industry",
+                    "operator": "in",
+                    "value": ["technology", "fintech", "healthtech", "ecommerce", "media"],
+                    "description": "Technology sector focus",
+                },
             ],
             "authority_limits": {
                 "max_auto_bind_premium": 20_000.0,

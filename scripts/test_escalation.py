@@ -10,7 +10,7 @@ import uuid
 
 import httpx
 
-BASE = os.environ.get("OPENINSURE_BACKEND_URL", "http://localhost:8000")"
+BASE = "https://openinsure-backend.proudplant-9550e5a5.swedencentral.azurecontainerapps.io"
 HEADERS = {"Content-Type": "application/json", "X-User-Role": "underwriter"}
 
 

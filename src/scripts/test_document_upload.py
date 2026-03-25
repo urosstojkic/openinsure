@@ -2,7 +2,7 @@
 
 import httpx
 
-BE = os.environ.get("OPENINSURE_BACKEND_URL", "http://localhost:8000")/api/v1"
+BE = "https://openinsure-backend.proudplant-9550e5a5.swedencentral.azurecontainerapps.io/api/v1"
 H = {"X-API-Key": "dev-key-change-me"}
 
 # Create submission

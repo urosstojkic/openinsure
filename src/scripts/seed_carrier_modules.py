@@ -8,7 +8,7 @@ Usage:
     python src/scripts/seed_carrier_modules.py [BASE_URL]
 
 Example:
-    python src/scripts/seed_carrier_modules.py os.environ.get("OPENINSURE_BACKEND_URL", "http://localhost:8000")
+    python src/scripts/seed_carrier_modules.py https://openinsure-backend.proudplant-9550e5a5.swedencentral.azurecontainerapps.io
 """
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ import httpx
 BASE_URL = (
     sys.argv[1]
     if len(sys.argv) > 1
-    else os.environ.get("OPENINSURE_BACKEND_URL", "http://localhost:8000")"
+    else "https://openinsure-backend.proudplant-9550e5a5.swedencentral.azurecontainerapps.io"
 )
 
 client = httpx.Client(base_url=BASE_URL, timeout=30)

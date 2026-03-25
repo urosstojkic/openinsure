@@ -2,7 +2,7 @@
 
 import httpx
 
-BE = os.environ.get("OPENINSURE_BACKEND_URL", "http://localhost:8000")/api/v1"
+BE = "https://openinsure-backend.proudplant-9550e5a5.swedencentral.azurecontainerapps.io/api/v1"
 H = {"X-API-Key": "dev-key-change-me"}
 
 
@@ -205,4 +205,4 @@ if __name__ == "__main__":
         print(f"  Claim (Ransomware):                  {cid2}")
     print()
     print("  Dashboard: https://openinsure-dashboard.proudplant-9550e5a5.swedencentral.azurecontainerapps.io")
-    print("  API Docs:  os.environ.get("OPENINSURE_BACKEND_URL", "http://localhost:8000")/docs")
+    print("  API Docs:  https://openinsure-backend.proudplant-9550e5a5.swedencentral.azurecontainerapps.io/docs")

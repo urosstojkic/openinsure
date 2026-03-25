@@ -53,7 +53,7 @@ export const DEFAULT_ROUTES: Record<UserRole, string> = {
   adjuster: '/workbench/claims',
   cfo: '/executive',
   compliance: '/workbench/compliance',
-  product_mgr: '/',
+  product_mgr: '/products',
   operations: '/finance',
   broker: '/portal/broker',
 };
@@ -73,6 +73,7 @@ export const NAV_ACCESS: Record<string, UserRole[]> = {
   '/workbench/reinsurance':  ['cuo', 'cfo'],
   '/workbench/actuarial':    ['cuo', 'cfo', 'ceo', 'product_mgr'],
   '/knowledge':              ['product_mgr', 'compliance', 'cuo', 'senior_uw'],
+  '/products':               ['product_mgr', 'cuo', 'ceo'],
   '/analytics/underwriting': ['cuo', 'senior_uw', 'uw_analyst', 'cfo', 'ceo', 'product_mgr'],
   '/analytics/claims':       ['cuo', 'claims_manager', 'adjuster', 'cfo', 'ceo'],
   '/executive':              ['ceo', 'cuo', 'cfo'],

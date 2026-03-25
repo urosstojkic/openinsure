@@ -28,6 +28,7 @@ import {
   X,
   Search,
   Command,
+  Package,
 } from 'lucide-react';
 import { useAuth, NAV_ACCESS, type UserRole } from '../context/AuthContext';
 import { useMockMode } from '../context/MockContext';
@@ -45,6 +46,7 @@ const navItems = [
   { to: '/finance',     label: 'Finance',          icon: Banknote },
   { to: '/compliance',  label: 'Compliance',       icon: ShieldCheck },
   { to: '/knowledge',   label: 'Knowledge',        icon: BookOpen },
+  { to: '/products',    label: 'Products',         icon: Package },
   { to: '/analytics/underwriting', label: 'UW Analytics',     icon: BarChart3 },
   { to: '/analytics/claims',       label: 'Claims Analytics', icon: BarChart3 },
 ];
@@ -86,6 +88,7 @@ function getBreadcrumb(pathname: string): string {
     '/workbench/reinsurance': 'Reinsurance Dashboard',
     '/workbench/actuarial': 'Actuarial Workbench',
     '/knowledge': 'Knowledge Base',
+    '/products': 'Product Management',
     '/analytics/underwriting': 'UW Performance Analytics',
     '/analytics/claims': 'Claims Analytics',
     '/executive': 'Executive Dashboard',

@@ -26,8 +26,15 @@ def create_submission_pdf(output_path: str = "test-data/sample-submission.pdf") 
     styles = getSampleStyleSheet()
 
     title_style = ParagraphStyle("Title2", parent=styles["Title"], fontSize=16, spaceAfter=6)
-    heading_style = ParagraphStyle("Heading", parent=styles["Heading2"], fontSize=12, textColor=colors.HexColor("#1e3a5f"), spaceBefore=14, spaceAfter=6)
-    label_style = ParagraphStyle("Label", parent=styles["Normal"], fontSize=9, textColor=colors.grey)
+    heading_style = ParagraphStyle(
+        "Heading",
+        parent=styles["Heading2"],
+        fontSize=12,
+        textColor=colors.HexColor("#1e3a5f"),
+        spaceBefore=14,
+        spaceAfter=6,
+    )
+    ParagraphStyle("Label", parent=styles["Normal"], fontSize=9, textColor=colors.grey)
     normal = ParagraphStyle("Body", parent=styles["Normal"], fontSize=10, leading=14)
     small = ParagraphStyle("Small", parent=styles["Normal"], fontSize=8, textColor=colors.grey)
 
@@ -45,14 +52,18 @@ def create_submission_pdf(output_path: str = "test-data/sample-submission.pdf") 
         ["Line of Business:", "Cyber Liability", "Policy Period:", "07/01/2026 – 07/01/2027"],
     ]
     t = Table(meta, colWidths=[1.4 * inch, 2.3 * inch, 1.4 * inch, 2.3 * inch])
-    t.setStyle(TableStyle([
-        ("FONTSIZE", (0, 0), (-1, -1), 9),
-        ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
-        ("FONTNAME", (2, 0), (2, -1), "Helvetica-Bold"),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
-        ("TOPPADDING", (0, 0), (-1, -1), 4),
-        ("LINEBELOW", (0, -1), (-1, -1), 1, colors.HexColor("#1e3a5f")),
-    ]))
+    t.setStyle(
+        TableStyle(
+            [
+                ("FONTSIZE", (0, 0), (-1, -1), 9),
+                ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
+                ("FONTNAME", (2, 0), (2, -1), "Helvetica-Bold"),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+                ("TOPPADDING", (0, 0), (-1, -1), 4),
+                ("LINEBELOW", (0, -1), (-1, -1), 1, colors.HexColor("#1e3a5f")),
+            ]
+        )
+    )
     elements.append(t)
     elements.append(Spacer(1, 0.2 * inch))
 
@@ -74,25 +85,31 @@ def create_submission_pdf(output_path: str = "test-data/sample-submission.pdf") 
         ["Email:", "s.mitchell@meridiantech.com"],
     ]
     t = Table(applicant, colWidths=[2.0 * inch, 5.4 * inch])
-    t.setStyle(TableStyle([
-        ("FONTSIZE", (0, 0), (-1, -1), 9),
-        ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
-        ("TOPPADDING", (0, 0), (-1, -1), 3),
-        ("LINEBELOW", (0, 0), (-1, -1), 0.5, colors.lightgrey),
-    ]))
+    t.setStyle(
+        TableStyle(
+            [
+                ("FONTSIZE", (0, 0), (-1, -1), 9),
+                ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+                ("TOPPADDING", (0, 0), (-1, -1), 3),
+                ("LINEBELOW", (0, 0), (-1, -1), 0.5, colors.lightgrey),
+            ]
+        )
+    )
     elements.append(t)
     elements.append(Spacer(1, 0.15 * inch))
 
     # Section 2: Business Profile
     elements.append(Paragraph("SECTION 2: BUSINESS PROFILE", heading_style))
-    elements.append(Paragraph(
-        "Meridian Health Technologies provides cloud-based electronic health record (EHR) systems, "
-        "telehealth platforms, and health data analytics to hospitals, clinics, and physician groups "
-        "across 14 states. The company processes approximately 2.3 million patient records annually "
-        "and maintains integrations with major insurance carriers for claims processing.",
-        normal,
-    ))
+    elements.append(
+        Paragraph(
+            "Meridian Health Technologies provides cloud-based electronic health record (EHR) systems, "
+            "telehealth platforms, and health data analytics to hospitals, clinics, and physician groups "
+            "across 14 states. The company processes approximately 2.3 million patient records annually "
+            "and maintains integrations with major insurance carriers for claims processing.",
+            normal,
+        )
+    )
     elements.append(Spacer(1, 0.1 * inch))
 
     business = [
@@ -106,13 +123,17 @@ def create_submission_pdf(output_path: str = "test-data/sample-submission.pdf") 
         ["SOC 2 Type II:", "Yes — Last audit: November 2025 (no findings)"],
     ]
     t = Table(business, colWidths=[2.2 * inch, 5.2 * inch])
-    t.setStyle(TableStyle([
-        ("FONTSIZE", (0, 0), (-1, -1), 9),
-        ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
-        ("TOPPADDING", (0, 0), (-1, -1), 3),
-        ("LINEBELOW", (0, 0), (-1, -1), 0.5, colors.lightgrey),
-    ]))
+    t.setStyle(
+        TableStyle(
+            [
+                ("FONTSIZE", (0, 0), (-1, -1), 9),
+                ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+                ("TOPPADDING", (0, 0), (-1, -1), 3),
+                ("LINEBELOW", (0, 0), (-1, -1), 0.5, colors.lightgrey),
+            ]
+        )
+    )
     elements.append(t)
     elements.append(Spacer(1, 0.15 * inch))
 
@@ -135,13 +156,17 @@ def create_submission_pdf(output_path: str = "test-data/sample-submission.pdf") 
         ["Security Maturity Score:", "7 out of 10 (self-assessed using NIST CSF)"],
     ]
     t = Table(security, colWidths=[2.8 * inch, 4.6 * inch])
-    t.setStyle(TableStyle([
-        ("FONTSIZE", (0, 0), (-1, -1), 9),
-        ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
-        ("TOPPADDING", (0, 0), (-1, -1), 3),
-        ("LINEBELOW", (0, 0), (-1, -1), 0.5, colors.lightgrey),
-    ]))
+    t.setStyle(
+        TableStyle(
+            [
+                ("FONTSIZE", (0, 0), (-1, -1), 9),
+                ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+                ("TOPPADDING", (0, 0), (-1, -1), 3),
+                ("LINEBELOW", (0, 0), (-1, -1), 0.5, colors.lightgrey),
+            ]
+        )
+    )
     elements.append(t)
     elements.append(Spacer(1, 0.15 * inch))
 
@@ -150,21 +175,35 @@ def create_submission_pdf(output_path: str = "test-data/sample-submission.pdf") 
     loss_header = ["Date", "Type", "Description", "Total Incurred"]
     loss_data = [
         loss_header,
-        ["Sep 2024", "Phishing", "Business email compromise — CFO impersonation. Wire transfer of $42,000 to fraudulent account. $31,500 recovered.", "$18,200"],
-        ["Mar 2023", "Ransomware", "LockBit 3.0 encrypted 3 file servers (non-PHI). Restored from backups within 18 hours. No ransom paid. Forensic investigation cost.", "$67,400"],
+        [
+            "Sep 2024",
+            "Phishing",
+            "Business email compromise — CFO impersonation. Wire transfer of $42,000 to fraudulent account. $31,500 recovered.",
+            "$18,200",
+        ],
+        [
+            "Mar 2023",
+            "Ransomware",
+            "LockBit 3.0 encrypted 3 file servers (non-PHI). Restored from backups within 18 hours. No ransom paid. Forensic investigation cost.",
+            "$67,400",
+        ],
         ["—", "—", "No other incidents in the past 5 years.", "—"],
     ]
     t = Table(loss_data, colWidths=[0.8 * inch, 1.0 * inch, 4.2 * inch, 1.4 * inch])
-    t.setStyle(TableStyle([
-        ("FONTSIZE", (0, 0), (-1, -1), 8),
-        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1e3a5f")),
-        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
-        ("TOPPADDING", (0, 0), (-1, -1), 4),
-        ("GRID", (0, 0), (-1, -1), 0.5, colors.lightgrey),
-        ("VALIGN", (0, 0), (-1, -1), "TOP"),
-    ]))
+    t.setStyle(
+        TableStyle(
+            [
+                ("FONTSIZE", (0, 0), (-1, -1), 8),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1e3a5f")),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+                ("TOPPADDING", (0, 0), (-1, -1), 4),
+                ("GRID", (0, 0), (-1, -1), 0.5, colors.lightgrey),
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ]
+        )
+    )
     elements.append(t)
     elements.append(Spacer(1, 0.15 * inch))
 
@@ -182,16 +221,20 @@ def create_submission_pdf(output_path: str = "test-data/sample-submission.pdf") 
         ["Aggregate Limit", "$5,000,000", "—"],
     ]
     t = Table(coverage, colWidths=[2.8 * inch, 1.8 * inch, 2.8 * inch])
-    t.setStyle(TableStyle([
-        ("FONTSIZE", (0, 0), (-1, -1), 9),
-        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1e3a5f")),
-        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
-        ("TOPPADDING", (0, 0), (-1, -1), 4),
-        ("GRID", (0, 0), (-1, -1), 0.5, colors.lightgrey),
-        ("ALIGN", (1, 1), (2, -1), "RIGHT"),
-    ]))
+    t.setStyle(
+        TableStyle(
+            [
+                ("FONTSIZE", (0, 0), (-1, -1), 9),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1e3a5f")),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+                ("TOPPADDING", (0, 0), (-1, -1), 4),
+                ("GRID", (0, 0), (-1, -1), 0.5, colors.lightgrey),
+                ("ALIGN", (1, 1), (2, -1), "RIGHT"),
+            ]
+        )
+    )
     elements.append(t)
     elements.append(Spacer(1, 0.15 * inch))
 
@@ -208,24 +251,30 @@ def create_submission_pdf(output_path: str = "test-data/sample-submission.pdf") 
         ["Non-Renewal Notice:", "No"],
     ]
     t = Table(prior, colWidths=[2.0 * inch, 5.4 * inch])
-    t.setStyle(TableStyle([
-        ("FONTSIZE", (0, 0), (-1, -1), 9),
-        ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
-        ("TOPPADDING", (0, 0), (-1, -1), 3),
-        ("LINEBELOW", (0, 0), (-1, -1), 0.5, colors.lightgrey),
-    ]))
+    t.setStyle(
+        TableStyle(
+            [
+                ("FONTSIZE", (0, 0), (-1, -1), 9),
+                ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+                ("TOPPADDING", (0, 0), (-1, -1), 3),
+                ("LINEBELOW", (0, 0), (-1, -1), 0.5, colors.lightgrey),
+            ]
+        )
+    )
     elements.append(t)
     elements.append(Spacer(1, 0.2 * inch))
 
     # Signature block
     elements.append(Paragraph("APPLICANT CERTIFICATION", heading_style))
-    elements.append(Paragraph(
-        "I hereby certify that the information provided in this application is true, accurate, and complete "
-        "to the best of my knowledge. I understand that any material misrepresentation or omission may void "
-        "coverage. I authorize the insurer to obtain additional information as needed to evaluate this application.",
-        normal,
-    ))
+    elements.append(
+        Paragraph(
+            "I hereby certify that the information provided in this application is true, accurate, and complete "
+            "to the best of my knowledge. I understand that any material misrepresentation or omission may void "
+            "coverage. I authorize the insurer to obtain additional information as needed to evaluate this application.",
+            normal,
+        )
+    )
     elements.append(Spacer(1, 0.3 * inch))
 
     sig = [
@@ -234,20 +283,26 @@ def create_submission_pdf(output_path: str = "test-data/sample-submission.pdf") 
         ["Company: Meridian Health Technologies, Inc.", ""],
     ]
     t = Table(sig, colWidths=[4.0 * inch, 3.4 * inch])
-    t.setStyle(TableStyle([
-        ("FONTSIZE", (0, 0), (-1, -1), 9),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
-        ("TOPPADDING", (0, 0), (-1, -1), 6),
-    ]))
+    t.setStyle(
+        TableStyle(
+            [
+                ("FONTSIZE", (0, 0), (-1, -1), 9),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+                ("TOPPADDING", (0, 0), (-1, -1), 6),
+            ]
+        )
+    )
     elements.append(t)
 
     # Footer
     elements.append(Spacer(1, 0.3 * inch))
-    elements.append(Paragraph(
-        "CONFIDENTIAL — This application and all attachments contain proprietary information. "
-        f"Generated: {date.today().isoformat()} | Form: CYBER-APP-2026-v2.1",
-        small,
-    ))
+    elements.append(
+        Paragraph(
+            "CONFIDENTIAL — This application and all attachments contain proprietary information. "
+            f"Generated: {date.today().isoformat()} | Form: CYBER-APP-2026-v2.1",
+            small,
+        )
+    )
 
     doc.build(elements)
     return output_path

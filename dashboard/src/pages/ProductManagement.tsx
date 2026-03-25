@@ -6,13 +6,13 @@ import {
   Pencil, Check, X, GripVertical, Trash2,
 } from 'lucide-react';
 import {
-  AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
+  AreaChart, Area, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, PieChart, Pie, Cell,
 } from 'recharts';
 import StatusBadge from '../components/StatusBadge';
 import StatCard from '../components/StatCard';
 import { useToast } from '../components/useToast';
-import Toast from '../components/Toast';
+import { ToastContainer } from '../components/Toast';
 import {
   getProducts, getProduct, updateProduct, publishProduct,
   createProductVersion, getProductPerformance, createProduct,
@@ -39,7 +39,7 @@ type Tab = 'overview' | 'coverages' | 'rating' | 'appetite' | 'authority' | 'per
 
 const ProductManagement: React.FC = () => {
   const queryClient = useQueryClient();
-  const { toasts, addToast, removeToast } = useToast();
+  const { toasts, addToast, dismissToast } = useToast();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>('overview');
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -120,7 +120,7 @@ const ProductManagement: React.FC = () => {
           onCreate={(body) => createMutation.mutate(body)}
           isLoading={createMutation.isPending}
         />
-        {toasts.map((t) => <Toast key={t.id} type={t.type} message={t.message} onClose={() => removeToast(t.id)} />)}
+        <ToastContainer toasts={toasts} onDismiss={dismissToast} />
       </>
     );
   }
@@ -139,7 +139,7 @@ const ProductManagement: React.FC = () => {
           onNewVersion={() => versionMutation.mutate(detail.id)}
           isSaving={saveMutation.isPending}
         />
-        {toasts.map((t) => <Toast key={t.id} type={t.type} message={t.message} onClose={() => removeToast(t.id)} />)}
+        <ToastContainer toasts={toasts} onDismiss={dismissToast} />
       </>
     );
   }
@@ -226,7 +226,7 @@ const ProductManagement: React.FC = () => {
         </div>
       )}
 
-      {toasts.map((t) => <Toast key={t.id} type={t.type} message={t.message} onClose={() => removeToast(t.id)} />)}
+      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
     </div>
   );
 };
@@ -929,7 +929,7 @@ const PerformanceTab: React.FC<{ performance: ProductPerformance | null }> = ({ 
               <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
               <XAxis dataKey="month" tick={{ fontSize: 11 }} stroke="#94a3b8" />
               <YAxis tick={{ fontSize: 11 }} stroke="#94a3b8" tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`} />
-              <Tooltip formatter={(v: number) => [money(v), 'Premium']} />
+              <Tooltip formatter={(v: unknown) => [money(Number(v)), 'Premium']} />
               <Area type="monotone" dataKey="premium" stroke="#6366f1" fill="url(#premGrad)" strokeWidth={2} />
             </AreaChart>
           </ResponsiveContainer>
@@ -942,7 +942,7 @@ const PerformanceTab: React.FC<{ performance: ProductPerformance | null }> = ({ 
             <ResponsiveContainer width="100%" height={220}>
               <PieChart>
                 <Pie data={bindData} cx="50%" cy="50%" innerRadius={55} outerRadius={85} paddingAngle={3} dataKey="value"
-                  label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
+                  label={({ name, percent }: { name?: string; percent?: number }) => `${name ?? ''} ${((percent ?? 0) * 100).toFixed(0)}%`}>
                   {bindData.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
                 </Pie>
                 <Tooltip />
