@@ -64,9 +64,10 @@ After completing a significant feature block (new process, major fix, architectu
 1. **Version tag** — Use semantic naming: `v{N}-{feature}` (e.g., `v83-all-10-agents`, `v84-ai-native-knowledge`)
 2. **Changelog entry** — Add to `CHANGELOG.md` with: what changed, which agents/issues, before/after metrics
 3. **Playwright screenshots** — Capture affected portal pages to `test-screenshots/{version}/` with descriptive filenames
-4. **Update `docs/guides/feature-guide.md`** — Add section for the new feature with: description, API endpoints, MCP tools, Foundry agent involvement, screenshot references
-5. **Update `.github/copilot-instructions.md` section 3** — Refresh test counts, endpoint counts, agent counts
-6. **Keep docs current** — All documentation (README, CHANGELOG, copilot-instructions, feature-guide) must be kept current after EVERY deploy. Stale docs are a bug.
+4. **Update `docs/guides/feature-guide.md`** — Add section for the new feature with: description, API endpoints, data model, MCP tools, Foundry agent involvement, screenshot references. **A feature is NOT done until it appears in the feature guide.**
+5. **Update `docs/TECHNICAL_OVERVIEW.md`** — If the feature changes architecture, data model, agent workflows, or infrastructure, update the relevant section(s)
+6. **Update `.github/copilot-instructions.md` section 3** — Refresh test counts, endpoint counts, agent counts
+7. **Keep docs current** — All documentation (README, CHANGELOG, copilot-instructions, feature-guide, TECHNICAL_OVERVIEW) must be kept current after EVERY deploy. Stale docs are a bug.
 
 ### Versioning Convention
 
@@ -86,6 +87,8 @@ After completing a significant feature block (new process, major fix, architectu
 - Never merge on red CI. "Tests passed locally" is NOT sufficient.
 - Never hardcode credentials, connection strings, or API keys
 - Never skip feature documentation after a major block
+- Never implement a feature without documenting it in an existing doc (feature-guide, TECHNICAL_OVERVIEW, or CHANGELOG)
+- Every new feature, API endpoint, or UI page MUST be documented in `docs/guides/feature-guide.md` before the feature is considered done
 - Never commit environment-specific URLs (proudplant, braveriver, etc.) — use `<your-backend-url>` placeholders
 - Scripts must use `os.environ.get('OPENINSURE_BACKEND_URL', 'http://localhost:8000')` not hardcoded URLs
 

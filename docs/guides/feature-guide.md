@@ -31,6 +31,7 @@
 | 14 | [MCP Server](#14-mcp-server) | ✅ Working |
 | 15 | [Actuarial Workbench](#15-actuarial-workbench) | ✅ Working |
 | 16 | [Broker Portal](#16-broker-portal) | ✅ Working |
+| 17 | [Product Management](#17-product-management) | ✅ Working |
 
 ---
 
@@ -989,6 +990,115 @@ Logged in as **Thomas Anderson** (Broker — Marsh & Co), the portal shows:
 | `GET` | `/broker/claims` | Broker's claims |
 
 **Status**: ✅ Working — All broker endpoints return 200. Portal renders with correct data scoping.
+
+---
+
+## 17. Product Management
+
+**What it does**: Product Management is the insurance product lifecycle module — creating, configuring, versioning, publishing, and monitoring insurance product definitions. Products are SQL-persisted entities with structured data for coverages, rating factors, appetite rules, authority limits, and territories. This replaces the earlier in-memory/YAML approach with a production-grade relational data model.
+
+### Product Lifecycle
+
+Products follow a defined lifecycle: **Draft → Active → Sunset → Retired**.
+
+- **Draft** — Product is being configured. Coverages, rating factors, appetite rules, and territories can be freely edited. Rating is disabled.
+- **Active** — Product is published and available for quoting. The rating engine processes submissions against this product's factor tables. Changes require creating a new version.
+- **Sunset** — Product is being phased out. Existing policies continue; new quotes are discouraged.
+- **Retired** — Product is fully decommissioned. No updates allowed.
+
+### Data Model
+
+Each product is defined in Azure SQL with the following structure:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | UUID | Unique product identifier |
+| `code` | NVARCHAR(50) | Human-readable product code (e.g., `CYBER-SMB-001`) — unique |
+| `product_name` | NVARCHAR | Display name |
+| `line_of_business` | NVARCHAR | LOB category: `cyber`, `professional_indemnity`, `directors_officers`, `tech_eo`, `mpl` |
+| `description` | NVARCHAR | Product description |
+| `status` | NVARCHAR | Lifecycle status: `draft`, `active`, `sunset`, `retired` |
+| `version` | INT | Version counter (bumped on new version) |
+| `coverages` | JSON | Array of coverage definitions (code, name, limits, deductibles) |
+| `rating_factors` | JSON | Array of rating factor definitions (name, type, weight) |
+| `appetite_rules` | JSON | Array of underwriting appetite constraints (field, operator, value) |
+| `authority_limits` | JSON | Auto-bind thresholds (premium, limit, senior/CUO review triggers) |
+| `territories` | JSON | Array of territory codes (e.g., `["US", "UK"]`) |
+| `forms` | JSON | Required application forms |
+| `metadata` | JSON | Flexible key-value metadata (min/max premium, base rates) |
+| `published_at` | DATETIME2 | When product was last published |
+| `created_by` | NVARCHAR | Creator identity |
+
+### Seed Products
+
+The platform ships with 4 pre-configured products:
+
+| Code | Product | LOB | Status | Coverages |
+|------|---------|-----|--------|-----------|
+| `CYBER-SMB-001` | Cyber Liability — Small & Medium Business | cyber | active | 5 (Breach Response, BI, Ransomware, TPL, Media) |
+| `PI-PROF-001` | Professional Indemnity | professional_indemnity | active | 2 (Claims, Defense Costs) |
+| `DO-CORP-001` | Directors & Officers | directors_officers | active | 2 (Side A, Side B) |
+| `TECH-EO-001` | Technology Errors & Omissions | tech_eo | draft | 2 (E&O, Media) |
+
+### API Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/api/v1/products` | Create a new product (starts in `draft`) |
+| `GET` | `/api/v1/products` | List products with filtering (`?status=active&product_line=cyber`) and pagination |
+| `GET` | `/api/v1/products/{id}` | Get product by ID (full definition) |
+| `PUT` | `/api/v1/products/{id}` | Update product (blocked if `retired`) |
+| `POST` | `/api/v1/products/{id}/publish` | Publish a draft product → `active` (records version snapshot) |
+| `POST` | `/api/v1/products/{id}/versions` | Create a new version (bumps version, resets to `draft`) |
+| `POST` | `/api/v1/products/{id}/rate` | Calculate premium for given risk data against product's rating factors |
+| `GET` | `/api/v1/products/{id}/coverages` | List available coverages for a product |
+| `GET` | `/api/v1/products/{id}/performance` | Aggregated performance metrics (GWP, loss ratio, bind rate, trend) |
+
+### Rating Engine
+
+The rating endpoint (`/rate`) uses a two-tier approach:
+
+1. **Structured factor tables** — When `rating_factor_tables` are configured, the engine looks up the risk value in the table and applies the entry's multiplier. Supports industry, revenue band, security maturity, and custom factors.
+2. **Flat factor fallback** — When no structured tables match, applies `industry_factor × revenue_factor` from the risk data.
+
+Example rate request:
+```json
+POST /api/v1/products/{id}/rate
+{
+  "risk_data": {
+    "industry": "technology",
+    "annual_revenue": 5000000,
+    "security_maturity": 7
+  },
+  "coverages_requested": ["First-Party Breach Response", "Business Interruption"]
+}
+```
+
+### Version Management
+
+Products support full version history:
+- **Publish** records a snapshot of the current product state in `version_history`
+- **New Version** saves a snapshot, bumps the version number, and resets status to `draft`
+- Each snapshot includes the full product configuration at that point in time
+
+### Dashboard UI
+
+The Product Management dashboard (accessible to Head of Product role) provides:
+- **Product Catalog** — Filterable list of all products with status badges
+- **Product Detail** — Full configuration view with tabs for coverages, rating factors, appetite rules, territories
+- **Performance Tab** — GWP, loss ratio, bind rate, premium trend chart
+- **Version History** — Timeline of all published versions with diff view
+- **Publish / New Version** — One-click lifecycle transitions
+
+### Foundry Integration
+
+Products feed into the AI agent workflow:
+- **Triage Agent** — Uses appetite rules to auto-accept/decline/refer submissions
+- **Underwriting Agent** — Retrieves product's rating factors and authority limits for risk assessment
+- **Rating Engine** — Uses product's factor tables for premium calculation
+- **Knowledge Base** — Product definitions are indexed in AI Search for agent retrieval
+
+**Status**: ✅ Working — 6 products in SQL, full CRUD API, rating engine, versioning, publish workflow.
 
 ---
 
