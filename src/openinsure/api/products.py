@@ -369,7 +369,7 @@ async def update_product(product_id: str, body: ProductUpdate) -> ProductRespons
         record["appetite_rules"] = [r.model_dump() for r in body.appetite_rules]  # type: ignore[union-attr]
         del updates["appetite_rules"]
     if "authority_limits" in updates and updates["authority_limits"] is not None:
-        record["authority_limits"] = body.authority_limits.model_dump() if body.authority_limits else None  # type: ignore[union-attr]
+        record["authority_limits"] = body.authority_limits.model_dump() if body.authority_limits else None
         del updates["authority_limits"]
     if "metadata" in updates and updates["metadata"] is not None:
         record["metadata"].update(updates.pop("metadata"))
