@@ -1123,16 +1123,19 @@ async def upload_documents(
             raise HTTPException(status_code=413, detail="File too large (max 50 MB)")
         if storage:
             blob_name = f"submission/{submission_id}/{doc_id}/{f.filename}"
-            await storage.upload_document(
-                blob_name=blob_name,
-                data=content,
-                content_type=f.content_type or "application/octet-stream",
-                metadata={
-                    "submission_id": submission_id,
-                    "document_id": doc_id,
-                    "original_filename": f.filename or "",
-                },
-            )
+            try:
+                await storage.upload_document(
+                    blob_name=blob_name,
+                    data=content,
+                    content_type=f.content_type or "application/octet-stream",
+                    metadata={
+                        "submission_id": submission_id,
+                        "document_id": doc_id,
+                        "original_filename": f.filename or "",
+                    },
+                )
+            except Exception:
+                _logger.warning("document.upload_to_blob_failed", doc_id=doc_id)
 
     record["updated_at"] = _now()
     return DocumentUploadResponse(submission_id=submission_id, document_ids=doc_ids)
