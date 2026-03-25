@@ -8,9 +8,9 @@
 
 > Every module — underwriting, policy administration, claims, billing, compliance — is designed from the ground up to be operated by, and through, AI agents.
 
-📖 **[Technical Overview →](docs/TECHNICAL_OVERVIEW.md)** — The definitive technical reference for the platform: architecture, AI agents, domain model, API, security, deployment. Start here.
+📖 **[Technical Overview →](docs/TECHNICAL_OVERVIEW.md)** — The definitive technical reference: architecture, AI agents, domain model, API, security, deployment. Start here.
 
-📖 **[Full Functional Capabilities →](docs/CAPABILITIES.md)** — Comprehensive description of everything the platform does, written for insurance executives and product managers.
+📖 **[Feature Guide →](docs/guides/feature-guide.md)** — Detailed walkthrough of all 16 features with API examples and screenshots.
 
 ## What Is This?
 
@@ -206,7 +206,7 @@ mypy src/openinsure/
 
 ### Deployment
 
-OpenInsure can be deployed to any Azure subscription. See [Deployment Guide](docs/deployment/azure-setup.md) for instructions.
+OpenInsure can be deployed to any Azure subscription. See the [Enterprise Integration Guide](docs/guides/enterprise-integration-guide.md) for full deployment instructions.
 
 ```bash
 pwsh scripts/deploy.ps1                    # auto-version, both services
@@ -432,11 +432,11 @@ Every agent decision produces a **Decision Record** for EU AI Act compliance:
 
 ### Process Completeness (~80%)
 
-Core insurance workflows are ~80% complete. See [Process Completeness Assessment](docs/architecture/process-completeness.md) for the full gap analysis and roadmap.
+Core insurance workflows are ~80% complete. See the [Technical Overview — Insurance Operations](docs/TECHNICAL_OVERVIEW.md#8-insurance-operations) for the full gap analysis.
 
 ### MCP Server
 
-OpenInsure ships a standards-compliant **MCP server** with 29 tools and 5 resources, enabling any MCP-compatible agent (Copilot CLI, Claude Desktop, custom orchestrators) to interact with the platform. See [MCP Integration](docs/architecture/mcp-integration.md) for details.
+OpenInsure ships a standards-compliant **MCP server** with 32 tools and 5 resources, enabling any MCP-compatible agent (Copilot CLI, Claude Desktop, custom orchestrators) to interact with the platform. See the [Technical Overview — MCP Server](docs/TECHNICAL_OVERVIEW.md#mcp-server) for details.
 
 **White-label ready:** each tenant points the MCP server at their own Azure backend — no code changes needed.
 

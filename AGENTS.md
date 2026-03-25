@@ -82,7 +82,7 @@ ruff check src/ tests/ && ruff format --check src/ tests/ && mypy src/openinsure
 
 ## Architectural Decisions
 
-See `docs/architecture/ADR.md` for immutable architectural decisions.
+See `docs/TECHNICAL_OVERVIEW.md` Appendix C for immutable architectural decisions.
 
 Key ADRs:
 - ADR-001: Python FastAPI for backend

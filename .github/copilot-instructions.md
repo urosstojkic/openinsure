@@ -126,7 +126,7 @@ Every agent decision produces an immutable **Decision Record** (EU AI Act Art. 1
 
 ### Process Completeness (~80%)
 
-See `docs/architecture/process-completeness.md` for the full gap analysis. Key gaps: data enrichment, billing pipeline, subrogation, document generation.
+See `docs/TECHNICAL_OVERVIEW.md` § Insurance Operations for the full gap analysis. Key gaps: data enrichment, billing pipeline, subrogation, document generation.
 
 ---
 
@@ -160,7 +160,7 @@ Claim: reported -> under_investigation -> reserved -> (approved -> settled -> cl
                                                    \-> denied -> closed
 ```
 
-Full entity relationships and state machines: `docs/architecture/data-model.md`
+Full entity relationships and state machines: `docs/TECHNICAL_OVERVIEW.md` § Domain Model
 
 ### Key Design Patterns
 
@@ -184,7 +184,7 @@ src/openinsure/
 +-- infrastructure/  # Azure adapters + repository implementations
 |   +-- repositories/  # InMemory* and Sql* variants
 +-- knowledge/       # Knowledge graph schemas & query builders
-+-- mcp/             # MCP Server (29 tools, 5 resources, stdio + SSE)
++-- mcp/             # MCP Server (32 tools, 5 resources, stdio + SSE)
 +-- rbac/            # Roles, authority matrix, authentication
 +-- services/        # Business logic (rating, lifecycle, claims, workflow engine, learning loop, comparable accounts)
 +-- main.py          # FastAPI app entry point
@@ -194,7 +194,7 @@ src/openinsure/
 
 - **Dev/test**: `X-User-Role` header selects role (no auth required)
 - **Production**: JWT / API key via `X-API-Key` header, Entra ID for Azure services
-- **RBAC**: 19 platform roles, authority delegation engine in `rbac/`
+- **RBAC**: 23 platform roles, authority delegation engine in `rbac/`
 - **Azure services**: `DefaultAzureCredential` (managed identity, no secrets in code)
 
 ---
@@ -274,7 +274,7 @@ The CD workflow:
 - `AZURE_TENANT_ID` — Azure AD tenant ID
 - `AZURE_SUBSCRIPTION_ID` — Azure subscription ID
 
-See `docs/deployment/azure-setup.md` for OIDC federated credential setup.
+See `docs/TECHNICAL_OVERVIEW.md` § Deployment for OIDC federated credential setup.
 
 ### Manual (immediate deploy)
 
@@ -292,7 +292,7 @@ python scripts/smoke_test.py https://<your-backend-url>
 
 The deploy script: ACR build, Container Apps update, auto-incrementing version tags (`v1`, `v2`, ...). No login prompts — uses existing `az login` session.
 
-For Azure infrastructure setup: `docs/deployment/azure-setup.md`
+For Azure infrastructure setup: `docs/guides/enterprise-integration-guide.md`
 
 ---
 
@@ -305,18 +305,11 @@ For Azure infrastructure setup: `docs/deployment/azure-setup.md`
 | `CONTRIBUTING.md` | How to contribute, branch strategy, PR process | Contributors |
 | `SECURITY.md` | Security policy, vulnerability reporting | Security |
 | `CHANGELOG.md` | Release history | Everyone |
+| `docs/TECHNICAL_OVERVIEW.md` | **THE** technical reference — architecture, agents, API, domain, security, deployment, ADRs | CTO, architects, devs |
 | `docs/architecture/architecture-spec-v01.md` | North star: technical architecture vision | Architects |
 | `docs/architecture/operating-model-v02.md` | North star: operating model, 16+ personas | Product / architects |
-| `docs/architecture/data-model.md` | Entity relationships, 26 tables, state machines | Backend devs |
-| `docs/architecture/process-flows.md` | Agent workflows, RBAC matrix, integration architecture | All devs |
-| `docs/architecture/process-completeness.md` | Gap analysis with roadmap (~75% complete) | Product / planning |
-| `docs/architecture/mcp-integration.md` | MCP server: 16 tools, 5 resources, usage guide | Integration devs |
-| `docs/architecture/overview.md` | Architecture overview with diagrams | New developers |
-| `docs/architecture/ADR.md` | 7 architectural decision records (immutable) | Architects |
-| `docs/deployment/azure-setup.md` | Azure deployment walkthrough | Infra / DevOps |
-| `docs/guides/document-channels.md` | Document upload, ACORD ingestion, OCR guide | Backend devs |
-| `docs/developer-guide.md` | Developer setup, patterns, extending the platform | New developers |
-| `docs/CAPABILITIES.md` | Full functional capabilities (for executives) | Business stakeholders |
+| `docs/guides/feature-guide.md` | Detailed walkthrough of all 16 features with API examples | Product, demo, QA |
+| `docs/guides/enterprise-integration-guide.md` | Production deployment, Azure setup, integration | DevOps, Solutions Architect |
 | `.squad/routing.md` | Work routing rules + issue triage | Squad framework |
 | `.squad/decisions.md` | Architectural decisions log | All devs |
 

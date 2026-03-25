@@ -1348,7 +1348,21 @@ A comprehensive code review was conducted alongside this document. The following
 | #106 | Hidden duplicate routes with include_in_schema=False | Low | Naming inconsistency |
 | #107 | Inconsistent API naming — mixed plural/singular paths | Low | Naming inconsistency |
 
-## Appendix C: Related Documentation
+## Appendix C: Architectural Decision Records (ADRs)
+
+These decisions are foundational and unlikely to change. They are recorded here for historical context.
+
+| ADR | Decision | Rationale |
+|---|---|---|
+| **ADR-001** | Python 3.12 + FastAPI for backend | AI/ML ecosystem, native async/await, Pydantic integration, auto-generated OpenAPI |
+| **ADR-002** | Pydantic v2 for domain entities | Runtime validation at construction, Rust-based core (5–50× faster than v1), native `.model_dump()` / `.model_validate()`, full mypy support |
+| **ADR-003** | Azure SQL + Cosmos DB dual storage | SQL for ACID transactions (insurance operations), Cosmos for knowledge graph documents. Both first-party Azure with Entra ID integration |
+| **ADR-004** | Event-driven (Event Grid + Service Bus) | Insurance workflows are multi-step and async. Loose coupling, audit trail (every event persists), at-least-once delivery with dead-letter queues |
+| **ADR-005** | Microsoft Foundry for AI orchestration | Native agent orchestration, 1,900+ model catalog, guardrails, audit logging, MCP compatibility, M365 publishing |
+| **ADR-006** | EU AI Act compliance-by-design | Insurance underwriting classified as high-risk (Annex III). Deadline Aug 2026, fines up to €15M / 3% turnover. Retroactive compliance would require costly rewrite |
+| **ADR-007** | ACORD-aligned JSON/REST API | Industry-standard terminology for interoperability, modern JSON/REST (no legacy XML overhead), OpenAPI auto-generated |
+
+## Appendix D: Related Documentation
 
 | Document | Purpose | Audience |
 |---|---|---|
@@ -1356,9 +1370,6 @@ A comprehensive code review was conducted alongside this document. The following
 | [Operating Model v02](architecture/operating-model-v02.md) | AI-native carrier/MGA operating model | CTO, COO, Strategy |
 | [Feature Guide](guides/feature-guide.md) | Detailed walkthrough of all 16 features | Product, Demo, QA |
 | [Enterprise Integration Guide](guides/enterprise-integration-guide.md) | Production deployment and integration | DevOps, Solutions Architect |
-| [Developer Guide](developer-guide.md) | Local setup, contributing, coding standards | Developer |
-| [Data Model](architecture/data-model.md) | SQL schema, 26 tables, state machines | Developer, DBA |
-| [Process Flows](architecture/process-flows.md) | Agent workflows, escalation, RBAC | Business Analyst, Architect |
 | [CHANGELOG](../CHANGELOG.md) | Version history and release notes | All |
 
 ---

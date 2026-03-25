@@ -1739,7 +1739,7 @@ ORDER BY u.name, ad.action_type;
 
 After completing this integration guide:
 
-1. **Review Process Completeness:** See `docs/architecture/process-completeness.md` for remaining gaps (billing, document generation, subrogation)
+1. **Review Process Completeness:** See `docs/TECHNICAL_OVERVIEW.md` § Insurance Operations for remaining gaps (billing, document generation, subrogation)
 2. **Join the Community:** Contribute to OpenInsure on GitHub, report issues, suggest features
 3. **Schedule Training:** Book a session with your team to walk through workflows
 4. **Plan Phase 2:** Review the roadmap and prioritize next features (e.g., billing API, rating table UI)
