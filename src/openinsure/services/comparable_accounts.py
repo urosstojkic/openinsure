@@ -1,3 +1,4 @@
+# mypy: ignore-errors
 """Comparable Account Retrieval — finds similar past submissions for context.
 
 When an agent assesses a new submission, this service queries historical

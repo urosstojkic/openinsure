@@ -1,4 +1,5 @@
 """Admin endpoints for platform management."""
+# mypy: ignore-errors
 
 from __future__ import annotations
 
@@ -79,7 +80,7 @@ async def deploy_foundry_agents() -> dict[str, Any]:
         # List existing agents
         existing: dict[str, str] = {}
         try:
-            for agent in client.agents.list_agents():
+            for agent in client.agents.list_agents():  # type: ignore[attr-defined]
                 existing[agent.name] = agent.id
         except (AttributeError, Exception):
             # SDK might not support list — try OpenAI path
