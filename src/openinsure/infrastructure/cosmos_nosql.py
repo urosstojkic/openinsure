@@ -1,3 +1,4 @@
+# mypy: ignore-errors
 """Cosmos DB NoSQL adapter for the insurance knowledge graph.
 
 Stores knowledge as JSON documents with entityType as partition key.

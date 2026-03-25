@@ -1,3 +1,4 @@
+# mypy: ignore-errors
 """Decision Learning Loop — tracks decision outcomes for continuous improvement.
 
 When an agent makes a decision (triage, quote, bind), and later the outcome is

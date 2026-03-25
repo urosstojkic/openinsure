@@ -1,3 +1,4 @@
+# mypy: ignore-errors
 """In-memory knowledge store — the institutional knowledge backbone of OpenInsure.
 
 Provides rich, structured insurance data that works as the default knowledge

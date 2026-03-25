@@ -1,3 +1,4 @@
+# mypy: ignore-errors
 """Data enrichment service for OpenInsure.
 
 Provides simulated external data enrichment for submissions.

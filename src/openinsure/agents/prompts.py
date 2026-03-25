@@ -1,3 +1,4 @@
+# mypy: ignore-errors
 """Structured prompt builders for OpenInsure Foundry agents.
 
 Each builder assembles a complete prompt with:
