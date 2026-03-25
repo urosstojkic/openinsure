@@ -37,13 +37,78 @@ def _knowledge_store():
     return get_knowledge_store()
 
 
+async def get_product_context(submission: dict[str, Any]) -> list[dict[str, Any]]:
+    """Retrieve the product definition relevant to this submission.
+
+    Queries AI Search for the product matching the submission's LOB/product code,
+    so agents have current coverages, appetite rules, rating factors, and authority
+    limits — not hardcoded defaults.
+
+    Falls back to Cosmos DB, then to the in-memory knowledge store.
+    """
+    lob = submission.get("line_of_business", "cyber")
+    product_code = submission.get("product_code", "")
+
+    # 1. Try AI Search (fastest, always current after sync)
+    try:
+        from openinsure.infrastructure.factory import get_search_adapter
+
+        search = get_search_adapter()
+        if search is not None:
+            query = product_code or f"{lob} insurance product"
+            result = await search.search(
+                query,
+                filters="category eq 'product'",
+                top=3,
+                select=["id", "content", "category"],
+            )
+            hits = result.get("results", [])
+            if hits:
+                # Prefer exact product_code match
+                for hit in hits:
+                    content = hit.get("content", "")
+                    if product_code and product_code.upper() in content.upper():
+                        return [{"title": f"Product: {product_code}", "content": content}]
+                # Otherwise return best LOB match
+                for hit in hits:
+                    content = hit.get("content", "")
+                    if lob.lower() in content.lower():
+                        return [{"title": f"Product ({lob})", "content": content}]
+                # Return first result as fallback
+                return [{"title": "Product Definition", "content": hits[0].get("content", "")}]
+    except Exception:
+        logger.debug("prompts.product_search_failed", exc_info=True)
+
+    # 2. Try Cosmos DB products container
+    try:
+        from openinsure.infrastructure.factory import get_knowledge_store as get_cosmos
+
+        store = get_cosmos()
+        if store is not None:
+            products = await store.query(f"product_{lob}")
+            if isinstance(products, list) and products:
+                return products
+    except Exception:
+        logger.debug("prompts.product_cosmos_failed", exc_info=True)
+
+    # 3. Fall back to in-memory knowledge store (static defaults)
+    return []
+
+
 async def get_triage_context(submission: dict[str, Any]) -> list[dict[str, Any]]:
     """Retrieve underwriting guidelines relevant to this submission.
 
     Returns guidelines filtered by LOB, industry, and risk profile so that
     different submissions receive different knowledge context.
+    Also includes the product definition for appetite/coverage checks.
     """
-    # Try Cosmos DB first
+    results: list[dict[str, Any]] = []
+
+    # Product-specific knowledge (from SQL → Cosmos/Search pipeline)
+    product_ctx = await get_product_context(submission)
+    results.extend(product_ctx)
+
+    # Try Cosmos DB for guidelines
     try:
         from openinsure.infrastructure.factory import get_knowledge_store as get_cosmos
 
@@ -52,12 +117,14 @@ async def get_triage_context(submission: dict[str, Any]) -> list[dict[str, Any]]
             lob = submission.get("line_of_business", "cyber")
             guidelines = await store.query(f"underwriting_guidelines_{lob}")
             if isinstance(guidelines, list) and guidelines:
-                return guidelines
+                results.extend(guidelines)
+                return results
     except Exception:
         logger.debug("prompts.knowledge_retrieval_failed", exc_info=True)
 
     # Fall back to rich in-memory knowledge store with submission-specific filtering
-    return _submission_specific_guidelines(submission)
+    results.extend(_submission_specific_guidelines(submission))
+    return results
 
 
 async def get_claims_context(claim: dict[str, Any]) -> list[dict[str, Any]]:

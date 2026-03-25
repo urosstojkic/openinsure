@@ -1,7 +1,8 @@
 """Product API endpoints for OpenInsure.
 
 Manages insurance product definitions, rating, and coverage configuration.
-Uses in-memory storage as a placeholder until the database adapter is wired in.
+All mutations persist to SQL and trigger async knowledge sync (Cosmos → AI Search)
+so Foundry agents always have current product definitions.
 """
 
 from __future__ import annotations
@@ -12,17 +13,44 @@ from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query
+import structlog
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from openinsure.infrastructure.factory import get_product_repository
 
 router = APIRouter()
+logger = structlog.get_logger()
 
 # ---------------------------------------------------------------------------
 # Repository — resolved by factory (in-memory or SQL depending on config)
 # ---------------------------------------------------------------------------
 _repo = get_product_repository()
+
+
+# ---------------------------------------------------------------------------
+# Knowledge sync — fire-and-forget after product mutations
+# ---------------------------------------------------------------------------
+
+
+async def _sync_product_knowledge(product: dict[str, Any], *, removed: bool = False) -> None:
+    """Push product changes to Cosmos DB + AI Search for agent retrieval.
+
+    Runs as a background task so the API response is not delayed.
+    Failures are logged but never block the product API.
+    """
+    try:
+        from openinsure.services.product_knowledge_sync import ProductKnowledgeSyncService
+
+        svc = ProductKnowledgeSyncService()
+        if removed:
+            result = await svc.remove_product(str(product["id"]))
+            logger.info("product.knowledge_removed", product_id=product["id"], success=result)
+        else:
+            result = await svc.sync_product(product)
+            logger.info("product.knowledge_synced", product_id=product["id"], result=result)
+    except Exception:
+        logger.warning("product.knowledge_sync_failed", product_id=product.get("id"), exc_info=True)
 
 
 # ---------------------------------------------------------------------------
@@ -292,7 +320,7 @@ def _snapshot(record: dict[str, Any]) -> dict[str, Any]:
 
 
 @router.post("", response_model=ProductResponse, status_code=201)
-async def create_product(body: ProductCreate) -> ProductResponse:
+async def create_product(body: ProductCreate, background_tasks: BackgroundTasks) -> ProductResponse:
     """Create a new insurance product definition."""
     pid = str(uuid.uuid4())
     now = _now()
@@ -319,6 +347,7 @@ async def create_product(body: ProductCreate) -> ProductResponse:
         "updated_at": now,
     }
     await _repo.create(record)
+    background_tasks.add_task(_sync_product_knowledge, record)
     return ProductResponse(**record)
 
 
@@ -353,8 +382,8 @@ async def get_product(product_id: str) -> ProductResponse:
 
 
 @router.put("/{product_id}", response_model=ProductResponse)
-async def update_product(product_id: str, body: ProductUpdate) -> ProductResponse:
-    """Update a product definition."""
+async def update_product(product_id: str, body: ProductUpdate, background_tasks: BackgroundTasks) -> ProductResponse:
+    """Update a product definition.  Persists to SQL and syncs to agent knowledge."""
     record = await _get_product(product_id)
     _ensure_extended_fields(record)
     if record["status"] == ProductStatus.RETIRED:
@@ -362,30 +391,34 @@ async def update_product(product_id: str, body: ProductUpdate) -> ProductRespons
 
     updates = body.model_dump(exclude_unset=True)
     if "coverages" in updates and updates["coverages"] is not None:
-        record["coverages"] = [c.model_dump() for c in body.coverages]  # type: ignore[union-attr]
-        del updates["coverages"]
+        updates["coverages"] = [c.model_dump() for c in body.coverages]  # type: ignore[union-attr]
     if "rating_factor_tables" in updates and updates["rating_factor_tables"] is not None:
-        record["rating_factor_tables"] = [t.model_dump() for t in body.rating_factor_tables]  # type: ignore[union-attr]
-        del updates["rating_factor_tables"]
+        updates["rating_factor_tables"] = [t.model_dump() for t in body.rating_factor_tables]  # type: ignore[union-attr]
     if "appetite_rules" in updates and updates["appetite_rules"] is not None:
-        record["appetite_rules"] = [r.model_dump() for r in body.appetite_rules]  # type: ignore[union-attr]
-        del updates["appetite_rules"]
+        updates["appetite_rules"] = [r.model_dump() for r in body.appetite_rules]  # type: ignore[union-attr]
     if "authority_limits" in updates and updates["authority_limits"] is not None:
-        record["authority_limits"] = body.authority_limits.model_dump() if body.authority_limits else None
-        del updates["authority_limits"]
+        updates["authority_limits"] = body.authority_limits.model_dump() if body.authority_limits else None
     if "metadata" in updates and updates["metadata"] is not None:
-        record["metadata"].update(updates.pop("metadata"))
-    for key, val in updates.items():
-        if val is not None:
-            record[key] = val
+        merged_meta = {**record.get("metadata", {}), **updates["metadata"]}
+        updates["metadata"] = merged_meta
 
-    record["updated_at"] = _now()
-    return ProductResponse(**record)
+    updated = await _repo.update(product_id, updates)
+    if updated is None:
+        raise HTTPException(status_code=404, detail=f"Product {product_id} not found after update")
+    _ensure_extended_fields(updated)
+    background_tasks.add_task(_sync_product_knowledge, updated)
+    return ProductResponse(**updated)
 
 
 @router.post("/{product_id}/publish", response_model=ProductResponse)
-async def publish_product(product_id: str, body: PublishRequest | None = None) -> ProductResponse:
-    """Publish a draft product, making it active and available for quoting."""
+async def publish_product(
+    product_id: str, background_tasks: BackgroundTasks, body: PublishRequest | None = None
+) -> ProductResponse:
+    """Publish a draft product, making it active and available for quoting.
+
+    Persists status change + version snapshot to SQL, then syncs to agent knowledge
+    so Foundry agents immediately see the published product definition.
+    """
     record = await _get_product(product_id)
     _ensure_extended_fields(record)
     if record["status"] == ProductStatus.ACTIVE:
@@ -393,51 +426,68 @@ async def publish_product(product_id: str, body: PublishRequest | None = None) -
     if record["status"] == ProductStatus.RETIRED:
         raise HTTPException(status_code=409, detail="Cannot publish a retired product")
 
-    record["status"] = ProductStatus.ACTIVE
-    record["updated_at"] = _now()
-
+    now = _now()
     summary = body.change_summary if body else ""
-    record["version_history"].append(
-        {
-            "version": record["version"],
-            "created_at": record["updated_at"],
-            "created_by": "system",
-            "change_summary": summary or f"Published version {record['version']}",
-            "snapshot": _snapshot(record),
-        }
-    )
-    return ProductResponse(**record)
+    version_entry = {
+        "version": record["version"],
+        "created_at": now,
+        "created_by": "system",
+        "change_summary": summary or f"Published version {record['version']}",
+        "snapshot": _snapshot(record),
+    }
+
+    updates: dict[str, Any] = {
+        "status": ProductStatus.ACTIVE,
+        "version_history": [*record.get("version_history", []), version_entry],
+    }
+    updated = await _repo.update(product_id, updates)
+    if updated is None:
+        raise HTTPException(status_code=404, detail=f"Product {product_id} not found after publish")
+    _ensure_extended_fields(updated)
+    background_tasks.add_task(_sync_product_knowledge, updated)
+    return ProductResponse(**updated)
 
 
 @router.post("/{product_id}/versions", response_model=ProductResponse)
-async def create_version(product_id: str, body: VersionCreateRequest | None = None) -> ProductResponse:
-    """Create a new version of an existing product (bumps minor version)."""
+async def create_version(
+    product_id: str, background_tasks: BackgroundTasks, body: VersionCreateRequest | None = None
+) -> ProductResponse:
+    """Create a new version of an existing product (bumps minor version).
+
+    Snapshots the current state, bumps version, resets to draft.
+    Persists to SQL and syncs to agent knowledge.
+    """
     record = await _get_product(product_id)
     _ensure_extended_fields(record)
 
-    # Save current state as a version snapshot
     summary = body.change_summary if body else ""
-    record["version_history"].append(
-        {
-            "version": record["version"],
-            "created_at": _now(),
-            "created_by": "system",
-            "change_summary": summary or f"Snapshot before version bump from {record['version']}",
-            "snapshot": _snapshot(record),
-        }
-    )
+    version_entry = {
+        "version": record["version"],
+        "created_at": _now(),
+        "created_by": "system",
+        "change_summary": summary or f"Snapshot before version bump from {record['version']}",
+        "snapshot": _snapshot(record),
+    }
 
     # Bump version
     try:
         parts = record["version"].split(".")
         parts[-1] = str(int(parts[-1]) + 1)
-        record["version"] = ".".join(parts)
+        new_version = ".".join(parts)
     except (ValueError, IndexError):
-        record["version"] = record["version"] + ".1"
+        new_version = record["version"] + ".1"
 
-    record["status"] = ProductStatus.DRAFT
-    record["updated_at"] = _now()
-    return ProductResponse(**record)
+    updates: dict[str, Any] = {
+        "version": new_version,
+        "status": ProductStatus.DRAFT,
+        "version_history": [*record.get("version_history", []), version_entry],
+    }
+    updated = await _repo.update(product_id, updates)
+    if updated is None:
+        raise HTTPException(status_code=404, detail=f"Product {product_id} not found after version bump")
+    _ensure_extended_fields(updated)
+    background_tasks.add_task(_sync_product_knowledge, updated)
+    return ProductResponse(**updated)
 
 
 @router.get("/{product_id}/performance", response_model=ProductPerformance)

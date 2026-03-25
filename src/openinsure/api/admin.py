@@ -240,6 +240,24 @@ async def seed_knowledge() -> dict[str, Any]:
         return {"error": str(e)[:500]}
 
 
+@router.post("/sync-products")
+async def sync_products_to_knowledge() -> dict[str, Any]:
+    """Sync ALL products from SQL to Cosmos DB and AI Search.
+
+    This ensures Foundry agents have current product definitions including
+    coverages, appetite rules, rating factors, and authority limits.
+    Use after bulk product imports, infrastructure changes, or as a periodic job.
+    """
+    try:
+        from openinsure.services.product_knowledge_sync import ProductKnowledgeSyncService
+
+        svc = ProductKnowledgeSyncService()
+        return await svc.sync_all_products()
+    except Exception as e:
+        logger.exception("admin.sync_products_failed")
+        return {"error": str(e)[:500]}
+
+
 @router.post("/sync-knowledge")
 async def sync_knowledge_to_search() -> dict[str, Any]:
     """Sync knowledge from Cosmos DB to Azure AI Search.
