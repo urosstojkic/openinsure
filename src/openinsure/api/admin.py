@@ -238,3 +238,82 @@ async def seed_knowledge() -> dict[str, Any]:
     except Exception as e:
         logger.exception("admin.seed_knowledge_failed")
         return {"error": str(e)[:500]}
+
+
+@router.post("/sync-knowledge")
+async def sync_knowledge_to_search() -> dict[str, Any]:
+    """Sync knowledge from Cosmos DB to Azure AI Search.
+
+    Reads all knowledge from Cosmos and pushes to AI Search index.
+    This is the workaround for Cosmos DB indexer not supporting
+    disableLocalAuth=true with managed identity.
+    """
+    try:
+        from openinsure.config import get_settings
+
+        settings = get_settings()
+        if not settings.cosmos_endpoint:
+            return {"error": "COSMOS_ENDPOINT not configured"}
+
+        from azure.cosmos import CosmosClient
+        from azure.identity import DefaultAzureCredential
+        from azure.search.documents import SearchClient
+
+        credential = DefaultAzureCredential()
+        cosmos = CosmosClient(settings.cosmos_endpoint, credential=credential)
+        db = cosmos.get_database_client(settings.cosmos_database_name or "openinsure-knowledge")
+
+        # Read all knowledge from Cosmos
+        docs = []
+        containers = [
+            "guidelines",
+            "rating_factors",
+            "claims_precedents",
+            "compliance_rules",
+            "coverage_options",
+            "industry_profiles",
+            "jurisdiction_rules",
+        ]
+        for container_name in containers:
+            with contextlib.suppress(Exception):
+                container = db.get_container_client(container_name)
+                for item in container.read_all_items():
+                    import json
+
+                    content_str = json.dumps(item.get("content", item), default=str)
+                    docs.append(
+                        {
+                            "id": item["id"],
+                            "content": content_str[:30000],
+                            "category": item.get("category", container_name),
+                            "source": f"cosmos/{container_name}",
+                            "tags": container_name,
+                        }
+                    )
+
+        if not docs:
+            return {"error": "No documents found in Cosmos DB"}
+
+        # Push to AI Search
+        search_endpoint = settings.search_endpoint
+        if not search_endpoint:
+            return {"error": "SEARCH_ENDPOINT not configured", "cosmos_docs": len(docs)}
+
+        search_client = SearchClient(
+            endpoint=search_endpoint,
+            index_name="openinsure-knowledge",
+            credential=credential,
+        )
+        result = search_client.upload_documents(documents=docs)
+        succeeded = sum(1 for r in result if r.succeeded)
+
+        logger.info("admin.sync_knowledge", cosmos_docs=len(docs), indexed=succeeded)
+        return {
+            "cosmos_docs": len(docs),
+            "indexed": succeeded,
+            "containers_scanned": len(containers),
+        }
+
+    except Exception as e:
+        logger.exception("admin.sync_knowledge_failed")
+        return {"error": str(e)[:500]}
