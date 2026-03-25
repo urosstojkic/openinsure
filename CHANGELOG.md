@@ -5,6 +5,28 @@ All notable changes to OpenInsure will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## v94 — SQL Product Data Model + Tech Debt Audit (2026-03-25)
+
+### Changed
+- **Products migrated to Azure SQL** — proper relational data model replaces in-memory seed data (#91)
+  - Migration `005_products_table.sql` adds JSON columns (coverages, rating_factors, appetite_rules, authority_limits, territories, forms, metadata)
+  - `SqlProductRepository` with full CRUD, filtering, pagination
+  - 4 seed products (Cyber SMB, Professional Indemnity, D&O, Tech E&O)
+  - Factory pattern auto-selects SQL repo in Azure mode
+- **Unified Technical Documentation** — `docs/TECHNICAL_OVERVIEW.md` (53KB) replaces 5 redundant docs
+  - Deleted: `ai-native-assessment.md`, `mcp-integration.md`, `e2e-demo-case.md`, `e2e-test-results.md`, `document-channels.md`
+  - 12 sections with Mermaid architecture diagrams
+- **16 tech-debt issues filed (#92–#107)** from deep codebase audit
+  - Critical: prompts.py god file, duplicate policy lifecycle, rating engine fallback
+  - High: phantom agents, knowledge path consolidation, SQL repo parity
+  - Medium: duplicate workflows, unused events, embedded knowledge data
+- **Documentation hygiene** — all env-specific URLs removed from docs (19+ files cleaned)
+- **Foundry agents on GPT-5.2** — all 10 agents upgraded from gpt-4o
+
+### Fixed
+- Product Management page now shows SQL-persisted products (not empty)
+- CI green: 520+ tests passing (ruff, mypy, bandit, pytest)
+
 ## v90 — GPT-5.2 + Knowledge Verification (2026-03-25)
 - All 10 Foundry agents upgraded to GPT-5.2 (from gpt-4o)
 - Playwright verified: Knowledge page (7 tabs), UW Workbench, Executive Dashboard all show Cosmos data
