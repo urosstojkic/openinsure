@@ -86,6 +86,20 @@ def create_app() -> FastAPI:
             except Exception:
                 logger.warning("openinsure.escalations.seed_failed", exc_info=True)
 
+        # Always seed products (in-memory repo, no SQL table)
+        try:
+            from openinsure.infrastructure.factory import get_product_repository
+            from openinsure.infrastructure.seed_data import SAMPLE_PRODUCTS
+
+            prod_repo = get_product_repository()
+            existing = await prod_repo.list_all(limit=1)
+            if not existing:
+                for product in SAMPLE_PRODUCTS:
+                    await prod_repo.create(product)
+                logger.info("openinsure.products.seeded", count=len(SAMPLE_PRODUCTS))
+        except Exception:
+            logger.warning("openinsure.products.seed_failed", exc_info=True)
+
         yield
 
         logger.info("openinsure.shutdown")

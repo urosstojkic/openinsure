@@ -35,6 +35,132 @@ POLICY_IDS = [str(uuid.uuid4()) for _ in range(3)]
 CLAIM_IDS = [str(uuid.uuid4()) for _ in range(2)]
 PRODUCT_ID = str(uuid.uuid4())
 PRODUCT_IDS = [PRODUCT_ID] + [str(uuid.uuid4()) for _ in range(3)]
+
+SAMPLE_PRODUCTS = [
+    {
+        "id": PRODUCT_IDS[0],
+        "code": "CYBER-SMB-001",
+        "name": "Cyber Liability — Small & Medium Business",
+        "line_of_business": "cyber",
+        "description": "Comprehensive cyber insurance for businesses with revenue under $50M",
+        "status": "active",
+        "version": 1,
+        "coverages": [
+            {
+                "code": "BREACH-RESP",
+                "name": "First-Party Breach Response",
+                "default_limit": 1000000,
+                "default_deductible": 25000,
+            },
+            {
+                "code": "BIZ-INTERRUPT",
+                "name": "Business Interruption",
+                "default_limit": 500000,
+                "default_deductible": 50000,
+            },
+            {
+                "code": "RANSOM",
+                "name": "Cyber Extortion / Ransomware",
+                "default_limit": 500000,
+                "default_deductible": 25000,
+            },
+            {"code": "TPL", "name": "Third-Party Liability", "default_limit": 1000000, "default_deductible": 25000},
+            {"code": "MEDIA", "name": "Media Liability", "default_limit": 250000, "default_deductible": 10000},
+        ],
+        "rating_factors": [
+            {"name": "annual_revenue", "type": "numeric", "weight": 0.25},
+            {"name": "employee_count", "type": "numeric", "weight": 0.15},
+            {"name": "security_maturity", "type": "numeric", "weight": 0.25},
+            {"name": "industry", "type": "category", "weight": 0.20},
+            {"name": "prior_incidents", "type": "numeric", "weight": 0.15},
+        ],
+        "appetite_rules": [
+            {"field": "annual_revenue", "operator": "between", "value": [500000, 50000000]},
+            {"field": "security_maturity_score", "operator": "gte", "value": 4},
+            {"field": "prior_incidents", "operator": "lte", "value": 3},
+        ],
+        "authority_limits": {"auto_bind_max": 25000, "uw_analyst_max": 100000, "senior_uw_max": 250000},
+        "territories": ["US"],
+        "metadata": {"min_premium": 2500, "max_premium": 500000, "base_rate_per_1000": 1.5},
+    },
+    {
+        "id": PRODUCT_IDS[1],
+        "code": "PI-PROF-001",
+        "name": "Professional Indemnity",
+        "line_of_business": "professional_indemnity",
+        "description": "Professional liability coverage for service firms",
+        "status": "active",
+        "version": 1,
+        "coverages": [
+            {
+                "code": "PI-CLAIMS",
+                "name": "Professional Liability Claims",
+                "default_limit": 1000000,
+                "default_deductible": 10000,
+            },
+            {"code": "PI-DEFENSE", "name": "Defense Costs", "default_limit": 500000, "default_deductible": 5000},
+        ],
+        "rating_factors": [
+            {"name": "annual_revenue", "type": "numeric", "weight": 0.30},
+            {"name": "employee_count", "type": "numeric", "weight": 0.20},
+        ],
+        "appetite_rules": [],
+        "authority_limits": {"auto_bind_max": 15000},
+        "territories": ["US"],
+        "metadata": {"min_premium": 1500},
+    },
+    {
+        "id": PRODUCT_IDS[2],
+        "code": "DO-CORP-001",
+        "name": "Directors & Officers",
+        "line_of_business": "directors_officers",
+        "description": "D&O liability coverage for corporate boards",
+        "status": "active",
+        "version": 1,
+        "coverages": [
+            {
+                "code": "DO-SIDE-A",
+                "name": "Side A — Individual Directors",
+                "default_limit": 2000000,
+                "default_deductible": 25000,
+            },
+            {
+                "code": "DO-SIDE-B",
+                "name": "Side B — Corporate Reimbursement",
+                "default_limit": 2000000,
+                "default_deductible": 50000,
+            },
+        ],
+        "rating_factors": [{"name": "annual_revenue", "type": "numeric", "weight": 0.35}],
+        "appetite_rules": [],
+        "authority_limits": {"auto_bind_max": 20000},
+        "territories": ["US"],
+        "metadata": {"min_premium": 5000},
+    },
+    {
+        "id": PRODUCT_IDS[3],
+        "code": "TECH-EO-001",
+        "name": "Technology Errors & Omissions",
+        "line_of_business": "tech_eo",
+        "description": "E&O coverage for technology companies",
+        "status": "draft",
+        "version": 1,
+        "coverages": [
+            {"code": "TECH-EO", "name": "Technology E&O", "default_limit": 1000000, "default_deductible": 15000},
+            {
+                "code": "TECH-MEDIA",
+                "name": "Technology Media Liability",
+                "default_limit": 500000,
+                "default_deductible": 10000,
+            },
+        ],
+        "rating_factors": [{"name": "annual_revenue", "type": "numeric", "weight": 0.30}],
+        "appetite_rules": [],
+        "authority_limits": {"auto_bind_max": 15000},
+        "territories": ["US"],
+        "metadata": {"min_premium": 2000},
+    },
+]
 DECISION_IDS = [str(uuid.uuid4()) for _ in range(40)]
 AUDIT_IDS = [str(uuid.uuid4()) for _ in range(80)]
 TREATY_IDS = [str(uuid.uuid4()) for _ in range(3)]
