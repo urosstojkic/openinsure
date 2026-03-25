@@ -33,7 +33,7 @@ import httpx
 # ---------------------------------------------------------------------------
 random.seed(42)
 
-DEFAULT_URL = "https://openinsure-backend.proudplant-9550e5a5.swedencentral.azurecontainerapps.io"
+DEFAULT_URL = os.environ.get("OPENINSURE_BACKEND_URL", "http://localhost:8000")"
 
 # ---------------------------------------------------------------------------
 # Company names by industry (170+ unique names across 8 industries)

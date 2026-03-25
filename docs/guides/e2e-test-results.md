@@ -1,7 +1,7 @@
 # E2E Test Results — v90
 
 > **Date**: 2026-03-25  
-> **Backend**: `https://openinsure-backend.proudplant-9550e5a5.swedencentral.azurecontainerapps.io`  
+> **Backend**: `https://<your-backend-url>`  
 > **Auth**: `X-API-Key: dev-key-change-me`  
 > **Tool**: httpx (Python)
 

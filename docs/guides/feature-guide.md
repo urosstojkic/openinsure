@@ -4,8 +4,8 @@
 >
 > Every feature verified against the live deployment with Playwright screenshots and API endpoint testing.
 >
-> **Dashboard**: `https://openinsure-dashboard.proudplant-9550e5a5.swedencentral.azurecontainerapps.io`
-> **Backend API**: `https://openinsure-backend.proudplant-9550e5a5.swedencentral.azurecontainerapps.io/api/v1`
+> **Dashboard**: `https://<your-dashboard-url>`
+> **Backend API**: `https://<your-backend-url>/api/v1`
 > **Auth header**: `X-API-Key: dev-key-change-me` · Role override via `X-User-Role` header
 
 ---
@@ -851,7 +851,7 @@ python -m openinsure.mcp
 python -m openinsure.mcp --sse
 
 # Custom backend URL
-python -m openinsure.mcp --api-url https://openinsure-backend.proudplant-9550e5a5.swedencentral.azurecontainerapps.io
+python -m openinsure.mcp --api-url https://<your-backend-url>
 ```
 
 **Environment Variables**:
@@ -868,7 +868,7 @@ python -m openinsure.mcp --api-url https://openinsure-backend.proudplant-9550e5a
       "command": "python",
       "args": ["-m", "openinsure.mcp"],
       "env": {
-        "OPENINSURE_API_BASE_URL": "https://openinsure-backend.proudplant-9550e5a5.swedencentral.azurecontainerapps.io"
+        "OPENINSURE_API_BASE_URL": "https://<your-backend-url>"
       }
     }
   }

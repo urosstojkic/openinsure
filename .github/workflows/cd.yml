@@ -71,4 +71,4 @@ jobs:
       - name: Smoke Test
         run: |
           pip install httpx
-          python scripts/smoke_test.py https://openinsure-backend.proudplant-9550e5a5.swedencentral.azurecontainerapps.io
+          python scripts/smoke_test.py https://<your-backend-url>

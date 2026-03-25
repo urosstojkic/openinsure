@@ -16,7 +16,7 @@ Usage::
 
     # Against a remote backend (no local start)
     python -m src.scripts.trigger_escalations \\
-        --url https://openinsure-backend.proudplant-9550e5a5.swedencentral.azurecontainerapps.io \\
+        --url os.environ.get("OPENINSURE_BACKEND_URL", "http://localhost:8000") \\
         --no-start
 
     # Auto-start local backend with auth enabled
@@ -39,7 +39,7 @@ import httpx
 BASE_URL = "http://localhost:8000"
 API_KEY = "dev-key-change-me"
 
-DEFAULT_REMOTE_URL = "https://openinsure-backend.proudplant-9550e5a5.swedencentral.azurecontainerapps.io"
+DEFAULT_REMOTE_URL = os.environ.get("OPENINSURE_BACKEND_URL", "http://localhost:8000")"
 
 
 def _set_base_url(url: str) -> None:

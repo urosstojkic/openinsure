@@ -6,6 +6,7 @@ Uses in-memory storage as a placeholder until the database adapter is wired in.
 
 from __future__ import annotations
 
+import copy
 import uuid
 from datetime import UTC, datetime
 from enum import StrEnum
@@ -35,6 +36,7 @@ class ProductStatus(StrEnum):
     ACTIVE = "active"
     DRAFT = "draft"
     RETIRED = "retired"
+    SUNSET = "sunset"
 
 
 class ProductLine(StrEnum):
@@ -61,6 +63,51 @@ class CoverageDefinition(BaseModel):
     is_optional: bool = False
 
 
+class RatingFactorEntry(BaseModel):
+    """A single key→multiplier row in a rating factor table."""
+
+    key: str = Field(..., description="Factor value, e.g. 'technology' or '1-5M'")
+    multiplier: float = Field(1.0, description="Premium multiplier for this value")
+    description: str = ""
+
+
+class RatingFactorTable(BaseModel):
+    """A named table of rating factors (e.g. industry, revenue band)."""
+
+    name: str = Field(..., description="Factor category, e.g. 'industry'")
+    description: str = ""
+    entries: list[RatingFactorEntry] = Field(default_factory=list)
+
+
+class AppetiteRule(BaseModel):
+    """A configurable underwriting appetite constraint."""
+
+    name: str
+    field: str = Field(..., description="Risk field this rule evaluates")
+    operator: str = Field("in", description="Operator: in, not_in, gte, lte, between, eq")
+    value: Any = Field(..., description="Threshold or list of acceptable values")
+    description: str = ""
+
+
+class AuthorityLimit(BaseModel):
+    """Auto-bind authority thresholds for this product."""
+
+    max_auto_bind_premium: float = 0.0
+    max_auto_bind_limit: float = 0.0
+    requires_senior_review_above: float = 0.0
+    requires_cuo_review_above: float = 0.0
+
+
+class VersionInfo(BaseModel):
+    """Metadata about a product version snapshot."""
+
+    version: str
+    created_at: str
+    created_by: str = "system"
+    change_summary: str = ""
+    snapshot: dict[str, Any] = Field(default_factory=dict)
+
+
 class ProductCreate(BaseModel):
     """Payload for creating a new product."""
 
@@ -73,10 +120,23 @@ class ProductCreate(BaseModel):
         default_factory=dict,
         description="Rating algorithm configuration (base rates, factors, etc.)",
     )
+    rating_factor_tables: list[RatingFactorTable] = Field(
+        default_factory=list,
+        description="Structured rating factor tables (industry, revenue, security, etc.)",
+    )
     underwriting_rules: dict[str, Any] = Field(
         default_factory=dict,
         description="Underwriting eligibility rules",
     )
+    appetite_rules: list[AppetiteRule] = Field(
+        default_factory=list,
+        description="Configurable appetite rules for triage",
+    )
+    authority_limits: AuthorityLimit | None = None
+    territories: list[str] = Field(default_factory=list)
+    effective_date: str | None = None
+    expiration_date: str | None = None
+    forms: list[str] = Field(default_factory=list, description="Required application forms")
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -88,7 +148,14 @@ class ProductUpdate(BaseModel):
     status: ProductStatus | None = None
     coverages: list[CoverageDefinition] | None = None
     rating_rules: dict[str, Any] | None = None
+    rating_factor_tables: list[RatingFactorTable] | None = None
     underwriting_rules: dict[str, Any] | None = None
+    appetite_rules: list[AppetiteRule] | None = None
+    authority_limits: AuthorityLimit | None = None
+    territories: list[str] | None = None
+    effective_date: str | None = None
+    expiration_date: str | None = None
+    forms: list[str] | None = None
     metadata: dict[str, Any] | None = None
 
 
@@ -103,8 +170,16 @@ class ProductResponse(BaseModel):
     status: ProductStatus
     coverages: list[CoverageDefinition]
     rating_rules: dict[str, Any]
+    rating_factor_tables: list[RatingFactorTable] = Field(default_factory=list)
     underwriting_rules: dict[str, Any]
+    appetite_rules: list[AppetiteRule] = Field(default_factory=list)
+    authority_limits: AuthorityLimit | None = None
+    territories: list[str] = Field(default_factory=list)
+    effective_date: str | None = None
+    expiration_date: str | None = None
+    forms: list[str] = Field(default_factory=list)
     metadata: dict[str, Any]
+    version_history: list[VersionInfo] = Field(default_factory=list)
     created_at: str
     updated_at: str
 
@@ -146,6 +221,34 @@ class CoverageListResponse(BaseModel):
     coverages: list[CoverageDefinition]
 
 
+class PublishRequest(BaseModel):
+    """Optional body for the publish endpoint."""
+
+    change_summary: str = ""
+
+
+class VersionCreateRequest(BaseModel):
+    """Payload for creating a new product version."""
+
+    change_summary: str = ""
+
+
+class ProductPerformance(BaseModel):
+    """Aggregated product performance metrics."""
+
+    product_id: str
+    product_name: str
+    policies_in_force: int = 0
+    total_gwp: float = 0.0
+    loss_ratio: float = 0.0
+    bind_rate: float = 0.0
+    avg_premium: float = 0.0
+    submissions_count: int = 0
+    bound_count: int = 0
+    declined_count: int = 0
+    premium_trend: list[dict[str, Any]] = Field(default_factory=list)
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -160,6 +263,25 @@ async def _get_product(product_id: str) -> dict[str, Any]:
 
 def _now() -> str:
     return datetime.now(UTC).isoformat()
+
+
+def _ensure_extended_fields(record: dict[str, Any]) -> dict[str, Any]:
+    """Back-fill new fields on legacy records that lack them."""
+    record.setdefault("rating_factor_tables", [])
+    record.setdefault("appetite_rules", [])
+    record.setdefault("authority_limits", None)
+    record.setdefault("territories", [])
+    record.setdefault("effective_date", None)
+    record.setdefault("expiration_date", None)
+    record.setdefault("forms", [])
+    record.setdefault("version_history", [])
+    return record
+
+
+def _snapshot(record: dict[str, Any]) -> dict[str, Any]:
+    """Create a serialisable snapshot of the product (excluding history)."""
+    snap = {k: v for k, v in record.items() if k != "version_history"}
+    return copy.deepcopy(snap)
 
 
 # ---------------------------------------------------------------------------
@@ -181,8 +303,16 @@ async def create_product(body: ProductCreate) -> ProductResponse:
         "status": ProductStatus.DRAFT,
         "coverages": [c.model_dump() for c in body.coverages],
         "rating_rules": body.rating_rules,
+        "rating_factor_tables": [t.model_dump() for t in body.rating_factor_tables],
         "underwriting_rules": body.underwriting_rules,
+        "appetite_rules": [r.model_dump() for r in body.appetite_rules],
+        "authority_limits": body.authority_limits.model_dump() if body.authority_limits else None,
+        "territories": body.territories,
+        "effective_date": body.effective_date,
+        "expiration_date": body.expiration_date,
+        "forms": body.forms,
         "metadata": body.metadata,
+        "version_history": [],
         "created_at": now,
         "updated_at": now,
     }
@@ -207,7 +337,7 @@ async def list_products(
     total = await _repo.count(filters)
     page = await _repo.list_all(filters=filters, skip=skip, limit=limit)
     return ProductList(
-        items=[ProductResponse(**r) for r in page],
+        items=[ProductResponse(**_ensure_extended_fields(r)) for r in page],
         total=total,
         skip=skip,
         limit=limit,
@@ -217,13 +347,14 @@ async def list_products(
 @router.get("/{product_id}", response_model=ProductResponse)
 async def get_product(product_id: str) -> ProductResponse:
     """Retrieve a single product by ID."""
-    return ProductResponse(**await _get_product(product_id))
+    return ProductResponse(**_ensure_extended_fields(await _get_product(product_id)))
 
 
 @router.put("/{product_id}", response_model=ProductResponse)
 async def update_product(product_id: str, body: ProductUpdate) -> ProductResponse:
     """Update a product definition."""
     record = await _get_product(product_id)
+    _ensure_extended_fields(record)
     if record["status"] == ProductStatus.RETIRED:
         raise HTTPException(status_code=409, detail="Cannot update a retired product")
 
@@ -231,6 +362,15 @@ async def update_product(product_id: str, body: ProductUpdate) -> ProductRespons
     if "coverages" in updates and updates["coverages"] is not None:
         record["coverages"] = [c.model_dump() for c in body.coverages]  # type: ignore[union-attr]
         del updates["coverages"]
+    if "rating_factor_tables" in updates and updates["rating_factor_tables"] is not None:
+        record["rating_factor_tables"] = [t.model_dump() for t in body.rating_factor_tables]  # type: ignore[union-attr]
+        del updates["rating_factor_tables"]
+    if "appetite_rules" in updates and updates["appetite_rules"] is not None:
+        record["appetite_rules"] = [r.model_dump() for r in body.appetite_rules]  # type: ignore[union-attr]
+        del updates["appetite_rules"]
+    if "authority_limits" in updates and updates["authority_limits"] is not None:
+        record["authority_limits"] = body.authority_limits.model_dump() if body.authority_limits else None  # type: ignore[union-attr]
+        del updates["authority_limits"]
     if "metadata" in updates and updates["metadata"] is not None:
         record["metadata"].update(updates.pop("metadata"))
     for key, val in updates.items():
@@ -241,26 +381,137 @@ async def update_product(product_id: str, body: ProductUpdate) -> ProductRespons
     return ProductResponse(**record)
 
 
+@router.post("/{product_id}/publish", response_model=ProductResponse)
+async def publish_product(product_id: str, body: PublishRequest | None = None) -> ProductResponse:
+    """Publish a draft product, making it active and available for quoting."""
+    record = await _get_product(product_id)
+    _ensure_extended_fields(record)
+    if record["status"] == ProductStatus.ACTIVE:
+        raise HTTPException(status_code=409, detail="Product is already active")
+    if record["status"] == ProductStatus.RETIRED:
+        raise HTTPException(status_code=409, detail="Cannot publish a retired product")
+
+    record["status"] = ProductStatus.ACTIVE
+    record["updated_at"] = _now()
+
+    summary = body.change_summary if body else ""
+    record["version_history"].append(
+        {
+            "version": record["version"],
+            "created_at": record["updated_at"],
+            "created_by": "system",
+            "change_summary": summary or f"Published version {record['version']}",
+            "snapshot": _snapshot(record),
+        }
+    )
+    return ProductResponse(**record)
+
+
+@router.post("/{product_id}/versions", response_model=ProductResponse)
+async def create_version(product_id: str, body: VersionCreateRequest | None = None) -> ProductResponse:
+    """Create a new version of an existing product (bumps minor version)."""
+    record = await _get_product(product_id)
+    _ensure_extended_fields(record)
+
+    # Save current state as a version snapshot
+    summary = body.change_summary if body else ""
+    record["version_history"].append(
+        {
+            "version": record["version"],
+            "created_at": _now(),
+            "created_by": "system",
+            "change_summary": summary or f"Snapshot before version bump from {record['version']}",
+            "snapshot": _snapshot(record),
+        }
+    )
+
+    # Bump version
+    try:
+        parts = record["version"].split(".")
+        parts[-1] = str(int(parts[-1]) + 1)
+        record["version"] = ".".join(parts)
+    except (ValueError, IndexError):
+        record["version"] = record["version"] + ".1"
+
+    record["status"] = ProductStatus.DRAFT
+    record["updated_at"] = _now()
+    return ProductResponse(**record)
+
+
+@router.get("/{product_id}/performance", response_model=ProductPerformance)
+async def get_product_performance(product_id: str) -> ProductPerformance:
+    """Return aggregated performance metrics for a product.
+
+    In production this would query the policy/claims data stores. For now
+    we return realistic stub data so the UI has something to render.
+    """
+    record = await _get_product(product_id)
+    _ensure_extended_fields(record)
+
+    # Stub performance data — seeded products get realistic numbers
+    import hashlib
+
+    seed = int(hashlib.md5(product_id.encode()).hexdigest()[:8], 16)  # noqa: S324
+    rng = __import__("random").Random(seed)
+
+    policies = rng.randint(80, 600)
+    gwp = round(rng.uniform(2_000_000, 25_000_000), 2)
+    submissions = rng.randint(200, 1200)
+    bound = rng.randint(int(submissions * 0.3), int(submissions * 0.7))
+    declined = submissions - bound - rng.randint(0, int(submissions * 0.1))
+
+    months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+    trend = [{"month": m, "premium": round(rng.uniform(150_000, 600_000), 2)} for m in months]
+
+    return ProductPerformance(
+        product_id=product_id,
+        product_name=record["name"],
+        policies_in_force=policies,
+        total_gwp=gwp,
+        loss_ratio=round(rng.uniform(0.35, 0.72), 2),
+        bind_rate=round(bound / max(submissions, 1), 2),
+        avg_premium=round(gwp / max(policies, 1), 2),
+        submissions_count=submissions,
+        bound_count=bound,
+        declined_count=max(declined, 0),
+        premium_trend=trend,
+    )
+
+
 @router.post("/{product_id}/rate", response_model=RateResponse)
 async def calculate_rate(product_id: str, body: RateRequest) -> RateResponse:
     """Calculate a rate for given risk data.
 
-    Stub implementation — returns a deterministic rate based on product
-    base rates.  The real version calls the rating engine.
+    Uses rating_factor_tables when available, otherwise falls back to the
+    simple base_rate × flat factors approach.
     """
     record = await _get_product(product_id)
+    _ensure_extended_fields(record)
     if record["status"] != ProductStatus.ACTIVE:
         raise HTTPException(status_code=409, detail="Rating is only available for active products")
 
     base_rate = record["rating_rules"].get("base_rate", 1000.0)
-    industry_factor = body.risk_data.get("industry_factor", 1.0)
-    revenue_factor = body.risk_data.get("revenue_factor", 1.0)
+    adjustments: list[dict[str, Any]] = []
 
-    adjusted = base_rate * industry_factor * revenue_factor
-    adjustments = [
-        {"name": "industry_factor", "factor": industry_factor},
-        {"name": "revenue_factor", "factor": revenue_factor},
-    ]
+    # Apply structured factor tables if present
+    for table in record.get("rating_factor_tables", []):
+        factor_name = table["name"]
+        risk_val = str(body.risk_data.get(factor_name, "")).lower()
+        for entry in table.get("entries", []):
+            if entry["key"].lower() == risk_val:
+                adjustments.append({"name": factor_name, "factor": entry["multiplier"]})
+                base_rate *= entry["multiplier"]
+                break
+
+    # Fallback flat factors
+    if not adjustments:
+        industry_factor = body.risk_data.get("industry_factor", 1.0)
+        revenue_factor = body.risk_data.get("revenue_factor", 1.0)
+        base_rate *= industry_factor * revenue_factor
+        adjustments = [
+            {"name": "industry_factor", "factor": industry_factor},
+            {"name": "revenue_factor", "factor": revenue_factor},
+        ]
 
     requested = body.coverages_requested or [c["name"] for c in record["coverages"]]
     rated_coverages = [
@@ -271,9 +522,9 @@ async def calculate_rate(product_id: str, body: RateRequest) -> RateResponse:
 
     return RateResponse(
         product_id=product_id,
-        base_premium=base_rate,
+        base_premium=record["rating_rules"].get("base_rate", 1000.0),
         adjustments=adjustments,
-        total_premium=round(adjusted, 2),
+        total_premium=round(base_rate, 2),
         currency="USD",
         rated_coverages=rated_coverages,
     )

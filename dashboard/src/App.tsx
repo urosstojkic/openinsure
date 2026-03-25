@@ -28,6 +28,7 @@ import FinanceDashboard from './pages/FinanceDashboard';
 import KnowledgePage from './pages/KnowledgePage';
 import UWAnalytics from './pages/UWAnalytics';
 import ClaimsAnalytics from './pages/ClaimsAnalytics';
+import ProductManagement from './pages/ProductManagement';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -97,6 +98,7 @@ function AppRoutes() {
         <Route path="knowledge" element={<RouteGuard path="knowledge"><KnowledgePage /></RouteGuard>} />
         <Route path="analytics/underwriting" element={<RouteGuard path="analytics/underwriting"><UWAnalytics /></RouteGuard>} />
         <Route path="analytics/claims" element={<RouteGuard path="analytics/claims"><ClaimsAnalytics /></RouteGuard>} />
+        <Route path="products" element={<RouteGuard path="products"><ProductManagement /></RouteGuard>} />
         <Route path="portal/broker" element={<RouteGuard path="portal/broker"><BrokerPortal /></RouteGuard>} />
         <Route path="*" element={<DefaultRedirect />} />
       </Route>

@@ -368,7 +368,7 @@ az containerapp show \
   --query "properties.configuration.ingress.fqdn" -o tsv
 ```
 
-This returns something like: `openinsure-backend.proudplant-9550e5a5.swedencentral.azurecontainerapps.io`
+This returns something like: `openinsure-backend.<your-environment>.swedencentral.azurecontainerapps.io`
 
 ### Option A: Environment variable (recommended)
 
@@ -384,7 +384,7 @@ for white-label deployments — each tenant sets their own URL.
       "command": "python",
       "args": ["-m", "openinsure.mcp"],
       "env": {
-        "OPENINSURE_API_BASE_URL": "https://openinsure-backend.proudplant-9550e5a5.swedencentral.azurecontainerapps.io"
+        "OPENINSURE_API_BASE_URL": "https://<your-backend-url>"
       }
     }
   }
@@ -400,7 +400,7 @@ for white-label deployments — each tenant sets their own URL.
       "command": "python",
       "args": ["-m", "openinsure.mcp"],
       "env": {
-        "OPENINSURE_API_BASE_URL": "https://openinsure-backend.proudplant-9550e5a5.swedencentral.azurecontainerapps.io"
+        "OPENINSURE_API_BASE_URL": "https://<your-backend-url>"
       }
     }
   }
@@ -410,14 +410,14 @@ for white-label deployments — each tenant sets their own URL.
 ### Option B: CLI argument
 
 ```bash
-python -m openinsure.mcp --api-url https://openinsure-backend.proudplant-9550e5a5.swedencentral.azurecontainerapps.io
+python -m openinsure.mcp --api-url https://<your-backend-url>
 ```
 
 ### Verify connectivity
 
 ```bash
 # Health check against the backend
-curl https://openinsure-backend.proudplant-9550e5a5.swedencentral.azurecontainerapps.io/health
+curl https://<your-backend-url>/health
 ```
 
 ### Resolution order

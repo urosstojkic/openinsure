@@ -12,7 +12,7 @@ import sys
 
 import httpx
 
-BASE_URL = "https://openinsure-backend.proudplant-9550e5a5.swedencentral.azurecontainerapps.io"
+BASE_URL = os.environ.get("OPENINSURE_BACKEND_URL", "http://localhost:8000")"
 API = f"{BASE_URL}/api/v1"
 HEADERS = {"X-API-Key": "dev-key-change-me", "Content-Type": "application/json"}
 

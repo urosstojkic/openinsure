@@ -86,6 +86,8 @@ After completing a significant feature block (new process, major fix, architectu
 - Never merge on red CI. "Tests passed locally" is NOT sufficient.
 - Never hardcode credentials, connection strings, or API keys
 - Never skip feature documentation after a major block
+- Never commit environment-specific URLs (proudplant, braveriver, etc.) — use `<your-backend-url>` placeholders
+- Scripts must use `os.environ.get('OPENINSURE_BACKEND_URL', 'http://localhost:8000')` not hardcoded URLs
 
 ---
 
