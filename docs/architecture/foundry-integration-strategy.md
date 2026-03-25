@@ -1,7 +1,7 @@
 # Foundry Integration Strategy
 
-> **Status:** Implemented (Phases 1–4)  
-> **Date:** 2025-07-15 (updated 2025-07-16)  
+> **Status:** Implemented (Phases 1–4, Phase 6 partial)  
+> **Date:** 2025-07-15 (updated 2026-03-25)  
 > **Authors:** Backend + Insurance Squad  
 > **Scope:** Evaluate native Foundry Agent Service capabilities and recommend migration path from custom Python implementations.
 
@@ -55,7 +55,7 @@ OpenInsure currently integrates with Microsoft Foundry Agent Service for LLM rea
 │                                  │                    │
 │  ┌──────────────┐               │                    │
 │  │  MCP Server  │               │                    │
-│  │  (27 tools)  │               │                    │
+│  │  (29 tools)  │               │                    │
 │  │  Exposes API │               │                    │
 │  │  to clients  │               │                    │
 │  └──────────────┘               │                    │
@@ -66,12 +66,12 @@ OpenInsure currently integrates with Microsoft Foundry Agent Service for LLM rea
                     │  Agent Service            │
                     │                           │
                     │  10 prompt agents          │
-                    │  (gpt-5.1 model)          │
-                    │  - No tools attached      │
-                    │  - No knowledge base      │
-                    │  - No memory              │
-                    │  - Single-turn only       │
-                    │  - Text in → text out     │
+                    │  (gpt-5.2 model)          │
+                    │  - AI Search attached     │
+                    │  - Function calling (UW)  │
+                    │  - Memory (UW + Claims)   │
+                    │  - Web Search (Enrichment)│
+                    │  - Multi-turn support     │
                     └───────────────────────────┘
 ```
 
@@ -89,7 +89,7 @@ OpenInsure currently integrates with Microsoft Foundry Agent Service for LLM rea
 
 ### Key Limitation
 
-Foundry agents are **stateless text processors** in our current setup. They receive everything they need in a single prompt and return a single response. All intelligence about what context to retrieve and how to use it lives in our Python code, not in the agents.
+While Foundry agents now have AI Search, function calling, memory, and multi-turn conversation support, the primary intelligence about what context to retrieve and how to use it still lives in our Python code. The agent tools complement our application logic rather than replacing it — agents can autonomously search knowledge and call functions, but orchestration, compliance, and learning loop logic remain in our codebase.
 
 ---
 
@@ -165,12 +165,12 @@ This inverts the control flow: instead of us pre-loading everything, the agent r
 
 **What it does:** Foundry agents can connect to remote MCP servers and call tools exposed by them. The agent discovers available tools and calls them on demand.
 
-**Current state:** Our MCP server (`mcp/server.py`) exposes 27 tools and 5 resources to external clients (GitHub Copilot, Claude Desktop). But our own Foundry agents don't consume it — they receive pre-assembled prompts.
+**Current state:** Our MCP server (`mcp/server.py`) exposes 29 tools and 5 resources to external clients (GitHub Copilot, Claude Desktop). Foundry agents now have AI Search, function calling, and memory tools attached, but don't yet consume the MCP server directly.
 
 **Impact:** This is the most transformative capability. If Foundry agents consumed our MCP server, they could:
 - Create submissions, file claims, generate documents **on their own**
 - Query analytics, check compliance, run workflows
-- Access any of our 27 tools on demand
+- Access any of our 29 tools on demand
 
 This shifts from "app orchestrates agents" to "agents orchestrate themselves via MCP."
 
@@ -255,7 +255,7 @@ pip install azure-identity
 
 ```bash
 PROJECT_ENDPOINT=https://<resource>.services.ai.azure.com/api/projects/<project>
-MODEL_DEPLOYMENT_NAME=gpt-5.1
+MODEL_DEPLOYMENT_NAME=gpt-5.2
 OPENAI_API_VERSION=2025-05-01-preview
 ```
 
@@ -274,7 +274,7 @@ client = AIProjectClient(
 agent = client.agents.create_version(
     agent_name="my-agent",
     definition=PromptAgentDefinition(
-        model="gpt-5.1",
+        model="gpt-5.2",
         instructions="You are a helpful assistant.",
         tools=[...],  # Optional: WebSearchPreviewTool, AzureAISearchToolDefinition, etc.
     ),
@@ -306,7 +306,7 @@ response = openai_client.responses.create(
 │                                                               │
 │  ┌──────────────┐     ┌──────────────┐     ┌──────────────┐  │
 │  │ Compliance    │     │ Orchestrator │     │  MCP Server  │  │
-│  │ (EU AI Act)   │     │ (workflows)  │     │  (27 tools)  │◄─┤─ GitHub Copilot
+│  │ (EU AI Act)   │     │ (workflows)  │     │  (29 tools)  │◄─┤─ GitHub Copilot
 │  │ DecisionRecord│     │              │     │              │◄─┤─ Claude Desktop
 │  └──────────────┘     └──────────────┘     └──────┬───────┘  │
 │                                                    │          │

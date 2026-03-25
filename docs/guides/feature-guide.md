@@ -1,6 +1,6 @@
-# OpenInsure v74 Feature Guide
+# OpenInsure v90 Feature Guide
 
-> **Generated**: 2026-03-24 · **Sprint**: v74 · **Platform**: v1.0.0 — AI Oversight Platform
+> **Generated**: 2026-03-25 · **Sprint**: v90 · **Platform**: v1.0.0 — AI Oversight Platform
 >
 > Each feature was verified against the live deployment with Playwright UI screenshots and API endpoint testing.
 
@@ -342,6 +342,121 @@ Enrichment data is attached to the submission and displayed alongside the origin
 
 ---
 
+## 9. Unified Knowledge Architecture
+
+> *Version: v89*
+
+**What it does**: Establishes Cosmos DB as the central knowledge source of truth, with automatic synchronization to Azure AI Search, which is then attached to all 10 Foundry agents. This creates a unified pipeline: Portal → API → Cosmos DB → AI Search → Agents.
+
+**Architecture**:
+```
+Portal (React) → REST API → Cosmos DB (source of truth, 13 docs)
+                                  ↓ (indexer, every 5 min)
+                           AI Search Index (50 docs)
+                                  ↓ (AI Search tool)
+                           Foundry Agents (10, GPT-5.2)
+```
+
+**Key capabilities**:
+- **Write path**: Portal → API → Cosmos DB → Indexer → AI Search → Agents see changes
+- **Read path**: API → Cosmos DB (or in-memory fallback) → Portal
+- **Agent path**: Agent → AI Search tool → openinsure-knowledge index (auto-synced from Cosmos)
+- **Graceful degradation**: When Cosmos is unavailable, all reads fall back to the in-memory knowledge store
+- **Key-based auth fallback**: When RBAC (DefaultAzureCredential) fails, system falls back to key-based Cosmos auth
+- **Cosmos private endpoint**: 10.0.2.5/10.0.2.6 — no public access needed
+
+**Knowledge page tabs** (7 total):
+1. Guidelines — Underwriting guidelines by LOB
+2. Rating Factors — Premium calculation factors
+3. Coverage Options — Available coverages and limits
+4. Claims Precedents — Historical claims decisions
+5. Compliance Rules — EU AI Act, GDPR, NAIC requirements
+6. Industry Profiles — Risk profiles by industry (healthcare, fintech, tech, retail, manufacturing, education)
+7. Jurisdiction Rules — Territory-specific regulatory requirements (US, EU, UK)
+
+**API Endpoints**:
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/v1/knowledge/guidelines` | List all guidelines |
+| `GET` | `/api/v1/knowledge/industry-profiles` | List all industry risk profiles |
+| `GET` | `/api/v1/knowledge/jurisdiction-rules` | List all jurisdiction rules |
+| `GET` | `/api/v1/knowledge/sync-status` | Check Cosmos availability |
+| `POST` | `/admin/seed-knowledge` | Seed knowledge into Cosmos DB |
+| `POST` | `/admin/deploy-agents` | Deploy/update all 10 Foundry agents |
+
+**Status**: ✅ **Working** — Cosmos DB seeded with 13 knowledge documents. AI Search index contains 50 documents. All 10 agents have AI Search tool attached. Knowledge page renders all 7 tabs with Cosmos-sourced data.
+
+---
+
+## 10. Decision Learning Loop
+
+> *Version: v84*
+
+**What it does**: Tracks AI decision outcomes for continuous improvement. When claims are filed or policies renew/cancel, outcomes are correlated with the original triage/quote/bind decisions. Computes per-agent accuracy metrics and detects systematic biases.
+
+**How it works**:
+1. Every AI decision (triage, quote, bind, claim assessment) is tracked
+2. Real-world outcomes (claim filed, policy renewed/cancelled, loss incurred) are recorded
+3. Outcomes are correlated with original decisions to compute accuracy
+4. Historical accuracy is injected into agent prompts so agents self-correct
+5. Systematic patterns are surfaced (e.g., "Healthcare submissions were underpriced by 15%")
+
+**API Endpoints**:
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/v1/analytics/decision-accuracy` | Per-agent accuracy metrics |
+| `POST` | `/api/v1/analytics/decision-outcome` | Record a real-world outcome |
+
+**MCP Tool**: `get_decision_accuracy` — Returns decision accuracy metrics for all agents.
+
+**Status**: ✅ **Working** — Decision outcomes tracked in memory. Accuracy metrics computed per agent. Context injected into prompts during triage and underwriting steps.
+
+---
+
+## 11. Comparable Accounts
+
+> *Version: v84*
+
+**What it does**: When assessing a new submission, agents see how similar past submissions were handled. Matches by LOB, industry (SIC prefix), revenue band (±50%), employee count (±50%), and security maturity.
+
+**What agents see**:
+- **Triage**: "COMPARABLE ACCOUNTS: 3 similar tech companies — 2 proceeded, 1 declined"
+- **Underwriting**: "COMPARABLE PRICING: Similar companies priced at $8K-$15K. Average loss ratio: 42%"
+
+**API Endpoints**:
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/v1/submissions/{id}/comparables` | Find comparable accounts for a submission |
+
+**MCP Tool**: `get_comparable_accounts` — Finds similar historical accounts for pricing comparison.
+
+**Foundry Agent**: The **UnderwritingAgent** has a `get_comparable_accounts` function tool — it can autonomously request similar accounts during risk assessment.
+
+**Status**: ✅ **Working** — Comparable accounts computed from in-memory submission history. Results include pricing history, claim outcomes, and loss ratios.
+
+---
+
+## 12. GPT-5.2 Model Upgrade
+
+> *Version: v90*
+
+**What it does**: All 10 Foundry agents upgraded from gpt-4o to GPT-5.2 for improved reasoning, better JSON adherence, and more accurate insurance domain knowledge.
+
+**Impact**:
+- Better quote generation accuracy and reasoning chains
+- Improved triage decisions with more nuanced risk assessment
+- More reliable JSON output parsing (fewer format errors)
+- Enhanced knowledge retrieval from AI Search (better query formulation)
+
+**Verification**: Playwright screenshots confirm all major pages render correctly with GPT-5.2 agent responses:
+- Knowledge page (7 tabs) shows Cosmos data
+- UW Workbench shows agent decisions
+- Executive Dashboard shows portfolio metrics
+
+**Status**: ✅ **Working** — All 10 agents deployed with GPT-5.2. CI green. Compliance Workbench blank page fixed (bias report error handling).
+
+---
+
 ## Summary
 
 | # | Feature | Issue | Status | API | MCP Tool | Foundry Agent |
@@ -354,6 +469,10 @@ Enrichment data is attached to the submission and displayed alongside the origin
 | 6 | Claims Analytics | #82 | ✅ Working | `/analytics/claims` | `get_claims_analytics` | ClaimsAgent |
 | 7 | AI Insights | #83 | ✅ Working | `/analytics/ai-insights` | `get_ai_insights` | AnalyticsAgent |
 | 8 | Renewal Scheduling | #84 | ✅ Working | `/renewals/upcoming` | `get_upcoming_renewals` | PolicyAgent |
+| 9 | Unified Knowledge Architecture | v89 | ✅ Working | `/knowledge/*`, `/admin/seed-knowledge` | — | All 10 agents |
+| 10 | Decision Learning Loop | v84 | ✅ Working | `/analytics/decision-accuracy` | `get_decision_accuracy` | All agents |
+| 11 | Comparable Accounts | v84 | ✅ Working | `/submissions/{id}/comparables` | `get_comparable_accounts` | Underwriting |
+| 12 | GPT-5.2 Model Upgrade | v90 | ✅ Working | — | — | All 10 agents |
 
 ### Foundry Agent Lifecycle Map
 

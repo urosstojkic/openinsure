@@ -18,7 +18,7 @@ OpenInsure is an open-source, AI-native core insurance platform built on the Mic
 **OpenInsure:** Agent receives submission → extracts data → assesses risk → generates quote → binds within authority → escalates exceptions to humans
 
 **What's live today:**
-- ✅ 8 AI agents (Orchestrator, Submission, Underwriting, Policy, Claims, Compliance, Document, Knowledge) deployed on Azure AI Foundry — all active
+- ✅ 10 AI agents (Orchestrator, Submission, Underwriting, Policy, Claims, Compliance, Document, Knowledge, Enrichment, Analytics) deployed on Azure AI Foundry with GPT-5.2 — all active with AI Search tools
 - ✅ Microsoft Foundry AI pipeline with ProcessWorkflowModal visualization (step-by-step AI reasoning with confidence scores)
 - ✅ 118 REST API endpoints across 21 modules — submissions, policies, claims, billing, compliance, knowledge, reinsurance, actuarial, MGA oversight, renewals, finance, and demo
 - ✅ React dashboard with 25 pages including role-specific workbenches (Executive, Underwriting, Claims, Compliance, Broker Portal, Reinsurance, Actuarial, MGA Oversight, Renewals, Finance) — all showing real SQL data with cross-dashboard consistency
@@ -28,6 +28,10 @@ OpenInsure is an open-source, AI-native core insurance platform built on the Mic
 - ✅ ACORD 125/126 XML ingestion — parse commercial insurance applications and auto-create submissions
 - ✅ Azure Document Intelligence integration — OCR + structured extraction from uploaded PDF/image insurance documents with regex fallback
 - ✅ Knowledge graph with claims precedents, compliance rules (EU AI Act, GDPR, NAIC), and coverage definitions
+- ✅ Unified Knowledge Architecture: Cosmos DB (13 docs) → AI Search (50 docs) → 10 Foundry agents
+- ✅ Decision Learning Loop — tracks AI decision outcomes, feeds accuracy back to agents for self-correction
+- ✅ Comparable Account Retrieval — agents see similar past submissions with pricing history and loss ratios
+- ✅ Dynamic Knowledge Retrieval — submission-specific context (industry, SIC, jurisdiction)
 - ✅ One-call demo: `POST /api/v1/demo/full-workflow` runs the entire lifecycle (submission → triage → quote → bind → claim → reserve) in ~3ms
 - ✅ Cyber Liability SMB product with 5 coverages and configurable rating engine
 - ✅ Bias monitoring with real disparate impact analysis (4/5ths rule) across protected attributes
@@ -36,7 +40,7 @@ OpenInsure is an open-source, AI-native core insurance platform built on the Mic
 - ✅ Security hardened: parameterized SQL queries, constant-time auth, production error sanitization, upload size limits
 - ✅ Role-based access control with 19 platform roles and authority delegation
 - ✅ Azure infrastructure: VNet-integrated Container Apps, Azure SQL with private endpoint (no public access), 13+ resources as Bicep IaC
-- ✅ 506 tests with comprehensive E2E lifecycle coverage, CI green (ruff + mypy + bandit + pytest)
+- ✅ 520 tests with comprehensive E2E lifecycle coverage, CI green (ruff + mypy + bandit + pytest)
 
 ### Why OpenInsure?
 
@@ -70,14 +74,16 @@ OpenInsure is an open-source, AI-native core insurance platform built on the Mic
 │                 Azure AI Foundry                             │
 │  ┌──────────────┬──────────────┬───────────────────────┐    │
 │  │ Agent Service │   AI Search  │   Foundry Models      │    │
-│  │ 8 Agents:     │ (Knowledge   │  (GPT-5.1, Claude,   │    │
+│  │ 10 Agents:    │ (Knowledge   │  (GPT-5.2, Claude,   │    │
 │  │ Orchestrator, │  retrieval,  │   Phi, Mistral —      │    │
 │  │ Submission,   │  hybrid      │   1,900+ models)      │    │
 │  │ Underwriting, │  vector +    │                       │    │
 │  │ Policy,Claims,│  keyword)    │                       │    │
 │  │ Compliance,   │              │                       │    │
 │  │ Document,     │              │                       │    │
-│  │ Knowledge     │              │                       │    │
+│  │ Knowledge,    │              │                       │    │
+│  │ Enrichment,   │              │                       │    │
+│  │ Analytics     │              │                       │    │
 │  └──────────────┴──────────────┴───────────────────────┘    │
 ├─────────────────────────────────────────────────────────────┤
 │              FastAPI Backend (Python 3.12+)                  │
@@ -117,18 +123,20 @@ OpenInsure is an open-source, AI-native core insurance platform built on the Mic
 
 ## Foundry Agents
 
-OpenInsure deploys **8 specialized AI agents** on Azure AI Foundry Agent Service:
+OpenInsure deploys **10 specialized AI agents** on Azure AI Foundry Agent Service (GPT-5.2):
 
-| Agent | Responsibility | Key Decisions |
-|-------|---------------|---------------|
-| **Orchestrator** | Multi-step workflow coordination, decision record collection | Workflow routing, escalation |
-| **Submission Agent** | Intake, classification, extraction, triage, appetite matching | Submission triage, priority assignment |
-| **Underwriting Agent** | Risk assessment, cyber scoring, premium calculation, authority check | Quote generation, bind/decline recommendation |
-| **Policy Agent** | Bind, issue, endorse, renew, cancel | Policy lifecycle actions |
-| **Claims Agent** | FNOL intake, coverage verification, reserving, fraud detection | Severity triage, reserve setting, fraud flagging |
-| **Compliance Agent** | Decision audit, bias analysis, regulatory checking | Compliance pass/fail, bias alerts |
-| **Document Agent** | Document classification, extraction, generation | Document type, extracted fields |
-| **Knowledge Agent** | Knowledge graph queries, guidelines, regulatory rules | Relevant guidelines, precedents |
+| Agent | Responsibility | Key Decisions | Tools |
+|-------|---------------|---------------|-------|
+| **Orchestrator** | Multi-step workflow coordination, decision record collection | Workflow routing, escalation | AI Search |
+| **Submission Agent** | Intake, classification, extraction, triage, appetite matching | Submission triage, priority assignment | AI Search |
+| **Underwriting Agent** | Risk assessment, cyber scoring, premium calculation, authority check | Quote generation, bind/decline recommendation | AI Search, Function Calling, Memory |
+| **Policy Agent** | Bind, issue, endorse, renew, cancel | Policy lifecycle actions | AI Search |
+| **Claims Agent** | FNOL intake, coverage verification, reserving, fraud detection | Severity triage, reserve setting, fraud flagging | AI Search, Memory |
+| **Compliance Agent** | Decision audit, bias analysis, regulatory checking | Compliance pass/fail, bias alerts | AI Search |
+| **Document Agent** | Document classification, extraction, generation | Document type, extracted fields | AI Search |
+| **Knowledge Agent** | Knowledge graph queries, guidelines, regulatory rules | Relevant guidelines, precedents | AI Search |
+| **Enrichment Agent** | External data enrichment, company research | Enrichment data, risk signals | AI Search, Web Search |
+| **Analytics Agent** | Portfolio insights, executive summaries | AI-generated insights, trends | AI Search |
 
 Every agent decision produces an immutable **Decision Record** (EU AI Act Art. 12) with reasoning chain, confidence score, and fairness metrics. Agents with confidence < 0.7 automatically escalate to human oversight.
 
@@ -342,7 +350,7 @@ Every agent decision produces a **Decision Record** for EU AI Act compliance:
 {
   "decision_id": "uuid",
   "agent_id": "underwriting-agent-v0.1",
-  "model_used": "gpt-5.1",
+  "model_used": "gpt-5.2",
   "decision_type": "underwriting_recommendation",
   "confidence": 0.82,
   "reasoning": { "chain_of_thought": "...", "key_factors": [...] },
@@ -357,15 +365,18 @@ Every agent decision produces a **Decision Record** for EU AI Act compliance:
 
 - ✅ Core domain model (Party, Submission, Policy, Claim, Product, Billing)
 - ✅ REST API with 118 endpoints across 21 modules
-- ✅ 8 Foundry AI agents with decision record logging
+- ✅ 10 Foundry AI agents with decision record logging (GPT-5.2 + AI Search tools)
 - ✅ Azure infrastructure (9 Bicep modules, 13+ Azure resources)
 - ✅ Knowledge base (cyber product, underwriting guidelines, regulatory requirements)
+- ✅ Unified Knowledge Architecture: Cosmos DB → AI Search → Agents
 - ✅ EU AI Act compliance layer (decision records, audit trail, bias monitoring)
-- ✅ MCP Server interface
+- ✅ MCP Server interface (29 tools, 5 resources)
 - ✅ Role-based access control (19 platform roles, authority delegation)
 - ✅ React dashboard with 25 pages
 - ✅ Cyber Liability SMB product (5 coverages, configurable rating engine with breakdown display)
-- ✅ CI/CD pipeline (lint, type check, security scan, 506 tests, build)
+- ✅ CI/CD pipeline (lint, type check, security scan, 520 tests, build)
+- ✅ Decision Learning Loop (outcome tracking, agent self-correction)
+- ✅ Comparable Account Retrieval (similar submissions with pricing/loss history)
 
 ### Phase 2 — Dashboard & Workbenches ✅
 
@@ -416,7 +427,6 @@ Every agent decision produces a **Decision Record** for EU AI Act compliance:
 ### In Progress
 
 - 🔄 M365 Copilot publishing
-- 🔄 Azure AI Search vector indexing for knowledge retrieval
 
 ### Process Completeness (~80%)
 
@@ -424,7 +434,7 @@ Core insurance workflows are ~80% complete. See [Process Completeness Assessment
 
 ### MCP Server
 
-OpenInsure ships a standards-compliant **MCP server** with 16 tools and 5 resources, enabling any MCP-compatible agent (Copilot CLI, Claude Desktop, custom orchestrators) to interact with the platform. See [MCP Integration](docs/architecture/mcp-integration.md) for details.
+OpenInsure ships a standards-compliant **MCP server** with 29 tools and 5 resources, enabling any MCP-compatible agent (Copilot CLI, Claude Desktop, custom orchestrators) to interact with the platform. See [MCP Integration](docs/architecture/mcp-integration.md) for details.
 
 **White-label ready:** each tenant points the MCP server at their own Azure backend — no code changes needed.
 

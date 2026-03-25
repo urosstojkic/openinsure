@@ -5,6 +5,34 @@ All notable changes to OpenInsure will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## v90 — GPT-5.2 + Knowledge Verification (2026-03-25)
+- All 10 Foundry agents upgraded to GPT-5.2 (from gpt-4o)
+- Playwright verified: Knowledge page (7 tabs), UW Workbench, Executive Dashboard all show Cosmos data
+- Fixed: Compliance Workbench blank page (bias report error handling)
+- CI green: all mypy errors resolved
+
+## v89 — Unified Knowledge Architecture (2026-03-25)
+- Cosmos DB as central knowledge source of truth (13 docs seeded)
+- Cosmos private endpoint (10.0.2.5/10.0.2.6) — no public access needed
+- AI Search index (50 docs) attached to all 10 Foundry agents
+- Admin endpoints: /admin/seed-knowledge, /admin/deploy-agents
+- Knowledge API reads from Cosmos with in-memory fallback
+- Cosmos → AI Search sync architecture documented
+
+## v85-v88 — Foundry Tools + Knowledge + AI-Native (2026-03-24)
+- Azure AI Search tool attached to all 10 agents (autonomous knowledge retrieval)
+- Function calling on underwriting agent (get_rating_factors, get_comparable_accounts)
+- Conversations API support for multi-turn agent interactions
+- Knowledge indexer script (index_knowledge.py)
+- Foundry integration strategy documented (474 lines)
+
+## v84 — AI-Native Knowledge Pipeline (2026-03-24)
+- Decision Learning Loop — tracks outcomes, feeds accuracy back to agents
+- Comparable Account Retrieval — agents see similar past submissions
+- Dynamic Knowledge Retrieval — submission-specific context (industry, SIC, jurisdiction)
+- Intelligent fallbacks — CyberRatingEngine + knowledge-based appetite rules
+- 520 tests, 29 MCP tools
+
 ## [0.7.0] — Unified Knowledge Architecture
 
 ### Added

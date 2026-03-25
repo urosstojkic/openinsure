@@ -66,6 +66,7 @@ After completing a significant feature block (new process, major fix, architectu
 3. **Playwright screenshots** — Capture affected portal pages to `test-screenshots/{version}/` with descriptive filenames
 4. **Update `docs/guides/feature-guide.md`** — Add section for the new feature with: description, API endpoints, MCP tools, Foundry agent involvement, screenshot references
 5. **Update `.github/copilot-instructions.md` section 3** — Refresh test counts, endpoint counts, agent counts
+6. **Keep docs current** — All documentation (README, CHANGELOG, copilot-instructions, feature-guide) must be kept current after EVERY deploy. Stale docs are a bug.
 
 ### Versioning Convention
 
@@ -92,28 +93,32 @@ After completing a significant feature block (new process, major fix, architectu
 
 | Metric | Value |
 |--------|-------|
-| Tests | 506 collected (417 unit, pytest CI green) |
+| Tests | 520 collected (unit, pytest CI green) |
 | API endpoints | 118 across 21 modules |
 | Dashboard pages | 25 (React 18 + TypeScript + Tailwind) |
-| Foundry agents | 8 deployed on Azure AI Foundry |
-| MCP tools | 16 tools + 5 resources |
-| Azure SQL data | 1,619 submissions, 573 policies, 139 claims |
+| Foundry agents | 10 deployed on Azure AI Foundry (GPT-5.2 + AI Search tools) |
+| MCP tools | 29 tools + 5 resources |
+| Knowledge | Cosmos DB (13 docs) + AI Search (50 docs) |
+| Model | GPT-5.2 |
+| Azure SQL data | 1,640+ submissions, 575+ policies, 140+ claims |
 | Portfolio | $27.33M GWP, 62.1% loss ratio |
 | CI pipeline | ruff + mypy + bandit + pytest (GitHub Actions) |
 | Hosting | Azure Container Apps (VNet + private endpoint) |
 
-### Foundry Agents (Azure AI Foundry Agent Service)
+### Foundry Agents (Azure AI Foundry Agent Service — GPT-5.2)
 
-| Agent | Purpose |
-|-------|---------|
-| **Orchestrator** | Multi-step workflow coordination, decision record collection |
-| **Submission** | Intake, classification, extraction, triage, appetite matching |
-| **Underwriting** | Risk assessment, cyber scoring, premium calculation, authority check |
-| **Policy** | Bind, issue, endorse, renew, cancel |
-| **Claims** | FNOL intake, coverage verification, reserving, fraud detection |
-| **Compliance** | Decision audit, bias analysis, regulatory checking |
-| **Document** | Document classification, extraction, generation |
-| **Knowledge** | Knowledge graph queries, guidelines, regulatory rules |
+| Agent | Purpose | Tools |
+|-------|---------|-------|
+| **Orchestrator** | Multi-step workflow coordination, decision record collection | AI Search |
+| **Submission** | Intake, classification, extraction, triage, appetite matching | AI Search |
+| **Underwriting** | Risk assessment, cyber scoring, premium calculation, authority check | AI Search, Function Calling, Memory |
+| **Policy** | Bind, issue, endorse, renew, cancel | AI Search |
+| **Claims** | FNOL intake, coverage verification, reserving, fraud detection | AI Search, Memory |
+| **Compliance** | Decision audit, bias analysis, regulatory checking | AI Search |
+| **Document** | Document classification, extraction, generation | AI Search |
+| **Knowledge** | Knowledge graph queries, guidelines, regulatory rules | AI Search |
+| **Enrichment** | External data enrichment, company research | AI Search, Web Search |
+| **Analytics** | Portfolio insights, executive summaries | AI Search |
 
 Every agent decision produces an immutable **Decision Record** (EU AI Act Art. 12). Confidence < 0.7 triggers automatic escalation to human oversight.
 
@@ -131,8 +136,8 @@ See `docs/architecture/process-completeness.md` for the full gap analysis. Key g
 |-------|------------|
 | Backend | Python 3.12+ / FastAPI / Pydantic v2 |
 | Dashboard | React 18 + TypeScript + Vite + TanStack Query + Tailwind |
-| AI Platform | Azure AI Foundry (Agent Service, AI Search, 1,900+ models) |
-| Database | Azure SQL (transactional) + Cosmos DB Gremlin (knowledge graph) |
+| AI Platform | Azure AI Foundry (Agent Service, AI Search, GPT-5.2, 1,900+ models) |
+| Database | Azure SQL (transactional) + Cosmos DB (knowledge source of truth) |
 | Storage | Azure Blob Storage |
 | Events | Azure Event Grid + Service Bus |
 | Identity | Microsoft Entra ID + Managed Identity |
@@ -170,16 +175,16 @@ Full entity relationships and state machines: `docs/architecture/data-model.md`
 
 ```
 src/openinsure/
-+-- agents/          # 10 files: 8 AI agents + base + foundry_client
++-- agents/          # 12 files: 10 AI agents + base + foundry_client
 +-- api/             # FastAPI routers (submissions, policies, claims, products, ...)
 +-- compliance/      # EU AI Act: decision records, audit trail, bias monitoring
 +-- domain/          # Pydantic entities (party, submission, policy, claim, product, billing)
 +-- infrastructure/  # Azure adapters + repository implementations
 |   +-- repositories/  # InMemory* and Sql* variants
 +-- knowledge/       # Knowledge graph schemas & query builders
-+-- mcp/             # MCP Server (16 tools, 5 resources, stdio + SSE)
++-- mcp/             # MCP Server (29 tools, 5 resources, stdio + SSE)
 +-- rbac/            # Roles, authority matrix, authentication
-+-- services/        # Business logic (rating, lifecycle, claims, workflow engine)
++-- services/        # Business logic (rating, lifecycle, claims, workflow engine, learning loop, comparable accounts)
 +-- main.py          # FastAPI app entry point
 ```
 
