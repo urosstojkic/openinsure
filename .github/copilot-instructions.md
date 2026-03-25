@@ -312,3 +312,4 @@ For Azure infrastructure setup: `docs/deployment/azure-setup.md`
 | `docs/CAPABILITIES.md` | Full functional capabilities (for executives) | Business stakeholders |
 | `.squad/routing.md` | Work routing rules + issue triage | Squad framework |
 | `.squad/decisions.md` | Architectural decisions log | All devs |
+

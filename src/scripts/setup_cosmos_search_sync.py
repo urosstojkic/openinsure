@@ -84,11 +84,7 @@ def _build_data_source() -> dict[str, Any]:
     """Build the Cosmos DB data source definition for AI Search."""
     # Connection string: key-based or managed-identity
     if COSMOS_KEY:
-        conn_str = (
-            f"AccountEndpoint={COSMOS_ENDPOINT};"
-            f"AccountKey={COSMOS_KEY};"
-            f"Database={COSMOS_DATABASE}"
-        )
+        conn_str = f"AccountEndpoint={COSMOS_ENDPOINT};AccountKey={COSMOS_KEY};Database={COSMOS_DATABASE}"
     else:
         # Managed identity — use the Cosmos resource ID
         cosmos_resource_id = os.environ.get(
@@ -96,10 +92,7 @@ def _build_data_source() -> dict[str, Any]:
             "/subscriptions/d20aaf79-95bf-45f9-91df-7483ed00c40a/resourceGroups/openinsure-dev-sc"
             "/providers/Microsoft.DocumentDB/databaseAccounts/openinsure-dev-cosmos-knshtzbusr734",
         )
-        conn_str = (
-            f"ResourceId={cosmos_resource_id};"
-            f"Database={COSMOS_DATABASE}"
-        )
+        conn_str = f"ResourceId={cosmos_resource_id};Database={COSMOS_DATABASE}"
 
     return {
         "name": DATA_SOURCE_NAME,

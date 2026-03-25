@@ -28,7 +28,7 @@ PROJECT_ENDPOINT = os.environ.get(
     "https://uros-ai-foundry-demo-resource.services.ai.azure.com/api/projects/uros-ai-foundry-demo",
 )
 
-MODEL = os.environ.get("MODEL_DEPLOYMENT_NAME", "gpt-4o")
+MODEL = os.environ.get("MODEL_DEPLOYMENT_NAME", "gpt-4.1")
 
 # ---------------------------------------------------------------------------
 # Original full agent instructions (from restore_agent_instructions.py)
