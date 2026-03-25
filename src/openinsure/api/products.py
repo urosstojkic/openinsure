@@ -45,6 +45,8 @@ class ProductLine(StrEnum):
     CYBER = "cyber"
     TECH_EO = "tech_eo"
     MPL = "mpl"
+    PROFESSIONAL_INDEMNITY = "professional_indemnity"
+    DIRECTORS_OFFICERS = "directors_officers"
 
 
 # ---------------------------------------------------------------------------
@@ -82,7 +84,7 @@ class RatingFactorTable(BaseModel):
 class AppetiteRule(BaseModel):
     """A configurable underwriting appetite constraint."""
 
-    name: str
+    name: str = ""
     field: str = Field(..., description="Risk field this rule evaluates")
     operator: str = Field("in", description="Operator: in, not_in, gte, lte, between, eq")
     value: Any = Field(..., description="Threshold or list of acceptable values")
