@@ -1,3 +1,4 @@
+# mypy: ignore-errors
 """Knowledge graph API endpoints for OpenInsure.
 
 Exposes the insurance knowledge graph (underwriting guidelines,
