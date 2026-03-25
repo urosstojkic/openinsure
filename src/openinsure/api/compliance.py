@@ -38,10 +38,17 @@ class DecisionType(StrEnum):
     PRICING = "pricing"
     FRAUD_DETECTION = "fraud_detection"
     POLICY_REVIEW = "policy_review"
+    COMPLIANCE = "compliance"
     COMPLIANCE_AUDIT = "compliance_audit"
     ORCHESTRATION = "orchestration"
     CLAIMS_ASSESSMENT = "claims_assessment"
     RENEWAL = "renewal"
+    ENRICHMENT = "enrichment"
+    BILLING = "billing"
+    DOCUMENT = "document"
+    ANALYTICS = "analytics"
+    INTAKE = "intake"
+    ASSESSMENT = "assessment"
 
 
 class RiskLevel(StrEnum):
