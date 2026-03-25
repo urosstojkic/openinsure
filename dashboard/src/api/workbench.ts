@@ -257,13 +257,17 @@ export async function getBiasChartData(): Promise<BiasChartData> {
   }
 }
 
-export async function getBiasReport(): Promise<BiasReport> {
+export async function getBiasReport(): Promise<BiasReport | null> {
   try {
     const { data } = await client.post<BiasReport>('/compliance/bias-report');
+    if (!data || typeof data !== 'object' || !Array.isArray(data.analyses)) {
+      console.warn('[API] Bias report returned unexpected shape:', typeof data);
+      return null;
+    }
     return data;
   } catch (error) {
     console.warn('[API] Bias report unavailable:', error);
-    throw error;
+    return null;
   }
 }
 

@@ -15,7 +15,7 @@ const ComplianceWorkbench: React.FC = () => {
   const { data: overrides = [] } = useQuery({ queryKey: ['override-log'], queryFn: getOverrideLog });
   const { data: biasData } = useQuery({ queryKey: ['bias-charts'], queryFn: getBiasChartData });
   const queryClient = useQueryClient();
-  const { data: biasReport, isLoading: biasReportLoading } = useQuery({ queryKey: ['bias-report'], queryFn: getBiasReport });
+  const { data: biasReport, isLoading: biasReportLoading } = useQuery({ queryKey: ['bias-report'], queryFn: getBiasReport, retry: false });
   const generateReport = useMutation({
     mutationFn: getBiasReport,
     onSuccess: (data) => queryClient.setQueryData(['bias-report'], data),
@@ -174,7 +174,7 @@ const ComplianceWorkbench: React.FC = () => {
               <div className="grid grid-cols-3 gap-3 text-xs">
                 <div className="rounded bg-slate-50 px-3 py-2">
                   <span className="text-slate-500">Submissions Analyzed</span>
-                  <p className="text-lg font-semibold text-slate-900">{biasReport.total_submissions_analyzed.toLocaleString()}</p>
+                  <p className="text-lg font-semibold text-slate-900">{(biasReport.total_submissions_analyzed ?? 0).toLocaleString()}</p>
                 </div>
                 <div className="rounded bg-slate-50 px-3 py-2">
                   <span className="text-slate-500">EU AI Act</span>
@@ -186,7 +186,7 @@ const ComplianceWorkbench: React.FC = () => {
                 </div>
               </div>
 
-              {biasReport.analyses.map((analysis: BiasAnalysis, idx: number) => {
+              {(biasReport.analyses ?? []).map((analysis: BiasAnalysis, idx: number) => {
                 const chartData = Object.entries(analysis.groups).map(([name, g]) => ({
                   name,
                   rate: g.rate,
@@ -200,7 +200,7 @@ const ComplianceWorkbench: React.FC = () => {
                       <div className="flex items-center gap-2">
                         <span className="text-xs text-slate-500">4/5ths ratio:</span>
                         <span className={`text-xs font-mono font-bold ${analysis.passes_threshold ? 'text-green-600' : 'text-red-600'}`}>
-                          {analysis.four_fifths_ratio.toFixed(4)}
+                          {(analysis.four_fifths_ratio ?? 0).toFixed(4)}
                         </span>
                         <StatusBadge
                           label={analysis.passes_threshold ? 'PASS' : 'FAIL'}
