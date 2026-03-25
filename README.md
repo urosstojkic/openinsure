@@ -8,6 +8,8 @@
 
 > Every module — underwriting, policy administration, claims, billing, compliance — is designed from the ground up to be operated by, and through, AI agents.
 
+📖 **[Technical Overview →](docs/TECHNICAL_OVERVIEW.md)** — The definitive technical reference for the platform: architecture, AI agents, domain model, API, security, deployment. Start here.
+
 📖 **[Full Functional Capabilities →](docs/CAPABILITIES.md)** — Comprehensive description of everything the platform does, written for insurance executives and product managers.
 
 ## What Is This?
