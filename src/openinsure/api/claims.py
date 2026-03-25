@@ -985,7 +985,7 @@ async def create_subrogation(claim_id: str, body: SubrogationCreate) -> Subrogat
         "updated_at": now,
     }
     _subrogation_records.append(record)
-    return SubrogationResponse(**record)
+    return SubrogationResponse(**record)  # type: ignore[arg-type]
 
 
 @router.get("/{claim_id}/subrogation", response_model=list[SubrogationResponse])

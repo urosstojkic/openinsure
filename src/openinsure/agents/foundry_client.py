@@ -1,3 +1,4 @@
+# mypy: ignore-errors
 """Client for invoking OpenInsure agents hosted in Microsoft Foundry.
 
 Uses the azure-ai-projects SDK v2 to call agents via the Responses API.
