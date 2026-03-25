@@ -287,7 +287,7 @@ async def sync_knowledge_to_search() -> dict[str, Any]:
                             "content": content_str[:30000],
                             "category": item.get("category", container_name),
                             "source": f"cosmos/{container_name}",
-                            "tags": container_name,
+                            "tags": [container_name],
                         }
                     )
 
