@@ -108,7 +108,7 @@ def main() -> None:
             agent = client.agents.create_version(
                 agent_name=name,
                 definition=PromptAgentDefinition(
-                    model="gpt-4.1",
+                    model="gpt-5.2",
                     instructions=instructions,
                 ),
             )
