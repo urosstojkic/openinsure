@@ -380,6 +380,7 @@ async def create_product(body: ProductCreate, background_tasks: BackgroundTasks)
     record["product_code"] = product_code
     record["code"] = product_code
     await _repo.create(record)
+    record["version"] = str(record["version"])
     background_tasks.add_task(_sync_product_knowledge, record)
     return ProductResponse(**record)
 
