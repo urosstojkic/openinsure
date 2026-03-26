@@ -25,8 +25,17 @@ import sys
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 import yaml
+
+
+def _redact_url(url: str) -> str:
+    """Redact sensitive parts of a URL for safe logging."""
+    parsed = urlparse(url)
+    host = parsed.hostname or url
+    return f"{parsed.scheme}://{host}/***" if parsed.scheme else host
+
 
 # ---------------------------------------------------------------------------
 # Paths
@@ -301,9 +310,9 @@ def _upload(documents: list[dict[str, Any]]) -> None:
         try:
             container.upsert_item(doc)
             succeeded += 1
-        except Exception as exc:
+        except Exception:
             failed += 1
-            print(f"  ✗ {doc['id']}: {exc}")
+            print(f"  ✗ {doc['id']}: upload failed")
 
     print(f"\n  ✅ {succeeded} documents uploaded, {failed} failed")
 
@@ -312,7 +321,7 @@ def _dry_run(documents: list[dict[str, Any]]) -> None:
     """Print what would be seeded without making API calls."""
     print(f"\n{'=' * 60}")
     print(f"DRY RUN — {len(documents)} documents would be seeded")
-    print(f"Target: {COSMOS_ENDPOINT}")
+    print(f"Target: {_redact_url(COSMOS_ENDPOINT)}")
     print(f"Database: {COSMOS_DATABASE}")
     print(f"Container: {COSMOS_CONTAINER}")
     print(f"{'=' * 60}\n")
