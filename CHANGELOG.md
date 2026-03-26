@@ -5,6 +5,37 @@ All notable changes to OpenInsure will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## v95 — Tech Debt Refactoring: 16 Issues Resolved (2026-03-26)
+
+All 16 tech-debt issues (#92–#107) identified in the v94 codebase audit have been resolved in a single structural refactoring block.
+
+### Architecture
+- **prompts.py god file → `agents/prompts/` package** — 1,265-line monolith split into 13 focused modules (`_triage.py`, `_underwriting.py`, `_claims.py`, `_policy.py`, `_compliance.py`, `_document.py`, `_enrichment.py`, `_knowledge.py`, `_analytics.py`, `_billing.py`, `_comparable.py`, `_orchestrator.py`, `__init__.py` re-exports) (#92)
+- **Policy lifecycle consolidated** — duplicate logic between `policy_agent.py` and `services/policy_lifecycle.py` merged into single authoritative service (#93)
+- **Knowledge paths unified** — 8 redundant retrieval paths consolidated into single Cosmos → AI Search pipeline (#97)
+
+### Reliability
+- **Rating engine as Foundry fallback (3-tier cascade)** — Foundry agent → `CyberRatingEngine` (local) → LOB-appropriate minimum premium. Eliminates flat $5K hardcode (#94)
+- **State machine enums aligned** — `referred`, `reinstated`, `reported` now defined in `domain/state_machine.py` enums, matching the actual state diagrams (#99)
+
+### Code Quality
+- **Phantom agents → Foundry wrappers** — 5 stub agents (enrichment, analytics, document, knowledge, compliance) now delegate to Foundry client with graceful fallback (#96)
+- **Compliance repos implement BaseRepository** — `ComplianceRepository` now extends the same base as all other repos (#98)
+- **Centralized authority limits** — 30+ hardcoded limits extracted to `domain/limits.py` (`AuthorityLimitsConfig`, `ReserveGuidelines`) (#103)
+- **Typed API endpoints** — 13 raw-dict endpoints replaced with Pydantic response models (#100)
+- **Domain events wired** — 7 event classes (`SubmissionReceived`, `SubmissionTriaged`, `SubmissionQuoted`, `PolicyBound`, etc.) now emitted via `event_publisher` on state changes (#102)
+- **Knowledge data extracted** — 738 lines of embedded data removed from `knowledge_agent.py`, now served from Cosmos/AI Search (#105)
+- **Duplicate routes cleaned** — hidden `include_in_schema=False` routes removed, API naming normalized to plural paths (#106, #107)
+- **Duplicate bias monitoring consolidated** — single `services/bias_monitor.py` replaces parallel implementations (#95)
+- **Duplicate workflow paths removed** — redundant workflow definitions collapsed (#101)
+
+### Product Pipeline
+- **Product API persistence + knowledge sync** — all product mutations persist to Azure SQL and trigger async sync: SQL → Cosmos DB → AI Search → Foundry agents. `ProductKnowledgeSyncService` handles the pipeline (#104)
+
+### Fixed
+- CI green: 566 tests passing (up from 520)
+- API surface: 153 endpoints across 28 modules (up from 118/21)
+
 ## v94 — SQL Product Data Model + Tech Debt Audit (2026-03-25)
 
 ### Changed

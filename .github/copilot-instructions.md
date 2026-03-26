@@ -98,8 +98,8 @@ After completing a significant feature block (new process, major fix, architectu
 
 | Metric | Value |
 |--------|-------|
-| Tests | 520 collected (unit, pytest CI green) |
-| API endpoints | 118 across 21 modules |
+| Tests | 566 collected (unit, pytest CI green) |
+| API endpoints | 153 across 28 modules |
 | Dashboard pages | 25 (React 18 + TypeScript + Tailwind) |
 | Foundry agents | 10 deployed on Azure AI Foundry (GPT-5.2 + AI Search tools) |
 | MCP tools | 29 tools + 5 resources |
@@ -109,6 +109,14 @@ After completing a significant feature block (new process, major fix, architectu
 | Portfolio | $27.33M GWP, 62.1% loss ratio |
 | CI pipeline | ruff + mypy + bandit + pytest (GitHub Actions) |
 | Hosting | Azure Container Apps (VNet + private endpoint) |
+
+### v95 Refactoring Notes
+
+- **Prompts refactored** — `agents/prompts/` package (13 modules) replaces monolithic `prompts.py`
+- **Rating cascade** — 3-tier fallback: Foundry → CyberRatingEngine → LOB minimum
+- **Product sync pipeline** — SQL → Cosmos DB → AI Search on every product mutation
+- **Authority limits centralized** — `domain/limits.py` replaces 30+ hardcoded values
+- **All 16 tech-debt issues (#92–#107) resolved**
 
 ### Foundry Agents (Azure AI Foundry Agent Service — GPT-5.2)
 
@@ -180,16 +188,18 @@ Full entity relationships and state machines: `docs/TECHNICAL_OVERVIEW.md` § Do
 
 ```
 src/openinsure/
-+-- agents/          # 12 files: 10 AI agents + base + foundry_client
++-- agents/          # 11 files: 10 AI agents + base + foundry_client
+|   +-- prompts/     # 13 modules: per-domain prompt builders (split from prompts.py in v95)
 +-- api/             # FastAPI routers (submissions, policies, claims, products, ...)
 +-- compliance/      # EU AI Act: decision records, audit trail, bias monitoring
 +-- domain/          # Pydantic entities (party, submission, policy, claim, product, billing)
+|   +-- limits.py    # Centralized authority, reserve, premium limits
 +-- infrastructure/  # Azure adapters + repository implementations
 |   +-- repositories/  # InMemory* and Sql* variants
 +-- knowledge/       # Knowledge graph schemas & query builders
 +-- mcp/             # MCP Server (32 tools, 5 resources, stdio + SSE)
 +-- rbac/            # Roles, authority matrix, authentication
-+-- services/        # Business logic (rating, lifecycle, claims, workflow engine, learning loop, comparable accounts)
++-- services/        # Business logic (rating, lifecycle, claims, workflow engine, learning loop, comparable accounts, product sync)
 +-- main.py          # FastAPI app entry point
 ```
 

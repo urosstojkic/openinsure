@@ -1095,10 +1095,23 @@ The Product Management dashboard (accessible to Head of Product role) provides:
 Products feed into the AI agent workflow:
 - **Triage Agent** — Uses appetite rules to auto-accept/decline/refer submissions
 - **Underwriting Agent** — Retrieves product's rating factors and authority limits for risk assessment
-- **Rating Engine** — Uses product's factor tables for premium calculation
+- **Rating Engine** — Uses product's factor tables for premium calculation (3-tier cascade: Foundry → CyberRatingEngine → LOB minimum)
 - **Knowledge Base** — Product definitions are indexed in AI Search for agent retrieval
 
-**Status**: ✅ Working — 6 products in SQL, full CRUD API, rating engine, versioning, publish workflow.
+### Product Sync Pipeline (v95)
+
+All product mutations trigger an async knowledge sync:
+
+```
+Product API (SQL) ──sync──▸ Cosmos DB ──sync──▸ AI Search ──tool──▸ Foundry Agents
+```
+
+- `ProductKnowledgeSyncService` converts SQL product records into structured knowledge documents
+- Retired products are removed from the search index so agents no longer reference them
+- The pipeline is **fail-open** — product CRUD still works if Cosmos or AI Search is unavailable
+- Sync is fire-and-forget; product API responses are not delayed by downstream sync
+
+**Status**: ✅ Working — 6 products in SQL, full CRUD API, rating engine, versioning, publish workflow, knowledge sync pipeline.
 
 ---
 

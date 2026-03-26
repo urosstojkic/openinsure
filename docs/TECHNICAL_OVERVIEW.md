@@ -290,6 +290,7 @@ flowchart LR
         Y2[guidelines/*.yaml]
         Y3[regulatory/*.yaml]
         Y4[precedents/*.yaml]
+        S1[Azure SQL<br/>Product API]
     end
 
     subgraph "Storage"
@@ -310,9 +311,12 @@ flowchart LR
     end
 
     Y1 & Y2 & Y3 & Y4 -->|seed-knowledge| C
+    S1 -->|ProductKnowledgeSyncService| C
     C -->|sync every 5 min| S
     S -->|AzureAISearchTool| A1 & A2 & A3 & A4 & A5 & A6
 ```
+
+**Product sync pipeline (v95):** When products are created, updated, or retired via the Product API (Azure SQL), the `ProductKnowledgeSyncService` pushes changes to Cosmos DB and AI Search asynchronously. Retired products are removed from the search index so agents no longer reference them. The pipeline is fail-open — product CRUD still works if Cosmos or Search is unavailable.
 
 **Knowledge categories indexed:**
 - Underwriting guidelines (per LOB, jurisdiction)
@@ -376,13 +380,35 @@ All data services use **private endpoints** — no public network access. Contai
 All agents are deployed as **prompt agents** on Azure AI Foundry with GPT-5.2. Each agent has:
 
 - **Azure AI Search tool** — autonomous knowledge retrieval from the indexed knowledge base
-- **System prompt** — agent-specific instructions with dynamic context injection
+- **System prompt** — agent-specific instructions with dynamic context injection via the `agents/prompts/` package (13 modules, split from a single `prompts.py` in v95)
 - **DecisionRecord output** — every invocation produces an immutable compliance record
+
+The `agents/prompts/` package contains focused prompt builders per domain: `_triage.py`, `_underwriting.py`, `_claims.py`, `_policy.py`, `_compliance.py`, `_document.py`, `_enrichment.py`, `_knowledge.py`, `_analytics.py`, `_billing.py`, `_comparable.py`, `_orchestrator.py`. The `__init__.py` re-exports all public symbols for backward compatibility.
 
 The Underwriting Agent additionally has:
 - **Function calling** — `get_rating_factors`, `get_comparable_accounts` (agent decides when to call)
 - **Foundry Memory** — session continuity across multi-turn interactions
 - **Web Search** — real-time company research (Enrichment Agent)
+
+### Rating (3-Tier Fallback)
+
+Premium calculation uses a cascading strategy:
+
+1. **Foundry agent** — invokes the underwriting agent for AI-driven pricing with full context
+2. **CyberRatingEngine** — local rating engine (`services/rating.py`) with factor-based calculation
+3. **LOB minimum premium** — per-line-of-business floor (e.g., Cyber $5K, D&O $7.5K, PI $3K)
+
+This ensures every submission receives a quote even when upstream services are unavailable.
+
+### Authority Limits (Centralized)
+
+All authority, reserve, and premium thresholds are centralized in `domain/limits.py`:
+
+- `QuoteAuthorityLimits` — per-role quoting authority
+- `BindAuthorityLimits` — per-role binding authority
+- `SettlementAuthorityLimits` — per-role claims settlement authority
+- `ReserveAuthorityLimits` — reserve setting limits by severity tier
+- `AuthorityLimitsConfig` — unified configuration consumed by the authority engine
 
 ### Agent Configuration
 
@@ -594,6 +620,8 @@ erDiagram
 ```
 
 ### State Machines
+
+> **v95 note:** All states (`referred`, `reinstated`, `reported`, etc.) are now defined in `domain/state_machine.py` enums, ensuring the Mermaid diagrams below match the runtime-enforced transitions exactly.
 
 #### Submission Lifecycle
 
@@ -1288,7 +1316,7 @@ openinsure/
 ├── src/openinsure/
 │   ├── main.py                    # FastAPI application entry point
 │   ├── config.py                  # Pydantic Settings (env-based config)
-│   ├── api/                       # 24 FastAPI router modules (152 endpoints)
+│   ├── api/                       # 28 FastAPI router modules (153 endpoints)
 │   ├── agents/                    # 8 agent classes + orchestrator + Foundry client
 │   │   ├── base.py                # InsuranceAgent base, DecisionRecord, AgentConfig
 │   │   ├── submission_agent.py
@@ -1300,9 +1328,25 @@ openinsure/
 │   │   ├── knowledge_agent.py
 │   │   ├── orchestrator.py
 │   │   ├── foundry_client.py      # Microsoft Foundry integration wrapper
-│   │   └── prompts.py             # System prompts with Jinja context injection
-│   ├── domain/                    # 13 Pydantic domain entities + state machines
-│   ├── services/                  # 21 business logic services
+│   │   └── prompts/               # System prompts package (13 modules, split from prompts.py in v95)
+│   │       ├── __init__.py        # Re-exports all public symbols
+│   │       ├── _triage.py         # Submission triage prompts
+│   │       ├── _underwriting.py   # Underwriting & pricing prompts
+│   │       ├── _claims.py         # Claims processing prompts
+│   │       ├── _policy.py         # Policy lifecycle prompts
+│   │       ├── _compliance.py     # Compliance & audit prompts
+│   │       ├── _document.py       # Document processing prompts
+│   │       ├── _enrichment.py     # Data enrichment prompts
+│   │       ├── _knowledge.py      # Knowledge retrieval prompts
+│   │       ├── _analytics.py      # Analytics & reporting prompts
+│   │       ├── _billing.py        # Billing prompts
+│   │       ├── _comparable.py     # Comparable account prompts
+│   │       └── _orchestrator.py   # Workflow orchestration prompts
+│   ├── domain/                    # 14 Pydantic domain entities + state machines + limits
+│   │   └── limits.py              # Centralized authority, reserve, premium limits (v95)
+│   ├── services/                  # 22 business logic services
+│   │   ├── rating.py              # CyberRatingEngine (tier 2 of 3-tier cascade)
+│   │   └── product_knowledge_sync.py  # SQL → Cosmos → AI Search sync (v95)
 │   ├── infrastructure/            # Azure service adapters + repository layer
 │   │   ├── database.py            # Azure SQL (async SQLAlchemy + pyodbc)
 │   │   ├── cosmos.py              # Cosmos DB NoSQL
@@ -1311,12 +1355,12 @@ openinsure/
 │   │   ├── event_bus.py           # Event Grid + Service Bus
 │   │   ├── document_intelligence.py
 │   │   ├── factory.py             # Dependency injection factory
-│   │   └── repositories/          # SQL + Cosmos repository implementations
+│   │   └── repositories/          # SQL + InMemory repository implementations
 │   ├── mcp/                       # MCP server (32 tools, 5 resources)
 │   ├── rbac/                      # 26 roles, authority engine, access matrix
 │   ├── compliance/                # Decision records, audit trail, bias monitor
 │   └── knowledge/                 # Knowledge graph schemas
-├── tests/                         # 50 test files (unit, integration, e2e)
+├── tests/                         # 50+ test files (unit, integration, e2e)
 ├── infra/                         # 9 Bicep IaC modules
 ├── dashboard/                     # React 19 + TypeScript + Tailwind + Vite
 ├── knowledge/                     # YAML knowledge base (products, guidelines, rules)
@@ -1327,26 +1371,26 @@ openinsure/
 
 ## Appendix B: Known Technical Debt
 
-A comprehensive code review was conducted alongside this document. The following issues were filed as GitHub issues (label: `tech-debt`):
+A comprehensive code review was conducted alongside this document. The following 16 issues were filed as GitHub issues (label: `tech-debt`) and **all resolved in v95**:
 
-| # | Issue | Severity | Category |
-|---|---|---|---|
-| #92 | Split prompts.py god file (1,265 lines) into focused modules | Critical | Over-engineering |
-| #93 | Consolidate duplicate policy lifecycle logic (policy_agent + policy_lifecycle) | Critical | Redundant code |
-| #94 | Rating engine not used as Foundry fallback — flat $5K premium instead | Critical | Missing integration |
-| #95 | Consolidate duplicate bias monitoring (services/ and compliance/) | High | Redundant code |
-| #96 | 5 phantom agents are stubs returning empty defaults | High | Dead code |
-| #97 | 8 redundant knowledge retrieval paths — consolidate into single pipeline | High | Over-engineering |
-| #98 | Compliance repository does not extend BaseRepository | High | Inconsistent patterns |
-| #99 | State machine defines states not in domain enums | High | Inconsistent patterns |
-| #100 | 13 untyped API endpoints return raw dicts | High | Inconsistent patterns |
-| #101 | Duplicate workflow paths for same operation | Medium | Redundant code |
-| #102 | 7 domain events defined but never emitted | Medium | Dead code |
-| #103 | 30+ hardcoded authority/reserve/premium limits | High | Missing abstraction |
-| #104 | Products and Renewals have no SQL implementations | High | Missing implementation |
-| #105 | knowledge_agent.py is 80% embedded data (738 lines) | Medium | Over-engineering |
-| #106 | Hidden duplicate routes with include_in_schema=False | Low | Naming inconsistency |
-| #107 | Inconsistent API naming — mixed plural/singular paths | Low | Naming inconsistency |
+| # | Issue | Severity | Category | Resolution |
+|---|---|---|---|---|
+| #92 | Split prompts.py god file (1,265 lines) into focused modules | Critical | Over-engineering | ✅ `agents/prompts/` package (13 modules) |
+| #93 | Consolidate duplicate policy lifecycle logic (policy_agent + policy_lifecycle) | Critical | Redundant code | ✅ Single `PolicyLifecycleService` |
+| #94 | Rating engine not used as Foundry fallback — flat $5K premium instead | Critical | Missing integration | ✅ 3-tier cascade: Foundry → CyberRatingEngine → LOB minimum |
+| #95 | Consolidate duplicate bias monitoring (services/ and compliance/) | High | Redundant code | ✅ Single `services/bias_monitor.py` |
+| #96 | 5 phantom agents are stubs returning empty defaults | High | Dead code | ✅ Foundry wrappers with graceful fallback |
+| #97 | 8 redundant knowledge retrieval paths — consolidate into single pipeline | High | Over-engineering | ✅ Unified Cosmos → AI Search pipeline |
+| #98 | Compliance repository does not extend BaseRepository | High | Inconsistent patterns | ✅ `ComplianceRepository` extends `BaseRepository` |
+| #99 | State machine defines states not in domain enums | High | Inconsistent patterns | ✅ `referred`, `reinstated`, `reported` in domain enums |
+| #100 | 13 untyped API endpoints return raw dicts | High | Inconsistent patterns | ✅ Pydantic response models |
+| #101 | Duplicate workflow paths for same operation | Medium | Redundant code | ✅ Collapsed |
+| #102 | 7 domain events defined but never emitted | Medium | Dead code | ✅ Wired to event publisher |
+| #103 | 30+ hardcoded authority/reserve/premium limits | High | Missing abstraction | ✅ `domain/limits.py` |
+| #104 | Products and Renewals have no SQL implementations | High | Missing implementation | ✅ `SqlProductRepository` + knowledge sync pipeline |
+| #105 | knowledge_agent.py is 80% embedded data (738 lines) | Medium | Over-engineering | ✅ Data served from Cosmos/AI Search |
+| #106 | Hidden duplicate routes with include_in_schema=False | Low | Naming inconsistency | ✅ Removed |
+| #107 | Inconsistent API naming — mixed plural/singular paths | Low | Naming inconsistency | ✅ Normalized to plural |
 
 ## Appendix C: Architectural Decision Records (ADRs)
 

@@ -22,7 +22,7 @@ OpenInsure is an open-source, AI-native core insurance platform built on the Mic
 **What's live today:**
 - ✅ 10 AI agents (Orchestrator, Submission, Underwriting, Policy, Claims, Compliance, Document, Knowledge, Enrichment, Analytics) deployed on Azure AI Foundry with GPT-5.2 — all active with AI Search tools
 - ✅ Microsoft Foundry AI pipeline with ProcessWorkflowModal visualization (step-by-step AI reasoning with confidence scores)
-- ✅ 118 REST API endpoints across 21 modules — submissions, policies, claims, billing, compliance, knowledge, reinsurance, actuarial, MGA oversight, renewals, finance, and demo
+- ✅ 153 REST API endpoints across 28 modules — submissions, policies, claims, billing, compliance, knowledge, reinsurance, actuarial, MGA oversight, renewals, finance, products, and demo
 - ✅ React dashboard with 25 pages including role-specific workbenches (Executive, Underwriting, Claims, Compliance, Broker Portal, Reinsurance, Actuarial, MGA Oversight, Renewals, Finance) — all showing real SQL data with cross-dashboard consistency
 - ✅ Azure SQL (private endpoint, VNet-integrated) with 3+ years of operations data: 1,540 submissions, 513 policies, 115 claims
 - ✅ $24.19M GWP, 36.9% loss ratio, 88.8% combined ratio
@@ -31,6 +31,8 @@ OpenInsure is an open-source, AI-native core insurance platform built on the Mic
 - ✅ Azure Document Intelligence integration — OCR + structured extraction from uploaded PDF/image insurance documents with regex fallback
 - ✅ Knowledge graph with claims precedents, compliance rules (EU AI Act, GDPR, NAIC), and coverage definitions
 - ✅ Unified Knowledge Architecture: Cosmos DB (13 docs) → AI Search (50 docs) → 10 Foundry agents
+- ✅ Product sync pipeline — SQL → Cosmos DB → AI Search on every product mutation (v95)
+- ✅ 3-tier rating cascade: Foundry agent → CyberRatingEngine → LOB minimum (v95)
 - ✅ Decision Learning Loop — tracks AI decision outcomes, feeds accuracy back to agents for self-correction
 - ✅ Comparable Account Retrieval — agents see similar past submissions with pricing history and loss ratios
 - ✅ Dynamic Knowledge Retrieval — submission-specific context (industry, SIC, jurisdiction)
@@ -42,7 +44,7 @@ OpenInsure is an open-source, AI-native core insurance platform built on the Mic
 - ✅ Security hardened: parameterized SQL queries, constant-time auth, production error sanitization, upload size limits
 - ✅ Role-based access control with 19 platform roles and authority delegation
 - ✅ Azure infrastructure: VNet-integrated Container Apps, Azure SQL with private endpoint (no public access), 13+ resources as Bicep IaC
-- ✅ 520 tests with comprehensive E2E lifecycle coverage, CI green (ruff + mypy + bandit + pytest)
+- ✅ 566 tests with comprehensive E2E lifecycle coverage, CI green (ruff + mypy + bandit + pytest)
 
 ### Why OpenInsure?
 
