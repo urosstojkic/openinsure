@@ -151,7 +151,7 @@ class FoundryAgentClient:
                 return {**base, "error": "OpenAI client not initialized"}
             response = self._openai.responses.create(
                 input=[{"role": "user", "content": message}],
-                extra_body={"agent": {"name": agent_name, "type": "agent_reference"}},
+                extra_body={"agent_reference": {"name": agent_name, "type": "agent_reference"}},
             )
             text = response.output_text
             elapsed_ms = int((time.monotonic() - start) * 1000)
