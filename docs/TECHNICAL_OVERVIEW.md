@@ -846,7 +846,7 @@ The MCP server exposes OpenInsure as a tool provider for AI agents (GitHub Copil
 
 ### Authentication & Authorization
 
-**Three authentication modes** (dev → API key → JWT) allow progressive hardening from development to production without code changes.
+**Three authentication modes** (dev → API key → JWT) allow progressive hardening from development to production without code changes. When `OPENINSURE_API_KEY` is set, the API enforces authentication — requests without a valid `X-API-Key` header receive `401 Unauthorized`, and requests with an invalid key receive `403 Forbidden`. When unset, the API runs in open dev mode.
 
 **RBAC: 26 roles across 6 categories:**
 

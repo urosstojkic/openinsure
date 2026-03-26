@@ -5,6 +5,17 @@ All notable changes to OpenInsure will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## v96 — Bug Fixes: Auth Enforcement, Product Creation, Claims Validation, Compliance UI (2026-03-27)
+
+### Fixed
+- **Auth enforcement** (#111) — API now returns `401 Unauthorized` / `403 Forbidden` for missing or invalid API keys when `OPENINSURE_API_KEY` is configured. Previously, unauthenticated requests were silently allowed.
+- **Product creation** (#112) — `POST /api/v1/products` now auto-generates `product_code` (LOB prefix + UUID) when not provided, coerces `version` to INT for SQL compatibility, and defaults `effective_date` to today.
+- **Claims validation** (#113) — `POST /api/v1/claims` now returns `422 Unprocessable Entity` when referencing a non-existent policy. Previously returned `500 Internal Server Error`.
+- **Compliance workbench UI** (#110) — Fixed React "Objects are not valid as a React child" crash in the decision audit display by serializing complex decision objects before rendering.
+
+### Metrics
+- CI green: 636 tests passing (up from 566)
+
 ## v95 — Tech Debt Refactoring: 16 Issues Resolved (2026-03-26)
 
 All 16 tech-debt issues (#92–#107) identified in the v94 codebase audit have been resolved in a single structural refactoring block.

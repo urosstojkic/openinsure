@@ -1013,12 +1013,12 @@ Each product is defined in Azure SQL with the following structure:
 | Field | Type | Description |
 |-------|------|-------------|
 | `id` | UUID | Unique product identifier |
-| `code` | NVARCHAR(50) | Human-readable product code (e.g., `CYBER-SMB-001`) — unique |
+| `code` | NVARCHAR(50) | Product code — auto-generated as `{LOB_PREFIX}-{UUID}` when not provided (e.g., `CYBER-a1b2c3d4`), or set explicitly (e.g., `CYBER-SMB-001`) — unique |
 | `product_name` | NVARCHAR | Display name |
 | `line_of_business` | NVARCHAR | LOB category: `cyber`, `professional_indemnity`, `directors_officers`, `tech_eo`, `mpl` |
 | `description` | NVARCHAR | Product description |
 | `status` | NVARCHAR | Lifecycle status: `draft`, `active`, `sunset`, `retired` |
-| `version` | INT | Version counter (bumped on new version) |
+| `version` | INT | Version counter (coerced to INT on creation; bumped on new version) |
 | `coverages` | JSON | Array of coverage definitions (code, name, limits, deductibles) |
 | `rating_factors` | JSON | Array of rating factor definitions (name, type, weight) |
 | `appetite_rules` | JSON | Array of underwriting appetite constraints (field, operator, value) |
@@ -1026,6 +1026,7 @@ Each product is defined in Azure SQL with the following structure:
 | `territories` | JSON | Array of territory codes (e.g., `["US", "UK"]`) |
 | `forms` | JSON | Required application forms |
 | `metadata` | JSON | Flexible key-value metadata (min/max premium, base rates) |
+| `effective_date` | DATETIME2 | When product takes effect (defaults to today if not provided) |
 | `published_at` | DATETIME2 | When product was last published |
 | `created_by` | NVARCHAR | Creator identity |
 
