@@ -20,20 +20,33 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import os
 import random
 import sys
 import time
 from datetime import date, timedelta
 from typing import Any
+from urllib.parse import urlparse
 
 import httpx
+
+
+def _redact_url(url: str) -> str:
+    """Redact sensitive parts of a URL for safe logging."""
+    parsed = urlparse(url)
+    host = parsed.hostname or url
+    return f"{parsed.scheme}://{host}/***" if parsed.scheme else host
+
 
 # ---------------------------------------------------------------------------
 # Deterministic randomness so reruns produce the same data
 # ---------------------------------------------------------------------------
 random.seed(42)
 
-DEFAULT_URL = "https://openinsure-backend.proudplant-9550e5a5.swedencentral.azurecontainerapps.io"
+DEFAULT_URL = os.environ.get(
+    "OPENINSURE_BACKEND_URL",
+    "http://localhost:8000",
+)
 
 # ---------------------------------------------------------------------------
 # Company names by industry (170+ unique names across 8 industries)
@@ -624,11 +637,11 @@ class APIClient:
             r = self.client.post(f"/api/v1/{endpoint}", json=data)
             if r.status_code in (200, 201):
                 return r.json()
-            print(f"  WARN {endpoint}: HTTP {r.status_code} — {r.text[:200]}")
+            print(f"  WARN {endpoint}: HTTP {r.status_code}")
             self.stats["errors"] += 1
             return None
-        except Exception as e:
-            print(f"  ERROR {endpoint}: {e}")
+        except Exception:
+            print(f"  ERROR {endpoint}: request failed")
             self.stats["errors"] += 1
             return None
 
@@ -983,7 +996,7 @@ def main() -> None:
 
     print("=" * 70)
     print("  OpenInsure — Multi-Year Demo Business Data Seed (Jan 2023 – Mar 2026)")
-    print(f"  Target: {args.url}")
+    print(f"  Target: {_redact_url(args.url)}")
     print(f"  Plan: ~{TOTAL_SUBMISSIONS} submissions, ~{round(TOTAL_SUBMISSIONS * 0.35)} policies,")
     print(f"         ~{NUM_CLAIMS} claims, ~200 decision records")
     print("=" * 70)
