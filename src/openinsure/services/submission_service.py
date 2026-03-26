@@ -7,11 +7,12 @@ API handlers delegate to this service to keep endpoint code thin.
 from __future__ import annotations
 
 import json
-import logging
 import uuid
 from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
+
+import structlog
 
 from openinsure.infrastructure.factory import (
     get_billing_repository,
@@ -19,12 +20,58 @@ from openinsure.infrastructure.factory import (
     get_submission_repository,
 )
 from openinsure.rbac.authority import AuthorityDecision, AuthorityEngine
+from openinsure.services.rating import CyberRatingEngine, RatingInput
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
+
+# LOB-appropriate minimum premiums when all else fails
+_LOB_MIN_PREMIUMS: dict[str, float] = {
+    "cyber": 2500.0,
+    "professional_indemnity": 1500.0,
+    "directors_officers": 5000.0,
+    "tech_eo": 2000.0,
+}
+_DEFAULT_MIN_PREMIUM = 2500.0
 
 
 def _now() -> str:
     return datetime.now(UTC).isoformat()
+
+
+def _extract_risk_data(record: dict[str, Any]) -> dict[str, Any]:
+    """Extract risk data from a submission record.
+
+    Handles both ``risk_data`` and ``cyber_risk_data`` field names, and
+    deserialises JSON strings when necessary.
+    """
+    raw = record.get("risk_data") or record.get("cyber_risk_data") or {}
+    if isinstance(raw, str):
+        try:
+            raw = json.loads(raw)
+        except (json.JSONDecodeError, TypeError):
+            raw = {}
+    return raw if isinstance(raw, dict) else {}
+
+
+def _build_rating_input(risk_data: dict[str, Any]) -> RatingInput:
+    """Build a ``RatingInput`` from a risk-data dict.
+
+    Applies safe defaults for any missing fields so the rating engine
+    can always produce a result.
+    """
+    return RatingInput(
+        annual_revenue=Decimal(str(risk_data.get("annual_revenue", 1_000_000))),
+        employee_count=max(1, int(risk_data.get("employee_count", 10))),
+        industry_sic_code=str(risk_data.get("industry_sic_code", "7372")),
+        security_maturity_score=float(risk_data.get("security_maturity_score", 5.0)),
+        has_mfa=bool(risk_data.get("has_mfa", False)),
+        has_endpoint_protection=bool(risk_data.get("has_endpoint_protection", False)),
+        has_backup_strategy=bool(risk_data.get("has_backup_strategy", False)),
+        has_incident_response_plan=bool(risk_data.get("has_incident_response_plan", False)),
+        prior_incidents=max(0, int(risk_data.get("prior_incidents", 0))),
+        requested_limit=Decimal(str(risk_data.get("requested_limit", 1_000_000))),
+        requested_deductible=Decimal(str(risk_data.get("requested_deductible", 10_000))),
+    )
 
 
 class SubmissionService:
@@ -100,34 +147,111 @@ class SubmissionService:
     async def calculate_premium(self, submission_id: str, record: dict[str, Any]) -> dict[str, Any]:
         """Calculate premium for a submission.
 
-        Returns dict with: premium, coverages, authority_result.
+        Tries Foundry first, falls back to the local CyberRatingEngine,
+        and only uses a LOB-appropriate minimum premium as a last resort.
+
+        Returns dict with: premium, coverages, ai_mode, and optionally
+        factors_applied / confidence / explanation from the rating engine.
         """
         from openinsure.agents.foundry_client import get_foundry_client
 
         foundry = get_foundry_client()
-        premium = 5000.0
+        risk_data = _extract_risk_data(record)
+        lob = record.get("line_of_business", record.get("lob", "cyber"))
 
+        # --- Attempt 1: Foundry agent ---
         if foundry.is_available:
-            result = await foundry.invoke(
-                "openinsure-underwriting",
-                "Price this cyber insurance submission. Calculate premium.\n"
-                "Base: $1.50 per $1000 revenue. Adjust for industry, security, incidents.\n"
-                "Respond ONLY with JSON:\n"
-                '{"risk_score": 35, "recommended_premium": 12500, "confidence": 0.85}\n\n'
-                f"Submission:\n{json.dumps(record, default=str)[:800]}",
-            )
-            resp = result.get("response", {})
-            if isinstance(resp, dict) and "recommended_premium" in resp:
-                raw_premium = resp["recommended_premium"]
-                premium = float(raw_premium) if raw_premium is not None else 5000.0
-                premium = premium or 5000.0
+            try:
+                result = await foundry.invoke(
+                    "openinsure-underwriting",
+                    "Price this cyber insurance submission. Calculate premium.\n"
+                    "Base: $1.50 per $1000 revenue. Adjust for industry, security, incidents.\n"
+                    "Respond ONLY with JSON:\n"
+                    '{"risk_score": 35, "recommended_premium": 12500, "confidence": 0.85}\n\n'
+                    f"Submission:\n{json.dumps(record, default=str)[:800]}",
+                )
+                resp = result.get("response", {})
+                if isinstance(resp, dict) and "recommended_premium" in resp:
+                    raw_premium = resp["recommended_premium"]
+                    if raw_premium is not None and float(raw_premium) > 0:
+                        premium = float(raw_premium)
+                        logger.info(
+                            "premium.foundry_calculated",
+                            submission_id=submission_id,
+                            premium=premium,
+                        )
+                        await self._repo.update(
+                            submission_id,
+                            {"status": "quoted", "quoted_premium": premium, "updated_at": _now()},
+                        )
+                        return {
+                            "premium": premium,
+                            "ai_mode": "foundry",
+                            "coverages": [{"name": "Cyber Liability", "limit": 1_000_000, "deductible": 10_000}],
+                        }
+            except Exception:
+                logger.warning(
+                    "premium.foundry_call_failed",
+                    submission_id=submission_id,
+                    exc_info=True,
+                )
 
+        # --- Attempt 2: Local CyberRatingEngine ---
+        try:
+            rating_input = _build_rating_input(risk_data)
+            engine = CyberRatingEngine()
+            rating_result = engine.calculate_premium(rating_input)
+            premium = float(rating_result.final_premium)
+
+            logger.info(
+                "premium.local_rating_engine",
+                submission_id=submission_id,
+                premium=premium,
+                confidence=rating_result.confidence,
+                factors=len(rating_result.factors_applied),
+            )
+
+            await self._repo.update(
+                submission_id,
+                {"status": "quoted", "quoted_premium": premium, "updated_at": _now()},
+            )
+            return {
+                "premium": premium,
+                "ai_mode": "local_rating_engine",
+                "confidence": rating_result.confidence,
+                "factors_applied": {k: float(v) for k, v in rating_result.factors_applied.items()},
+                "explanation": rating_result.explanation,
+                "warnings": rating_result.warnings,
+                "coverages": [
+                    {
+                        "name": "Cyber Liability",
+                        "limit": float(rating_input.requested_limit),
+                        "deductible": float(rating_input.requested_deductible),
+                    }
+                ],
+            }
+        except Exception:
+            logger.warning(
+                "premium.rating_engine_failed",
+                submission_id=submission_id,
+                exc_info=True,
+            )
+
+        # --- Attempt 3: LOB-appropriate minimum premium ---
+        premium = _LOB_MIN_PREMIUMS.get(lob, _DEFAULT_MIN_PREMIUM)
+        logger.warning(
+            "premium.lob_minimum_fallback",
+            submission_id=submission_id,
+            premium=premium,
+            lob=lob,
+        )
         await self._repo.update(
             submission_id,
             {"status": "quoted", "quoted_premium": premium, "updated_at": _now()},
         )
         return {
             "premium": premium,
+            "ai_mode": "lob_minimum_fallback",
             "coverages": [{"name": "Cyber Liability", "limit": 1_000_000, "deductible": 10_000}],
         }
 

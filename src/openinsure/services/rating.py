@@ -13,6 +13,8 @@ from typing import Any
 import structlog
 from pydantic import BaseModel, Field
 
+from openinsure.domain.limits import PLATFORM_LIMITS
+
 logger = structlog.get_logger()
 
 
@@ -28,8 +30,8 @@ class RatingInput(BaseModel):
     has_backup_strategy: bool = False
     has_incident_response_plan: bool = False
     prior_incidents: int = Field(ge=0, default=0)
-    requested_limit: Decimal = Field(ge=0, default=Decimal("1000000"))
-    requested_deductible: Decimal = Field(ge=0, default=Decimal("10000"))
+    requested_limit: Decimal = Field(ge=0, default=PLATFORM_LIMITS.premium.default_requested_limit)
+    requested_deductible: Decimal = Field(ge=0, default=PLATFORM_LIMITS.premium.default_requested_deductible)
 
 
 class RatingResult(BaseModel):
@@ -74,9 +76,9 @@ class CyberRatingEngine:
 
     def __init__(
         self,
-        base_rate_per_thousand: Decimal = Decimal("1.50"),
-        min_premium: Decimal = Decimal("2500"),
-        max_premium: Decimal = Decimal("500000"),
+        base_rate_per_thousand: Decimal = PLATFORM_LIMITS.premium.base_rate_per_thousand,
+        min_premium: Decimal = PLATFORM_LIMITS.premium.min_premium,
+        max_premium: Decimal = PLATFORM_LIMITS.premium.max_premium,
     ):
         self.base_rate = base_rate_per_thousand
         self.min_premium = min_premium

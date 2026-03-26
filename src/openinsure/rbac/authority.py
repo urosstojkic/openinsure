@@ -7,12 +7,16 @@ approval.
 
 from __future__ import annotations
 
-from decimal import Decimal
 from enum import StrEnum
+from typing import TYPE_CHECKING
 
 from pydantic import BaseModel
 
+from openinsure.domain.limits import PLATFORM_LIMITS
 from openinsure.rbac.roles import Role
+
+if TYPE_CHECKING:
+    from decimal import Decimal
 
 
 class AuthorityDecision(StrEnum):
@@ -68,30 +72,10 @@ def _escalation_above(role: str, hierarchy: list[str]) -> list[str]:
 
 
 # ---------------------------------------------------------------------------
-# Default authority configuration
+# Default authority configuration — sourced from centralized limits
 # ---------------------------------------------------------------------------
 
-DEFAULT_AUTHORITY_CONFIG: dict[str, dict[str, Decimal]] = {
-    "quote": {
-        "auto_limit": Decimal("50000"),
-        "sr_uw_limit": Decimal("250000"),
-        "lob_head_limit": Decimal("1000000"),
-    },
-    "bind": {
-        "auto_limit": Decimal("25000"),
-        "sr_uw_limit": Decimal("100000"),
-        "lob_head_limit": Decimal("500000"),
-    },
-    "settlement": {
-        "adjuster_limit": Decimal("25000"),
-        "cco_limit": Decimal("250000"),
-        "cuo_limit": Decimal("1000000"),
-    },
-    "reserve": {
-        "auto_limit": Decimal("25000"),
-        "adjuster_limit": Decimal("100000"),
-    },
-}
+DEFAULT_AUTHORITY_CONFIG: dict[str, dict[str, Decimal]] = PLATFORM_LIMITS.authority.to_engine_config()
 
 
 # ---------------------------------------------------------------------------

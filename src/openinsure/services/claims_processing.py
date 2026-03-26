@@ -27,6 +27,7 @@ from openinsure.domain.events import (
     ClaimReserved,
     DomainEvent,
 )
+from openinsure.domain.limits import PLATFORM_LIMITS
 from openinsure.domain.policy import Policy, PolicyStatus
 
 logger = structlog.get_logger()
@@ -86,12 +87,12 @@ def _generate_claim_number() -> str:
     return f"CLM-{str(uid)[:8].upper()}"
 
 
-# Reserve recommendations by severity tier
+# Reserve recommendations by severity tier — sourced from centralized limits
 RESERVE_GUIDELINES: dict[SeverityTier, tuple[Decimal, Decimal]] = {
-    SeverityTier.simple: (Decimal("5000"), Decimal("25000")),
-    SeverityTier.moderate: (Decimal("25000"), Decimal("100000")),
-    SeverityTier.complex: (Decimal("100000"), Decimal("500000")),
-    SeverityTier.catastrophe: (Decimal("500000"), Decimal("2000000")),
+    SeverityTier.simple: PLATFORM_LIMITS.reserves.for_tier("simple"),
+    SeverityTier.moderate: PLATFORM_LIMITS.reserves.for_tier("moderate"),
+    SeverityTier.complex: PLATFORM_LIMITS.reserves.for_tier("complex"),
+    SeverityTier.catastrophe: PLATFORM_LIMITS.reserves.for_tier("catastrophe"),
 }
 
 

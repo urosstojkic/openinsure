@@ -7,7 +7,6 @@ When Foundry is available, all reasoning goes through GPT-5.1.
 The local ``process()`` returns minimal defaults for graceful degradation.
 """
 
-from decimal import Decimal
 from typing import Any
 
 import structlog
@@ -18,6 +17,7 @@ from openinsure.agents.base import (
     DecisionRecord,
     InsuranceAgent,
 )
+from openinsure.domain.limits import PLATFORM_LIMITS
 
 logger = structlog.get_logger()
 
@@ -36,7 +36,7 @@ class ComplianceAgent(InsuranceAgent):
             or AgentConfig(
                 agent_id="compliance_agent",
                 agent_version="0.1.0",
-                authority_limit=Decimal("0"),
+                authority_limit=PLATFORM_LIMITS.agents.compliance_agent,
             )
         )
 

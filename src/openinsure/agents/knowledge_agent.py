@@ -5,17 +5,27 @@ underwriting guidelines, regulatory requirements, coverage rules, and
 general insurance domain knowledge.
 """
 
-from decimal import Decimal
 from typing import Any
 
 import structlog
 
 from openinsure.agents.base import AgentCapability, AgentConfig, InsuranceAgent
+from openinsure.domain.limits import PLATFORM_LIMITS
+from openinsure.infrastructure.knowledge_store import (
+    CLAIMS_PRECEDENTS,
+    COMPLIANCE_RULES,
+    COVERAGE_RULES,
+    REGULATORY_REQUIREMENTS,
+)
 
 logger = structlog.get_logger()
 
 # ---------------------------------------------------------------------------
 # Static knowledge store (production uses Cosmos DB Gremlin API)
+#
+# Maps below adapt the knowledge_store constants to the shape the agent
+# queries expect.  The canonical data lives in
+# ``infrastructure.knowledge_store``.
 # ---------------------------------------------------------------------------
 
 UNDERWRITING_GUIDELINES: dict[str, dict[str, Any]] = {
@@ -66,188 +76,6 @@ UNDERWRITING_GUIDELINES: dict[str, dict[str, Any]] = {
     },
 }
 
-REGULATORY_REQUIREMENTS: dict[str, dict[str, Any]] = {
-    "US-CA": {
-        "jurisdiction": "US-CA",
-        "name": "California",
-        "requirements": [
-            "CDI filing required for all admitted products",
-            "Rate filing: prior approval",
-            "Surplus lines: export list check required",
-            "Data privacy: CCPA compliance required for cyber products",
-        ],
-        "filing_status": "filed",
-    },
-    "US-NY": {
-        "jurisdiction": "US-NY",
-        "name": "New York",
-        "requirements": [
-            "DFS filing required for all admitted products",
-            "Rate filing: prior approval",
-            "Cyber regulation: 23 NYCRR 500 compliance verification",
-            "Surplus lines: filed via ELANY",
-        ],
-        "filing_status": "filed",
-    },
-    "US-TX": {
-        "jurisdiction": "US-TX",
-        "name": "Texas",
-        "requirements": [
-            "TDI filing required",
-            "Rate filing: file and use",
-            "Surplus lines: filed via SLTX",
-        ],
-        "filing_status": "filed",
-    },
-    "EU": {
-        "jurisdiction": "EU",
-        "name": "European Union",
-        "requirements": [
-            "Solvency II compliance required",
-            "GDPR data processing documentation",
-            "EU AI Act compliance for automated decisions",
-            "IDD (Insurance Distribution Directive) compliance",
-        ],
-        "filing_status": "pending",
-    },
-    "UK": {
-        "jurisdiction": "UK",
-        "name": "United Kingdom",
-        "requirements": [
-            "PRA/FCA authorisation required",
-            "Solvency II (UK) compliance",
-            "Consumer Duty obligations",
-            "UK GDPR compliance",
-        ],
-        "filing_status": "pending",
-    },
-}
-
-COVERAGE_RULES: dict[str, dict[str, Any]] = {
-    "cyber_first_party": {
-        "coverage_code": "CYB-FP",
-        "name": "First-Party Cyber Coverage",
-        "covered_causes": [
-            "data_breach",
-            "ransomware",
-            "system_failure",
-            "denial_of_service",
-        ],
-        "exclusions": [
-            "acts_of_war",
-            "infrastructure_failure",
-            "intentional_acts",
-            "prior_known_events",
-        ],
-    },
-    "cyber_third_party": {
-        "coverage_code": "CYB-TP",
-        "name": "Third-Party Cyber Coverage",
-        "covered_causes": [
-            "data_breach",
-            "unauthorized_access",
-            "social_engineering",
-        ],
-        "exclusions": [
-            "contractual_liability",
-            "patent_infringement",
-            "intentional_acts",
-        ],
-    },
-}
-
-CLAIMS_PRECEDENTS: dict[str, dict[str, Any]] = {
-    "ransomware": {
-        "claim_type": "ransomware",
-        "typical_reserve_range": {"low": 50_000, "mid": 250_000, "high": 2_000_000},
-        "avg_resolution_days": 45,
-        "common_expenses": [
-            "forensics_investigation",
-            "ransom_negotiation",
-            "system_restoration",
-            "regulatory_notification",
-            "credit_monitoring",
-        ],
-        "coverage_triggers": ["CYB-FP"],
-        "subrogation_potential": "low",
-        "red_flags": ["repeat_incident", "delayed_reporting", "no_backup_verification"],
-    },
-    "data_breach": {
-        "claim_type": "data_breach",
-        "typical_reserve_range": {"low": 25_000, "mid": 150_000, "high": 5_000_000},
-        "avg_resolution_days": 90,
-        "common_expenses": [
-            "forensics_investigation",
-            "breach_counsel",
-            "notification_costs",
-            "credit_monitoring",
-            "regulatory_defense",
-        ],
-        "coverage_triggers": ["CYB-FP", "CYB-TP"],
-        "subrogation_potential": "medium",
-        "red_flags": ["prior_known_vulnerability", "unpatched_systems", "no_encryption"],
-    },
-    "social_engineering": {
-        "claim_type": "social_engineering",
-        "typical_reserve_range": {"low": 10_000, "mid": 75_000, "high": 500_000},
-        "avg_resolution_days": 30,
-        "common_expenses": ["investigation", "funds_recovery_attempt", "process_remediation"],
-        "coverage_triggers": ["CYB-TP"],
-        "subrogation_potential": "high",
-        "red_flags": ["executive_impersonation", "wire_transfer_to_new_account"],
-    },
-    "business_interruption": {
-        "claim_type": "business_interruption",
-        "typical_reserve_range": {"low": 20_000, "mid": 200_000, "high": 3_000_000},
-        "avg_resolution_days": 60,
-        "common_expenses": ["forensics", "revenue_loss_calculation", "extra_expense"],
-        "coverage_triggers": ["CYB-FP"],
-        "subrogation_potential": "low",
-        "red_flags": ["pre_existing_outage", "inadequate_bcp"],
-    },
-}
-
-COMPLIANCE_RULES: dict[str, dict[str, Any]] = {
-    "eu_ai_act": {
-        "framework": "eu_ai_act",
-        "name": "EU AI Act — High-Risk System Requirements",
-        "classification": "high_risk",
-        "applicable_articles": [
-            {"article": "Art. 9", "requirement": "Risk management system", "status": "implemented"},
-            {"article": "Art. 10", "requirement": "Unbiased, representative data", "status": "implemented"},
-            {"article": "Art. 11", "requirement": "Technical documentation", "status": "implemented"},
-            {"article": "Art. 12", "requirement": "Decision record-keeping & logging", "status": "implemented"},
-            {"article": "Art. 13", "requirement": "Transparency to deployers", "status": "implemented"},
-            {"article": "Art. 14", "requirement": "Human oversight mechanisms", "status": "implemented"},
-        ],
-        "deadline": "2026-08-02",
-        "penalties": {"max_fine_pct": 0.03, "max_fine_eur": 15_000_000},
-    },
-    "gdpr": {
-        "framework": "gdpr",
-        "name": "GDPR — Data Protection for Insurance Operations",
-        "requirements": [
-            "Data processing agreement for all AI providers",
-            "DPIA required for automated underwriting decisions",
-            "Right to explanation for AI-driven decisions",
-            "72-hour breach notification to supervisory authority",
-            "Data minimization in claims processing",
-        ],
-        "penalties": {"max_fine_pct": 0.04, "max_fine_eur": 20_000_000},
-    },
-    "naic_model_bulletin": {
-        "framework": "naic_model_bulletin",
-        "name": "NAIC Model Bulletin on AI in Insurance",
-        "requirements": [
-            "Governance framework for AI/ML systems",
-            "Bias testing and monitoring",
-            "Transparency in AI-driven decisions",
-            "Human oversight for consequential decisions",
-            "Documentation of AI system development and validation",
-        ],
-    },
-}
-
 
 class KnowledgeAgent(InsuranceAgent):
     """Knowledge graph query and update agent.
@@ -266,7 +94,7 @@ class KnowledgeAgent(InsuranceAgent):
             or AgentConfig(
                 agent_id="knowledge_agent",
                 agent_version="0.1.0",
-                authority_limit=Decimal("0"),
+                authority_limit=PLATFORM_LIMITS.agents.knowledge_agent,
             )
         )
 
