@@ -21,6 +21,7 @@ from openinsure.api.metrics import router as metrics_router
 from openinsure.api.mga_oversight import router as mga_router
 from openinsure.api.policies import router as policies_router
 from openinsure.api.products import router as products_router
+from openinsure.api.regulatory import router as regulatory_router
 from openinsure.api.reinsurance import router as reinsurance_router
 from openinsure.api.renewals import router as renewals_router
 from openinsure.api.submissions import router as submissions_router
@@ -39,6 +40,7 @@ api_v1_router.include_router(claims_router, prefix="/claims", tags=["claims"])
 api_v1_router.include_router(products_router, prefix="/products", tags=["products"])
 api_v1_router.include_router(billing_router, prefix="/billing", tags=["billing"])
 api_v1_router.include_router(compliance_router, prefix="/compliance", tags=["compliance"])
+api_v1_router.include_router(regulatory_router, prefix="/compliance", tags=["regulatory-filing"])
 api_v1_router.include_router(documents_router, prefix="/documents", tags=["documents"])
 api_v1_router.include_router(events_router, prefix="/events", tags=["events"])
 api_v1_router.include_router(knowledge_router, prefix="/knowledge", tags=["knowledge"])
