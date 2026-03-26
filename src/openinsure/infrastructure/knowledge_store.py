@@ -685,6 +685,106 @@ BENCHMARK_METRICS: dict[str, Any] = {
 
 
 # ======================================================================
+# Regulatory Requirements (jurisdiction-level filing and compliance)
+# ======================================================================
+
+REGULATORY_REQUIREMENTS: dict[str, dict[str, Any]] = {
+    "US-CA": {
+        "jurisdiction": "US-CA",
+        "name": "California",
+        "requirements": [
+            "CDI filing required for all admitted products",
+            "Rate filing: prior approval",
+            "Surplus lines: export list check required",
+            "Data privacy: CCPA compliance required for cyber products",
+        ],
+        "filing_status": "filed",
+    },
+    "US-NY": {
+        "jurisdiction": "US-NY",
+        "name": "New York",
+        "requirements": [
+            "DFS filing required for all admitted products",
+            "Rate filing: prior approval",
+            "Cyber regulation: 23 NYCRR 500 compliance verification",
+            "Surplus lines: filed via ELANY",
+        ],
+        "filing_status": "filed",
+    },
+    "US-TX": {
+        "jurisdiction": "US-TX",
+        "name": "Texas",
+        "requirements": [
+            "TDI filing required",
+            "Rate filing: file and use",
+            "Surplus lines: filed via SLTX",
+        ],
+        "filing_status": "filed",
+    },
+    "EU": {
+        "jurisdiction": "EU",
+        "name": "European Union",
+        "requirements": [
+            "Solvency II compliance required",
+            "GDPR data processing documentation",
+            "EU AI Act compliance for automated decisions",
+            "IDD (Insurance Distribution Directive) compliance",
+        ],
+        "filing_status": "pending",
+    },
+    "UK": {
+        "jurisdiction": "UK",
+        "name": "United Kingdom",
+        "requirements": [
+            "PRA/FCA authorisation required",
+            "Solvency II (UK) compliance",
+            "Consumer Duty obligations",
+            "UK GDPR compliance",
+        ],
+        "filing_status": "pending",
+    },
+}
+
+
+# ======================================================================
+# Coverage Rules (coverage codes, covered causes, exclusions)
+# ======================================================================
+
+COVERAGE_RULES: dict[str, dict[str, Any]] = {
+    "cyber_first_party": {
+        "coverage_code": "CYB-FP",
+        "name": "First-Party Cyber Coverage",
+        "covered_causes": [
+            "data_breach",
+            "ransomware",
+            "system_failure",
+            "denial_of_service",
+        ],
+        "exclusions": [
+            "acts_of_war",
+            "infrastructure_failure",
+            "intentional_acts",
+            "prior_known_events",
+        ],
+    },
+    "cyber_third_party": {
+        "coverage_code": "CYB-TP",
+        "name": "Third-Party Cyber Coverage",
+        "covered_causes": [
+            "data_breach",
+            "unauthorized_access",
+            "social_engineering",
+        ],
+        "exclusions": [
+            "contractual_liability",
+            "patent_infringement",
+            "intentional_acts",
+        ],
+    },
+}
+
+
+# ======================================================================
 # InMemoryKnowledgeStore
 # ======================================================================
 
