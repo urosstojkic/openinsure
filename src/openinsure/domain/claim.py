@@ -17,6 +17,7 @@ from openinsure.domain.common import ConfidenceScore, DomainEntity, Money, new_i
 class ClaimStatus(StrEnum):
     """Lifecycle status of a claim."""
 
+    reported = "reported"
     fnol = "fnol"
     investigating = "investigating"
     reserved = "reserved"

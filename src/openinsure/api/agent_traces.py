@@ -129,7 +129,8 @@ async def list_agent_traces(
     if entity_id is not None:
         filters["entity_id"] = entity_id
 
-    page, total = await repo.list_decisions(filters=filters, skip=skip, limit=limit)
+    page = await repo.list_decisions(filters=filters, skip=skip, limit=limit)
+    total = await repo.count_decisions(filters=filters)
 
     # Optional post-filter on agent_id (stored as model_id after deserialization)
     if agent_id is not None:
@@ -150,7 +151,8 @@ async def list_agent_traces(
 async def agent_trace_summary() -> AgentTraceSummary:
     """Return aggregate statistics for all recorded agent traces."""
     repo = get_compliance_repository()
-    all_rows, total = await repo.list_decisions(skip=0, limit=5000)
+    all_rows = await repo.list_decisions(skip=0, limit=5000)
+    total = len(all_rows)
 
     agents: dict[str, int] = {}
     types: dict[str, int] = {}

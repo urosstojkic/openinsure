@@ -11,12 +11,14 @@ from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any
 
+import structlog
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from openinsure.infrastructure.factory import get_compliance_repository
 
 router = APIRouter()
+_logger = structlog.get_logger()
 
 # ---------------------------------------------------------------------------
 # Compliance repository — resolved by factory (in-memory or SQL)
@@ -203,7 +205,8 @@ async def list_decisions(
     if entity_id is not None:
         filters["entity_id"] = entity_id
 
-    page, total = await _compliance_repo.list_decisions(filters=filters, skip=skip, limit=limit)
+    page = await _compliance_repo.list_decisions(filters=filters, skip=skip, limit=limit)
+    total = await _compliance_repo.count_decisions(filters=filters)
     return DecisionList(
         items=[DecisionRecord(**r) for r in page],
         total=total,
@@ -241,7 +244,8 @@ async def get_audit_trail(
     if action is not None:
         filters["action"] = action
 
-    page, total = await _compliance_repo.list_audit_events(filters=filters, skip=skip, limit=limit)
+    page = await _compliance_repo.list_audit_events(filters=filters, skip=skip, limit=limit)
+    total = await _compliance_repo.count_audit_events(filters=filters)
     return AuditTrailResponse(
         items=[AuditEvent(**e) for e in page],
         total=total,
@@ -264,7 +268,28 @@ async def generate_bias_report_endpoint(
 
     repo = get_submission_repository()
     submissions = await repo.list_all(limit=5000)
-    return await generate_bias_report(submissions)
+    report = await generate_bias_report(submissions)
+
+    try:
+        from openinsure.services.event_publisher import publish_domain_event
+
+        await publish_domain_event(
+            "audit.generated",
+            "/compliance/bias-report",
+            {"report_type": "bias_monitoring", "submission_count": len(submissions)},
+        )
+        # Emit compliance alert if bias issues were detected
+        issues = report.get("issues", report.get("alerts", []))
+        if issues:
+            await publish_domain_event(
+                "compliance.alert",
+                "/compliance/bias-report",
+                {"alert_type": "bias_detected", "issue_count": len(issues)},
+            )
+    except Exception:
+        _logger.debug("event.publish_skipped", event="audit.generated")
+
+    return report
 
 
 @router.get("/system-inventory", response_model=SystemInventoryResponse)

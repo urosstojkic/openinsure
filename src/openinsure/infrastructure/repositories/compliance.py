@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+from openinsure.infrastructure.repository import BaseRepository
+
+if TYPE_CHECKING:
+    from uuid import UUID
 
 # Map agent IDs / model IDs to human-readable display names
 _AGENT_NAMES: dict[str, str] = {
@@ -26,12 +31,41 @@ def _agent_display_name(agent_id: str) -> str:
     return agent_id.replace("-", " ").replace("_", " ").title() if agent_id else "Unknown Agent"
 
 
-class InMemoryComplianceRepository:
+class InMemoryComplianceRepository(BaseRepository):
     """Dict/list-backed compliance store for local development and testing."""
 
     def __init__(self) -> None:
         self._decisions: dict[str, dict[str, Any]] = {}
         self._audit_events: list[dict[str, Any]] = []
+
+    # -- BaseRepository interface --------------------------------------------
+
+    async def create(self, entity: dict[str, Any]) -> dict[str, Any]:
+        return await self.add_decision(entity)
+
+    async def get_by_id(self, entity_id: UUID | str) -> dict[str, Any] | None:
+        return await self.get_decision(str(entity_id))
+
+    async def list_all(
+        self,
+        filters: dict[str, Any] | None = None,
+        skip: int = 0,
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        return await self.list_decisions(filters=filters, skip=skip, limit=limit)
+
+    async def update(self, entity_id: UUID | str, updates: dict[str, Any]) -> dict[str, Any] | None:
+        record = self._decisions.get(str(entity_id))
+        if record is None:
+            return None
+        record.update(updates)
+        return record
+
+    async def delete(self, entity_id: UUID | str) -> bool:
+        return self._decisions.pop(str(entity_id), None) is not None
+
+    async def count(self, filters: dict[str, Any] | None = None) -> int:
+        return await self.count_decisions(filters=filters)
 
     # -- decisions -----------------------------------------------------------
 
@@ -56,12 +90,14 @@ class InMemoryComplianceRepository:
         for key, val in (filters or {}).items():
             if val is not None:
                 results = [r for r in results if r.get(key) == val]
-        total = len(results)
-        return results[skip : skip + limit], total
+        return results[skip : skip + limit]
 
     async def count_decisions(self, filters: dict[str, Any] | None = None) -> int:
-        _, total = await self.list_decisions(filters=filters, skip=0, limit=len(self._decisions) or 1)
-        return total
+        results = list(self._decisions.values())
+        for key, val in (filters or {}).items():
+            if val is not None:
+                results = [r for r in results if r.get(key) == val]
+        return len(results)
 
     # -- audit events --------------------------------------------------------
 
@@ -79,8 +115,14 @@ class InMemoryComplianceRepository:
         for key, val in (filters or {}).items():
             if val is not None:
                 results = [r for r in results if r.get(key) == val]
-        total = len(results)
-        return results[skip : skip + limit], total
+        return results[skip : skip + limit]
+
+    async def count_audit_events(self, filters: dict[str, Any] | None = None) -> int:
+        results = list(self._audit_events)
+        for key, val in (filters or {}).items():
+            if val is not None:
+                results = [r for r in results if r.get(key) == val]
+        return len(results)
 
     async def clear_audit_events(self) -> None:
         self._audit_events.clear()

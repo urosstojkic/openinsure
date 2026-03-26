@@ -10,18 +10,49 @@ from __future__ import annotations
 import contextlib
 import json
 from typing import TYPE_CHECKING, Any
+from uuid import UUID  # noqa: TC003
 
-from openinsure.infrastructure.repository import safe_pagination_clause
+from openinsure.infrastructure.repository import BaseRepository, safe_pagination_clause
 
 if TYPE_CHECKING:
     from openinsure.infrastructure.database import DatabaseAdapter
 
 
-class SqlComplianceRepository:
+class SqlComplianceRepository(BaseRepository):
     """Azure SQL implementation of the compliance (decisions + audit) repository."""
 
     def __init__(self, db: DatabaseAdapter) -> None:
         self.db = db
+
+    # -- BaseRepository interface --------------------------------------------
+
+    async def create(self, entity: dict[str, Any]) -> dict[str, Any]:
+        return await self.add_decision(entity)
+
+    async def get_by_id(self, entity_id: UUID | str) -> dict[str, Any] | None:
+        return await self.get_decision(str(entity_id))
+
+    async def list_all(
+        self,
+        filters: dict[str, Any] | None = None,
+        skip: int = 0,
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        return await self.list_decisions(filters=filters, skip=skip, limit=limit)
+
+    async def update(self, entity_id: UUID | str, updates: dict[str, Any]) -> dict[str, Any] | None:
+        existing = await self.get_decision(str(entity_id))
+        if existing is None:
+            return None
+        existing.update(updates)
+        return existing
+
+    async def delete(self, entity_id: UUID | str) -> bool:
+        result = await self.db.execute_query("DELETE FROM decision_records WHERE id = ?", [str(entity_id)])
+        return bool(result)
+
+    async def count(self, filters: dict[str, Any] | None = None) -> int:
+        return await self.count_decisions(filters=filters)
 
     # -- decisions -----------------------------------------------------------
 
@@ -82,8 +113,7 @@ class SqlComplianceRepository:
         filters: dict[str, Any] | None = None,
         skip: int = 0,
         limit: int = 50,
-    ) -> tuple[list[dict[str, Any]], int]:
-        count_query = "SELECT COUNT(*) as cnt FROM decision_records"
+    ) -> list[dict[str, Any]]:
         query = "SELECT * FROM decision_records"
         params: list[Any] = []
         where_clauses: list[str] = []
@@ -100,20 +130,31 @@ class SqlComplianceRepository:
         if where_clauses:
             clause = " WHERE " + " AND ".join(where_clauses)
             query += clause
-            count_query += clause
-
-        count_result = await self.db.fetch_one(count_query, params)
-        total = count_result.get("cnt", 0) if count_result else 0
 
         pag_clause, pag_params = safe_pagination_clause("created_at DESC", skip, limit)
         query += pag_clause
         params.extend(pag_params)
         rows = await self.db.fetch_all(query, params)
-        return [_deserialize_decision(r) for r in rows], total
+        return [_deserialize_decision(r) for r in rows]
 
     async def count_decisions(self, filters: dict[str, Any] | None = None) -> int:
-        _, total = await self.list_decisions(filters=filters, skip=0, limit=1)
-        return total
+        count_query = "SELECT COUNT(*) as cnt FROM decision_records"
+        params: list[Any] = []
+        where_clauses: list[str] = []
+        if filters:
+            if "decision_type" in filters:
+                where_clauses.append("decision_type = ?")
+                params.append(filters["decision_type"])
+            if "entity_type" in filters:
+                where_clauses.append("JSON_VALUE(data_sources_used, '$.entity_type') = ?")
+                params.append(filters["entity_type"])
+            if "entity_id" in filters:
+                where_clauses.append("JSON_VALUE(data_sources_used, '$.entity_id') = ?")
+                params.append(filters["entity_id"])
+        if where_clauses:
+            count_query += " WHERE " + " AND ".join(where_clauses)
+        count_result = await self.db.fetch_one(count_query, params)
+        return count_result.get("cnt", 0) if count_result else 0
 
     # -- audit events --------------------------------------------------------
 
@@ -141,8 +182,7 @@ class SqlComplianceRepository:
         filters: dict[str, Any] | None = None,
         skip: int = 0,
         limit: int = 50,
-    ) -> tuple[list[dict[str, Any]], int]:
-        count_query = "SELECT COUNT(*) as cnt FROM audit_events"
+    ) -> list[dict[str, Any]]:
         query = "SELECT * FROM audit_events"
         params: list[Any] = []
         where_clauses: list[str] = []
@@ -160,18 +200,35 @@ class SqlComplianceRepository:
                 where_clauses.append("action = ?")
                 params.append(filters["action"])
         if where_clauses:
-            clause = " WHERE " + " AND ".join(where_clauses)
-            query += clause
-            count_query += clause
-
-        count_result = await self.db.fetch_one(count_query, params)
-        total = count_result.get("cnt", 0) if count_result else 0
+            query += " WHERE " + " AND ".join(where_clauses)
 
         pag_clause, pag_params = safe_pagination_clause("created_at DESC", skip, limit)
         query += pag_clause
         params.extend(pag_params)
         rows = await self.db.fetch_all(query, params)
-        return [_deserialize_audit_event(r) for r in rows], total
+        return [_deserialize_audit_event(r) for r in rows]
+
+    async def count_audit_events(self, filters: dict[str, Any] | None = None) -> int:
+        count_query = "SELECT COUNT(*) as cnt FROM audit_events"
+        params: list[Any] = []
+        where_clauses: list[str] = []
+        if filters:
+            if "entity_type" in filters:
+                where_clauses.append("resource_type = ?")
+                params.append(filters["entity_type"])
+            if "entity_id" in filters:
+                where_clauses.append("resource_id = ?")
+                params.append(filters["entity_id"])
+            if "actor" in filters:
+                where_clauses.append("actor_id = ?")
+                params.append(filters["actor"])
+            if "action" in filters:
+                where_clauses.append("action = ?")
+                params.append(filters["action"])
+        if where_clauses:
+            count_query += " WHERE " + " AND ".join(where_clauses)
+        count_result = await self.db.fetch_one(count_query, params)
+        return count_result.get("cnt", 0) if count_result else 0
 
     async def clear_audit_events(self) -> None:
         await self.db.execute_query("DELETE FROM audit_events")

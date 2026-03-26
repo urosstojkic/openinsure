@@ -26,6 +26,7 @@ class SubmissionStatus(StrEnum):
     received = "received"
     triaging = "triaging"
     underwriting = "underwriting"
+    referred = "referred"
     quoted = "quoted"
     bound = "bound"
     declined = "declined"
@@ -120,5 +121,6 @@ class Submission(DomainEntity):
     underwriting_at: datetime | None = None
     quoted_at: datetime | None = None
     bound_at: datetime | None = None
+    referred_at: datetime | None = None
     declined_at: datetime | None = None
     expired_at: datetime | None = None
