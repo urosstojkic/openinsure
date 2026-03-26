@@ -76,12 +76,31 @@ def _make_app(*, require_auth: bool = False, api_key: str = "test-key") -> FastA
 
 class TestDevMode:
     def test_no_auth_returns_dev_user(self):
-        client = TestClient(_make_app(require_auth=False))
+        client = TestClient(_make_app(require_auth=False, api_key=""))
         resp = client.get("/protected")
         assert resp.status_code == 200
         body = resp.json()
         assert body["user"] == "dev-user"
         assert Role.CUO in body["roles"]
+
+    def test_api_key_set_enforces_auth_even_without_require_auth(self):
+        """When api_key is configured, auth is enforced regardless of require_auth."""
+        client = TestClient(_make_app(require_auth=False, api_key=_KEY))
+        resp = client.get("/protected")
+        assert resp.status_code == 401
+
+    def test_api_key_set_accepts_valid_key_without_require_auth(self):
+        """Valid API key works even when require_auth=False."""
+        client = TestClient(_make_app(require_auth=False, api_key=_KEY))
+        resp = client.get("/protected", headers={"X-API-Key": _KEY})
+        assert resp.status_code == 200
+        assert resp.json()["user"] == "api-key-user"
+
+    def test_api_key_set_rejects_invalid_key_without_require_auth(self):
+        """Invalid API key returns 403 even when require_auth=False."""
+        client = TestClient(_make_app(require_auth=False, api_key=_KEY))
+        resp = client.get("/protected", headers={"X-API-Key": "wrong"})
+        assert resp.status_code == 403
 
 
 # ---------------------------------------------------------------------------
@@ -143,7 +162,7 @@ class TestJWTMode:
 class TestRequireRoles:
     def test_allowed_role(self):
         """Dev user has CUO role; admin-only requires PLATFORM_ADMIN → 403."""
-        client = TestClient(_make_app(require_auth=False))
+        client = TestClient(_make_app(require_auth=False, api_key=""))
         resp = client.get("/admin-only")
         assert resp.status_code == 403  # dev user is CUO, not PLATFORM_ADMIN
 

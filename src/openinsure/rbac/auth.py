@@ -92,15 +92,20 @@ async def get_current_user(
     """Extract the current user from the request.
 
     Mode resolution order:
-    1. ``require_auth=False`` → dev mode (default CUO user).
-    2. ``X-API-Key`` header → validate against ``settings.api_key``.
-    3. ``Authorization: Bearer <jwt>`` → decode token claims.
-    4. Fail with 401.
+    1. If ``api_key`` is configured (non-empty), enforce auth regardless of
+       ``require_auth``.  This closes the auth-bypass where a deployed
+       instance with an API key but ``require_auth=False`` allowed
+       unauthenticated access.
+    2. If no ``api_key`` and ``require_auth=False`` → dev mode (default CUO).
+    3. ``X-API-Key`` header → validate against ``settings.api_key``.
+    4. ``Authorization: Bearer <jwt>`` → decode token claims.
+    5. Fail with 401.
     """
     deployment_type = settings.deployment_type
+    auth_enforced = bool(settings.api_key) or settings.require_auth
 
-    # 1. Dev mode — no auth required, but honour X-User-Role header
-    if not settings.require_auth:
+    # Dev mode — only when no api_key is configured AND require_auth is False
+    if not auth_enforced:
         dev_role = request.headers.get("x-user-role")
         if dev_role:
             role_mapping: dict[str, str] = {
@@ -133,13 +138,13 @@ async def get_current_user(
             )
         return _dev_user(deployment_type)
 
-    # 2. API key mode
+    # API key mode
     api_key = request.headers.get("x-api-key")
     if api_key:
         if not secrets.compare_digest(api_key, settings.api_key):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Invalid API key.",
+                detail="Invalid API key",
             )
         return CurrentUser(
             user_id="api-key-user",
@@ -149,7 +154,7 @@ async def get_current_user(
             deployment_type=deployment_type,
         )
 
-    # 3. JWT Bearer mode
+    # JWT Bearer mode
     auth_header = request.headers.get("authorization")
     if auth_header and auth_header.lower().startswith("bearer "):
         token = auth_header[7:]
@@ -168,10 +173,10 @@ async def get_current_user(
             deployment_type=deployment_type,
         )
 
-    # 4. No credentials
+    # No credentials
     raise HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Missing API key. Provide X-API-Key header.",
+        detail="API key required",
     )
 
 

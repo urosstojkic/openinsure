@@ -36,9 +36,39 @@ def test_health_no_auth_required():
 
 
 def test_api_no_auth_in_dev_mode():
-    """When require_auth=False, API works without key."""
+    """When require_auth=False and no api_key configured, API works without key."""
+    app = create_app()
+    app.dependency_overrides[get_settings] = lambda: _make_settings(
+        require_auth=False, api_key=""
+    )
+    client = TestClient(app)
+    resp = client.get("/api/v1/submissions")
+    assert resp.status_code == 200
+
+
+def test_api_key_enforces_auth_regardless_of_require_auth():
+    """When api_key is set, auth is enforced even with require_auth=False (issue #111)."""
     client = _client_with_auth(require_auth=False)
     resp = client.get("/api/v1/submissions")
+    assert resp.status_code == 401
+    assert resp.json()["detail"] == "API key required"
+
+
+def test_api_key_enforces_auth_invalid_key():
+    """Invalid key returns 403 even when require_auth=False (issue #111)."""
+    client = _client_with_auth(require_auth=False)
+    resp = client.get("/api/v1/submissions", headers={"X-API-Key": "wrong-key"})
+    assert resp.status_code == 403
+    assert resp.json()["detail"] == "Invalid API key"
+
+
+def test_api_key_enforces_auth_valid_key():
+    """Valid key works when require_auth=False but api_key is set (issue #111)."""
+    client = _client_with_auth(require_auth=False)
+    resp = client.get(
+        "/api/v1/submissions",
+        headers={"X-API-Key": _TEST_API_KEY},
+    )
     assert resp.status_code == 200
 
 
