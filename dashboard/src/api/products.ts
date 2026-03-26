@@ -99,8 +99,15 @@ export async function getProducts(): Promise<ProductDetail[]> {
 }
 
 export async function getProduct(id: string): Promise<ProductDetail> {
-  const { data } = await client.get(`/products/${id}`);
-  return data;
+  try {
+    const { data } = await client.get(`/products/${id}`);
+    return data;
+  } catch (error) {
+    console.warn('[API] getProduct fallback:', error);
+    const mp = (mockProducts as unknown as ProductDetail[]).find((p) => p.id === id);
+    if (mp) return mp;
+    throw error;
+  }
 }
 
 export async function createProduct(body: Partial<ProductDetail>): Promise<ProductDetail> {
