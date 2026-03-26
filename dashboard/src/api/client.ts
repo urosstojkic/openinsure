@@ -11,6 +11,11 @@ client.interceptors.request.use((config) => {
   if (role) {
     config.headers['X-User-Role'] = role;
   }
+  // API key for dev/testing — in production, nginx injects this header server-side
+  const apiKey = import.meta.env.VITE_API_KEY;
+  if (apiKey) {
+    config.headers['X-API-Key'] = apiKey;
+  }
   return config;
 });
 

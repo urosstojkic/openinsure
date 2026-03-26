@@ -52,13 +52,8 @@ export async function getSubmission(id: string): Promise<Submission | undefined>
 }
 
 export async function createSubmission(payload: Record<string, unknown>): Promise<Submission> {
-  try {
-    const { data } = await client.post<Submission>('/submissions', payload);
-    return data;
-  } catch (error) {
-    console.warn('[API] Falling back to demo data:', error);
-    return { id: `mock-${Date.now()}`, ...payload } as unknown as Submission;
-  }
+  const { data } = await client.post<Submission>('/submissions', payload);
+  return data;
 }
 
 export async function processSubmission(id: string): Promise<{ message: string; [key: string]: unknown }> {
