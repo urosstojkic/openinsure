@@ -72,6 +72,8 @@ def _to_sql_row(entity: dict[str, Any]) -> dict[str, Any]:
         "forms": _dump(entity.get("forms")),
         "metadata": _dump(entity.get("metadata")),
         "published_at": entity.get("published_at"),
+        "effective_date": entity.get("effective_date"),
+        "expiration_date": entity.get("expiration_date"),
         "created_by": entity.get("created_by"),
         "created_at": entity.get("created_at"),
         "updated_at": entity.get("updated_at"),
@@ -155,8 +157,8 @@ class SqlProductRepository(BaseRepository):
                (id, product_code, code, product_name, line_of_business, description,
                 status, version, coverages, rating_factors, appetite_rules,
                 authority_limits, territories, forms, metadata,
-                published_at, created_by, created_at, updated_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                published_at, effective_date, expiration_date, created_by, created_at, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             [
                 row["id"],
                 row["product_code"],
@@ -174,6 +176,8 @@ class SqlProductRepository(BaseRepository):
                 row["forms"],
                 row["metadata"],
                 row["published_at"],
+                row["effective_date"],
+                row["expiration_date"],
                 row["created_by"],
                 row["created_at"],
                 row["updated_at"],
