@@ -467,7 +467,8 @@ async def update_claim(claim_id: str, body: ClaimUpdate) -> ClaimResponse:
 
 
 @router.post("/{claim_id}/reserve", response_model=ReserveResponse, status_code=201)
-@router.post("/{claim_id}/reserves", response_model=ReserveResponse, status_code=201, include_in_schema=False)
+# Backward-compat alias: prefer /reserve (singular matches domain action)
+@router.post("/{claim_id}/reserves", response_model=ReserveResponse, status_code=201, deprecated=True)
 async def set_reserve(
     claim_id: str, body: ReserveRequest, user: CurrentUser = Depends(get_current_user)
 ) -> ReserveResponse:

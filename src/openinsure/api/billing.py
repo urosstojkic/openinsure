@@ -433,10 +433,10 @@ async def record_payment(account_id: str, body: PaymentRequest) -> PaymentRespon
     )
 
 
-# Keep the old path working as an alias
-@router.post("/accounts/{account_id}/payment", response_model=PaymentResponse, status_code=201, include_in_schema=False)
+# Backward-compat alias: prefer /accounts/{id}/payments (plural)
+@router.post("/accounts/{account_id}/payment", response_model=PaymentResponse, status_code=201, deprecated=True)
 async def record_payment_alias(account_id: str, body: PaymentRequest) -> PaymentResponse:
-    """Alias for backward compatibility."""
+    """Alias for backward compatibility — use /payments (plural) instead."""
     return await record_payment(account_id, body)
 
 
