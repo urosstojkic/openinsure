@@ -4,16 +4,18 @@ Handles the claims lifecycle from first notice of loss (FNOL) through
 coverage verification, initial reserving, triage, and investigation
 support.
 
-When Foundry is available, all reasoning goes through GPT-5.1.
-The local ``process()`` returns minimal defaults for graceful degradation.
+When Foundry is available the prompt is built by
+:func:`build_claims_assessment_prompt` which injects claims precedents
+from the knowledge graph.  The local ``process()`` returns minimal
+defaults for graceful degradation.
 """
 
-from decimal import Decimal
 from typing import Any
 
 import structlog
 
 from openinsure.agents.base import AgentCapability, AgentConfig, InsuranceAgent
+from openinsure.domain.limits import PLATFORM_LIMITS
 
 logger = structlog.get_logger()
 
@@ -21,9 +23,11 @@ logger = structlog.get_logger()
 class ClaimsAgent(InsuranceAgent):
     """Claims intake, verification, reserving, and triage agent.
 
-    In production all reasoning is performed by the Foundry-hosted agent.
-    The local :meth:`process` returns safe minimal defaults so the system
-    does not crash when Foundry is unavailable.
+    In production all reasoning is performed by the Foundry-hosted agent
+    using the knowledge-enriched prompt from
+    ``prompts.build_claims_assessment_prompt``.  The local :meth:`process`
+    returns safe minimal defaults so the system does not crash when
+    Foundry is unavailable.
     """
 
     def __init__(self, config: AgentConfig | None = None):
@@ -32,7 +36,7 @@ class ClaimsAgent(InsuranceAgent):
             or AgentConfig(
                 agent_id="claims_agent",
                 agent_version="0.1.0",
-                authority_limit=Decimal("250000"),
+                authority_limit=PLATFORM_LIMITS.agents.claims_agent,
             )
         )
 
@@ -80,6 +84,18 @@ class ClaimsAgent(InsuranceAgent):
                 produces=["subrogation_score", "subrogation_basis"],
             ),
         ]
+
+    # ------------------------------------------------------------------
+    # Foundry-delegated prompt
+    # ------------------------------------------------------------------
+
+    def _build_prompt(self, task: dict[str, Any]) -> str:
+        """Build a knowledge-enriched prompt via :func:`build_claims_assessment_prompt`."""
+        from openinsure.agents.prompts import build_claims_assessment_prompt
+
+        claim = task.get("claim_report", task)
+        policy = task.get("policy")
+        return build_claims_assessment_prompt(claim, policy)
 
     # ------------------------------------------------------------------
     # Local fallback — minimal safe defaults

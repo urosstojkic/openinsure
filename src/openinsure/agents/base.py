@@ -99,6 +99,17 @@ class InsuranceAgent(ABC):
         """
         ...
 
+    @property
+    def foundry_agent_name(self) -> str:
+        """Foundry-hosted agent name derived from agent_id.
+
+        Subclasses may override this to provide an explicit name.
+        Default strips the ``_agent`` suffix, e.g.
+        ``"submission_agent"`` → ``"openinsure-submission"``.
+        """
+        base = self.config.agent_id.removesuffix("_agent")
+        return f"openinsure-{base}"
+
     async def execute(self, task: dict[str, Any]) -> tuple[dict[str, Any], DecisionRecord]:
         """Execute via Foundry if available, otherwise fall back to local.
 
@@ -112,7 +123,7 @@ class InsuranceAgent(ABC):
             # Build prompt from task
             prompt = self._build_prompt(task)
             foundry_result = await foundry.invoke(
-                f"openinsure-{self.config.agent_id.split('-')[0]}",
+                self.foundry_agent_name,
                 prompt,
             )
             if foundry_result.get("source") == "foundry":

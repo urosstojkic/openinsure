@@ -5,16 +5,18 @@ classifying attached documents, extracting structured data, validating
 completeness against product requirements, and triaging the submission
 (appetite matching, risk scoring, priority assignment).
 
-When Foundry is available, all reasoning goes through GPT-5.1.
-The local ``process()`` returns minimal defaults for graceful degradation.
+When Foundry is available the prompt is built by :func:`build_triage_prompt`
+which injects underwriting guidelines, dynamic knowledge, comparable
+accounts, and learning-loop context.  The local ``process()`` returns
+minimal safe defaults for graceful degradation.
 """
 
-from decimal import Decimal
 from typing import Any
 
 import structlog
 
 from openinsure.agents.base import AgentCapability, AgentConfig, InsuranceAgent
+from openinsure.domain.limits import PLATFORM_LIMITS
 
 logger = structlog.get_logger()
 
@@ -22,7 +24,8 @@ logger = structlog.get_logger()
 class SubmissionAgent(InsuranceAgent):
     """Submission intake, classification, extraction, and triage agent.
 
-    In production all reasoning is performed by the Foundry-hosted agent.
+    In production all reasoning is performed by the Foundry-hosted agent
+    using the knowledge-enriched prompt from ``prompts.build_triage_prompt``.
     The local :meth:`process` returns safe minimal defaults so the system
     does not crash when Foundry is unavailable.
     """
@@ -33,7 +36,7 @@ class SubmissionAgent(InsuranceAgent):
             or AgentConfig(
                 agent_id="submission_agent",
                 agent_version="0.1.0",
-                authority_limit=Decimal("0"),
+                authority_limit=PLATFORM_LIMITS.agents.submission_agent,
             )
         )
 
@@ -75,6 +78,17 @@ class SubmissionAgent(InsuranceAgent):
                 produces=["triage_result"],
             ),
         ]
+
+    # ------------------------------------------------------------------
+    # Foundry-delegated prompt
+    # ------------------------------------------------------------------
+
+    def _build_prompt(self, task: dict[str, Any]) -> str:
+        """Build a knowledge-enriched prompt via :func:`build_triage_prompt`."""
+        from openinsure.agents.prompts import build_triage_prompt
+
+        submission = task.get("submission", task)
+        return build_triage_prompt(submission)
 
     # ------------------------------------------------------------------
     # Local fallback — minimal safe defaults

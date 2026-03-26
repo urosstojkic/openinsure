@@ -4,16 +4,18 @@ Handles document classification, structured data extraction from
 insurance documents, and document generation (quotes, policies,
 certificates).
 
-When Foundry is available, all reasoning goes through GPT-5.1.
-The local ``process()`` returns minimal defaults for graceful degradation.
+When Foundry is available the prompt is built by
+:func:`build_document_prompt` which injects coverage knowledge and
+standard exclusions from the knowledge graph.  The local ``process()``
+returns minimal defaults for graceful degradation.
 """
 
-from decimal import Decimal
 from typing import Any
 
 import structlog
 
 from openinsure.agents.base import AgentCapability, AgentConfig, InsuranceAgent
+from openinsure.domain.limits import PLATFORM_LIMITS
 
 logger = structlog.get_logger()
 
@@ -21,9 +23,11 @@ logger = structlog.get_logger()
 class DocumentAgent(InsuranceAgent):
     """Document classification, extraction, and generation agent.
 
-    In production all reasoning is performed by the Foundry-hosted agent.
-    The local :meth:`process` returns safe minimal defaults so the system
-    does not crash when Foundry is unavailable.
+    In production all reasoning is performed by the Foundry-hosted agent
+    using the knowledge-enriched prompt from
+    ``prompts.build_document_prompt``.  The local :meth:`process` returns
+    safe minimal defaults so the system does not crash when Foundry is
+    unavailable.
     """
 
     def __init__(self, config: AgentConfig | None = None):
@@ -32,7 +36,7 @@ class DocumentAgent(InsuranceAgent):
             or AgentConfig(
                 agent_id="document_agent",
                 agent_version="0.1.0",
-                authority_limit=Decimal("0"),
+                authority_limit=PLATFORM_LIMITS.agents.document_agent,
             )
         )
 
@@ -62,6 +66,19 @@ class DocumentAgent(InsuranceAgent):
                 produces=["document_url", "document_id"],
             ),
         ]
+
+    # ------------------------------------------------------------------
+    # Foundry-delegated prompt
+    # ------------------------------------------------------------------
+
+    def _build_prompt(self, task: dict[str, Any]) -> str:
+        """Build a knowledge-enriched prompt via :func:`build_document_prompt`."""
+        from openinsure.agents.prompts import build_document_prompt
+
+        policy = task.get("policy", {})
+        submission = task.get("submission", {})
+        doc_type = task.get("document_type", task.get("type", "declaration"))
+        return build_document_prompt(policy, submission, doc_type)
 
     # ------------------------------------------------------------------
     # Local fallback — minimal safe defaults

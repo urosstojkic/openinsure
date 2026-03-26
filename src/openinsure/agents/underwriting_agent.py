@@ -3,16 +3,18 @@
 Handles risk assessment, pricing, terms generation, authority checking,
 and quote preparation for insurance submissions.
 
-When Foundry is available, all reasoning goes through GPT-5.1.
+When Foundry is available the prompt is built by
+:func:`build_underwriting_prompt` which injects pricing guidelines,
+dynamic knowledge, comparable accounts, and learning-loop context.
 The local ``process()`` returns minimal defaults for graceful degradation.
 """
 
-from decimal import Decimal
 from typing import Any
 
 import structlog
 
 from openinsure.agents.base import AgentCapability, AgentConfig, InsuranceAgent
+from openinsure.domain.limits import PLATFORM_LIMITS
 
 logger = structlog.get_logger()
 
@@ -20,9 +22,11 @@ logger = structlog.get_logger()
 class UnderwritingAgent(InsuranceAgent):
     """Underwriting, pricing, and quote-generation agent.
 
-    In production all reasoning is performed by the Foundry-hosted agent.
-    The local :meth:`process` returns safe minimal defaults so the system
-    does not crash when Foundry is unavailable.
+    In production all reasoning is performed by the Foundry-hosted agent
+    using the knowledge-enriched prompt from
+    ``prompts.build_underwriting_prompt``.  The local :meth:`process`
+    returns safe minimal defaults so the system does not crash when
+    Foundry is unavailable.
     """
 
     def __init__(self, config: AgentConfig | None = None):
@@ -31,7 +35,7 @@ class UnderwritingAgent(InsuranceAgent):
             or AgentConfig(
                 agent_id="underwriting_agent",
                 agent_version="0.1.0",
-                authority_limit=Decimal("1000000"),
+                authority_limit=PLATFORM_LIMITS.agents.underwriting_agent,
             )
         )
 
@@ -73,6 +77,18 @@ class UnderwritingAgent(InsuranceAgent):
                 produces=["quote"],
             ),
         ]
+
+    # ------------------------------------------------------------------
+    # Foundry-delegated prompt
+    # ------------------------------------------------------------------
+
+    def _build_prompt(self, task: dict[str, Any]) -> str:
+        """Build a knowledge-enriched prompt via :func:`build_underwriting_prompt`."""
+        from openinsure.agents.prompts import build_underwriting_prompt
+
+        submission = task.get("submission", task)
+        triage_result = task.get("triage_result")
+        return build_underwriting_prompt(submission, triage_result)
 
     # ------------------------------------------------------------------
     # Local fallback — minimal safe defaults
