@@ -94,6 +94,17 @@ function mapToClaimsQueueItem(item: any): ClaimsQueueItem {
   };
 }
 
+/** Safely coerce a value to a displayable string (handles API objects). */
+function toDisplayString(val: unknown): string {
+  if (typeof val === 'string') return val;
+  if (val && typeof val === 'object') {
+    return Object.entries(val as Record<string, unknown>)
+      .map(([k, v]) => `${k}: ${v}`)
+      .join(', ');
+  }
+  return val != null ? String(val) : '';
+}
+
 function mapToDecisionAuditItem(item: any): DecisionAuditItem {
   const dt = String(item.decision_type || item.action || '');
   const agentLabel = DECISION_TYPE_TO_AGENT[dt] || dt.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()) || 'Unknown';
@@ -102,9 +113,9 @@ function mapToDecisionAuditItem(item: any): DecisionAuditItem {
     agent: item.agent || item.agent_name || agentLabel,
     decision_type: item.decision_type || item.action || '',
     confidence: item.confidence ?? 0,
-    input_summary: item.input_summary || item.entity_id || item.resource_id || '',
-    output: item.output || item.outcome || item.details || '',
-    reasoning_chain: item.reasoning_chain || item.reasoning || [],
+    input_summary: toDisplayString(item.input_summary) || item.entity_id || item.resource_id || '',
+    output: toDisplayString(item.output) || toDisplayString(item.output_summary) || item.explanation || item.details || '',
+    reasoning_chain: Array.isArray(item.reasoning_chain) ? item.reasoning_chain : Array.isArray(item.reasoning) ? item.reasoning : [],
     timestamp: item.timestamp || item.created_at || '',
     reviewed: item.reviewed ?? false,
     flagged: item.flagged ?? false,
