@@ -13,16 +13,22 @@ Example:
 
 from __future__ import annotations
 
+import os
 import sys
 from typing import Any
+from urllib.parse import urlparse
 
 import httpx
 
-BASE_URL = (
-    sys.argv[1]
-    if len(sys.argv) > 1
-    else "https://openinsure-backend.proudplant-9550e5a5.swedencentral.azurecontainerapps.io"
-)
+
+def _redact_url(url: str) -> str:
+    """Redact sensitive parts of a URL for safe logging."""
+    parsed = urlparse(url)
+    host = parsed.hostname or url
+    return f"{parsed.scheme}://{host}/***" if parsed.scheme else host
+
+
+BASE_URL = sys.argv[1] if len(sys.argv) > 1 else os.environ.get("OPENINSURE_BACKEND_URL", "http://localhost:8000")
 
 client = httpx.Client(base_url=BASE_URL, timeout=30)
 
@@ -44,11 +50,11 @@ def post(endpoint: str, data: dict[str, Any]) -> dict[str, Any] | None:
         r = client.post(f"/api/v1/{endpoint}", json=data)
         if r.status_code in (200, 201):
             return r.json()
-        print(f"  WARN {endpoint}: HTTP {r.status_code} — {r.text[:200]}")
+        print(f"  WARN {endpoint}: HTTP {r.status_code}")
         stats["errors"] += 1
         return None
-    except Exception as e:
-        print(f"  ERROR {endpoint}: {e}")
+    except Exception:
+        print(f"  ERROR {endpoint}: request failed")
         stats["errors"] += 1
         return None
 
@@ -502,7 +508,7 @@ def seed_billing(policies: list[dict[str, Any]]) -> None:
 def main() -> None:
     print("=" * 60)
     print("  OpenInsure Carrier Module Seed")
-    print(f"  Target: {BASE_URL}")
+    print(f"  Target: {_redact_url(BASE_URL)}")
     print("=" * 60)
 
     # Health check

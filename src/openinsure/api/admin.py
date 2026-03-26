@@ -166,11 +166,18 @@ async def deploy_foundry_agents() -> dict[str, Any]:
                         )
                         results.append({"name": name, "status": "created_via_invoke"})
                     except Exception as e3:
+                        logger.exception(
+                            "admin.deploy_agent_failed",
+                            agent=name,
+                            agents_err=str(e1),
+                            oai_err=str(e2),
+                            invoke_err=str(e3),
+                        )
                         results.append(
                             {
                                 "name": name,
                                 "status": "all_methods_failed",
-                                "error": f"agents: {str(e1)[:80]} | oai: {str(e2)[:80]} | invoke: {str(e3)[:80]}",
+                                "error": "Agent creation failed — see server logs",
                             }
                         )
 
@@ -181,10 +188,12 @@ async def deploy_foundry_agents() -> dict[str, Any]:
             "existing_before": len(existing),
         }
 
-    except ImportError as e:
-        return {"error": f"Missing SDK: {e}"}
-    except Exception as e:
-        return {"error": str(e)[:500]}
+    except ImportError:
+        logger.exception("admin.deploy_agents_missing_sdk")
+        return {"error": "Required SDK not installed"}
+    except Exception:
+        logger.exception("admin.deploy_agents_failed")
+        return {"error": "Internal server error"}
 
 
 @router.post("/seed-knowledge", response_model=SeedKnowledgeResponse)
@@ -276,9 +285,9 @@ async def seed_knowledge() -> dict[str, Any]:
         logger.info("admin.seed_knowledge", total=total, results=results)
         return {"total": total, "seeded": results}
 
-    except Exception as e:
+    except Exception:
         logger.exception("admin.seed_knowledge_failed")
-        return {"error": str(e)[:500]}
+        return {"error": "Internal server error"}
 
 
 @router.post("/sync-products", response_model=SyncProductsResponse)
@@ -294,9 +303,9 @@ async def sync_products_to_knowledge() -> dict[str, Any]:
 
         svc = ProductKnowledgeSyncService()
         return await svc.sync_all_products()
-    except Exception as e:
+    except Exception:
         logger.exception("admin.sync_products_failed")
-        return {"error": str(e)[:500]}
+        return {"error": "Internal server error"}
 
 
 @router.post("/sync-knowledge", response_model=SyncKnowledgeResponse)
@@ -373,6 +382,6 @@ async def sync_knowledge_to_search() -> dict[str, Any]:
             "containers_scanned": len(containers),
         }
 
-    except Exception as e:
+    except Exception:
         logger.exception("admin.sync_knowledge_failed")
-        return {"error": str(e)[:500]}
+        return {"error": "Internal server error"}
