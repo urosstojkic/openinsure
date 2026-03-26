@@ -376,15 +376,13 @@ async def create_claim(body: ClaimCreate) -> ClaimResponse:
     cid = str(uuid.uuid4())
     now = _now()
 
-    # Resolve policy number from the linked policy
-    policy_number = ""
-    try:
-        pol_repo = get_policy_repository()
-        policy = await pol_repo.get_by_id(body.policy_id)
-        if policy:
-            policy_number = policy.get("policy_number", "")
-    except Exception:
-        logger.warning("claims.policy_lookup_failed", policy_id=body.policy_id, exc_info=True)
+    # Validate that the referenced policy exists
+    pol_repo = get_policy_repository()
+    policy = await pol_repo.get_by_id(body.policy_id)
+    if policy is None:
+        raise HTTPException(status_code=404, detail="Policy not found")
+
+    policy_number = policy.get("policy_number", "")
 
     record: dict[str, Any] = {
         "id": cid,
