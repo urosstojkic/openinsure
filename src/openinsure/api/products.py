@@ -291,6 +291,22 @@ async def _get_product(product_id: str) -> dict[str, Any]:
     return product
 
 
+_PRODUCT_LINE_PREFIXES: dict[str, str] = {
+    "cyber": "CYBER",
+    "tech_eo": "TECH-EO",
+    "mpl": "MPL",
+    "professional_indemnity": "PI",
+    "directors_officers": "DO",
+}
+
+
+def _generate_product_code(product_line: str) -> str:
+    """Auto-generate a unique product code from the product line and a short UUID suffix."""
+    prefix = _PRODUCT_LINE_PREFIXES.get(product_line, product_line.upper().replace("_", "-"))
+    suffix = uuid.uuid4().hex[:6].upper()
+    return f"{prefix}-{suffix}"
+
+
 def _now() -> str:
     return datetime.now(UTC).isoformat()
 
@@ -346,6 +362,9 @@ async def create_product(body: ProductCreate, background_tasks: BackgroundTasks)
         "created_at": now,
         "updated_at": now,
     }
+    product_code = _generate_product_code(body.product_line)
+    record["product_code"] = product_code
+    record["code"] = product_code
     await _repo.create(record)
     background_tasks.add_task(_sync_product_knowledge, record)
     return ProductResponse(**record)
