@@ -8,9 +8,50 @@ from typing import Any
 
 import structlog
 from fastapi import APIRouter
+from pydantic import BaseModel, Field
 
 router = APIRouter()
 logger = structlog.get_logger()
+
+
+# ---------------------------------------------------------------------------
+# Response models
+# ---------------------------------------------------------------------------
+
+
+class AgentResult(BaseModel):
+    name: str
+    status: str
+    id: str | None = None
+    error: str | None = None
+
+
+class DeployAgentsResponse(BaseModel):
+    total: int = 0
+    agents: list[AgentResult] = Field(default_factory=list)
+    existing_before: int = 0
+    error: str | None = None
+
+
+class SeedKnowledgeResponse(BaseModel):
+    total: int = 0
+    seeded: dict[str, int] = Field(default_factory=dict)
+    error: str | None = None
+
+
+class SyncProductsResponse(BaseModel):
+    total: int = 0
+    synced: int = 0
+    error: str | None = None
+    model_config = {"extra": "allow"}
+
+
+class SyncKnowledgeResponse(BaseModel):
+    cosmos_docs: int = 0
+    indexed: int = 0
+    containers_scanned: int = 0
+    error: str | None = None
+
 
 AGENT_DEFINITIONS: list[dict[str, str]] = [
     {
@@ -56,7 +97,7 @@ AGENT_DEFINITIONS: list[dict[str, str]] = [
 ]
 
 
-@router.post("/deploy-agents")
+@router.post("/deploy-agents", response_model=DeployAgentsResponse)
 async def deploy_foundry_agents() -> dict[str, Any]:
     """Deploy all OpenInsure agents to Microsoft Foundry.
 
@@ -146,7 +187,7 @@ async def deploy_foundry_agents() -> dict[str, Any]:
         return {"error": str(e)[:500]}
 
 
-@router.post("/seed-knowledge")
+@router.post("/seed-knowledge", response_model=SeedKnowledgeResponse)
 async def seed_knowledge() -> dict[str, Any]:
     """Seed Cosmos DB with knowledge base data from YAML files and in-memory store.
 
@@ -240,7 +281,7 @@ async def seed_knowledge() -> dict[str, Any]:
         return {"error": str(e)[:500]}
 
 
-@router.post("/sync-products")
+@router.post("/sync-products", response_model=SyncProductsResponse)
 async def sync_products_to_knowledge() -> dict[str, Any]:
     """Sync ALL products from SQL to Cosmos DB and AI Search.
 
@@ -258,7 +299,7 @@ async def sync_products_to_knowledge() -> dict[str, Any]:
         return {"error": str(e)[:500]}
 
 
-@router.post("/sync-knowledge")
+@router.post("/sync-knowledge", response_model=SyncKnowledgeResponse)
 async def sync_knowledge_to_search() -> dict[str, Any]:
     """Sync knowledge from Cosmos DB to Azure AI Search.
 

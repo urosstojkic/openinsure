@@ -6,6 +6,7 @@ Computes KPIs from Azure SQL data for CEO, CUO, and operations views.
 from typing import Any
 
 from fastapi import APIRouter
+from pydantic import BaseModel, Field
 
 from openinsure.infrastructure.factory import (
     get_claim_repository,
@@ -16,7 +17,113 @@ from openinsure.infrastructure.factory import (
 router = APIRouter()
 
 
-@router.get("/summary")
+# ---------------------------------------------------------------------------
+# Response models
+# ---------------------------------------------------------------------------
+
+
+class StatusCounts(BaseModel):
+    """Counts keyed by status string."""
+
+    model_config = {"extra": "allow"}
+
+
+class SubmissionMetrics(BaseModel):
+    total: int
+    by_status: dict[str, int] = Field(default_factory=dict)
+    bind_rate: float = 0.0
+    decline_rate: float = 0.0
+
+
+class PolicyMetrics(BaseModel):
+    total: int
+    active: int = 0
+    by_status: dict[str, int] = Field(default_factory=dict)
+    total_premium: float = 0.0
+    avg_premium: float = 0.0
+
+
+class ClaimMetrics(BaseModel):
+    total: int
+    by_status: dict[str, int] = Field(default_factory=dict)
+    total_incurred: float = 0.0
+    loss_ratio: float = 0.0
+
+
+class KPIMetrics(BaseModel):
+    gwp: float = 0.0
+    loss_ratio: float = 0.0
+    bind_rate: float = 0.0
+    active_policies: int = 0
+    open_claims: int = 0
+    pending_escalations: int = 0
+
+
+class SummaryMetricsResponse(BaseModel):
+    submissions: SubmissionMetrics
+    policies: PolicyMetrics
+    claims: ClaimMetrics
+    kpis: KPIMetrics
+
+
+class PipelineMetricsResponse(BaseModel):
+    pipeline: dict[str, int]
+    total: int
+
+
+class AgentMetricsResponse(BaseModel):
+    agent_activity: dict[str, int] = Field(default_factory=dict)
+    total_events: int = 0
+
+
+class PremiumTrendItem(BaseModel):
+    month: str
+    premium: float
+
+
+class PremiumTrendResponse(BaseModel):
+    trend: list[PremiumTrendItem] = Field(default_factory=list)
+
+
+class ExecutiveKPIs(BaseModel):
+    gwp: float
+    nwp: float
+    loss_ratio: float
+    combined_ratio: float
+    growth_rate: float
+
+
+class LossRatioByLOB(BaseModel):
+    lob: str
+    loss_ratio: float
+
+
+class ExposureConcentration(BaseModel):
+    name: str
+    exposure: float
+
+
+class PipelineStage(BaseModel):
+    stage: str
+    count: int
+
+
+class AgentImpact(BaseModel):
+    processing_time_reduction: int = 0
+    auto_bind_rate: float = 0.0
+    escalation_rate: float = 0.0
+
+
+class ExecutiveDashboardResponse(BaseModel):
+    kpis: ExecutiveKPIs
+    premium_trend: list[PremiumTrendItem] = Field(default_factory=list)
+    loss_ratio_by_lob: list[LossRatioByLOB] = Field(default_factory=list)
+    exposure_concentrations: list[ExposureConcentration] = Field(default_factory=list)
+    pipeline: list[PipelineStage] = Field(default_factory=list)
+    agent_impact: AgentImpact = Field(default_factory=AgentImpact)
+
+
+@router.get("/summary", response_model=SummaryMetricsResponse)
 async def get_summary_metrics() -> dict[str, Any]:
     """Top-level KPIs for the main dashboard."""
     from openinsure.services.escalation import count_pending
@@ -92,7 +199,7 @@ async def get_summary_metrics() -> dict[str, Any]:
     }
 
 
-@router.get("/pipeline")
+@router.get("/pipeline", response_model=PipelineMetricsResponse)
 async def get_pipeline_metrics() -> dict[str, Any]:
     """Submission pipeline funnel."""
     repo = get_submission_repository()
@@ -105,7 +212,7 @@ async def get_pipeline_metrics() -> dict[str, Any]:
     return {"pipeline": pipeline, "total": len(subs)}
 
 
-@router.get("/agents")
+@router.get("/agents", response_model=AgentMetricsResponse)
 async def get_agent_metrics() -> dict[str, Any]:
     """Agent performance metrics (from decision records)."""
     from openinsure.services.event_publisher import get_recent_events
@@ -126,7 +233,7 @@ async def get_agent_metrics() -> dict[str, Any]:
     }
 
 
-@router.get("/premium-trend")
+@router.get("/premium-trend", response_model=PremiumTrendResponse)
 async def get_premium_trend() -> dict[str, Any]:
     """Monthly premium trend from policies."""
     repo = get_policy_repository()
@@ -144,7 +251,7 @@ async def get_premium_trend() -> dict[str, Any]:
     return {"trend": trend}
 
 
-@router.get("/executive")
+@router.get("/executive", response_model=ExecutiveDashboardResponse)
 async def get_executive_dashboard() -> dict[str, Any]:
     """Aggregated executive KPIs for CEO / CUO / CFO dashboards.
 

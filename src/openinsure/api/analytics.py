@@ -161,6 +161,14 @@ class DecisionAccuracyResponse(BaseModel):
     improvement_signals: list[dict[str, Any]] = Field(default_factory=list)
 
 
+class DecisionOutcomeResponse(BaseModel):
+    """Response from recording a decision outcome."""
+
+    decision_id: str = ""
+    recorded: bool = False
+    model_config = {"extra": "allow"}
+
+
 # ---------------------------------------------------------------------------
 # UW Analytics endpoint (#81)
 # ---------------------------------------------------------------------------
@@ -507,7 +515,7 @@ async def get_decision_accuracy(
     )
 
 
-@router.post("/decision-outcome")
+@router.post("/decision-outcome", response_model=DecisionOutcomeResponse)
 async def record_decision_outcome(
     decision_id: str = Query(..., description="Decision ID to record outcome for"),
     outcome: dict[str, Any] | None = None,
