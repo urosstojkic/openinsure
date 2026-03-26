@@ -368,7 +368,7 @@ async def create_product(body: ProductCreate, background_tasks: BackgroundTasks)
         "appetite_rules": [r.model_dump() for r in body.appetite_rules],
         "authority_limits": body.authority_limits.model_dump() if body.authority_limits else None,
         "territories": body.territories,
-        "effective_date": body.effective_date,
+        "effective_date": body.effective_date or now[:10],
         "expiration_date": body.expiration_date,
         "forms": body.forms,
         "metadata": body.metadata,
