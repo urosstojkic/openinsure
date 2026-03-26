@@ -1333,11 +1333,11 @@ async def get_submission_comparables(
 
 @router.post("/{submission_id}/process")
 async def process_submission(submission_id: str, user: CurrentUser = Depends(get_current_user)) -> dict[str, object]:
-    """Run the full multi-agent new business workflow via the workflow engine.
+    """Run the full multi-agent new business workflow.
 
-    Delegates agent orchestration (triage → underwriting → compliance) to
-    :func:`execute_workflow`, then applies business logic (authority checks,
-    policy creation, billing) based on the workflow results.
+    Delegates to ``/api/v1/workflows/new-business/{submission_id}`` — the
+    canonical workflow endpoint.  Business logic (authority checks, policy
+    creation, billing) is applied on top of the workflow results.
     """
     from openinsure.infrastructure.factory import (
         get_billing_repository,
