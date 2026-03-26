@@ -11,12 +11,14 @@ from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any
 
+import structlog
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from openinsure.infrastructure.factory import get_policy_repository
 
 router = APIRouter()
+_logger = structlog.get_logger()
 
 # ---------------------------------------------------------------------------
 # Repository — resolved by factory (in-memory or SQL depending on config)
@@ -322,6 +324,17 @@ async def endorse_policy(policy_id: str, body: EndorsementRequest) -> Endorsemen
                 if "deductible" in body.changes["update_limits"]:
                     cov["deductible"] = body.changes["update_limits"]["deductible"]
 
+    try:
+        from openinsure.services.event_publisher import publish_domain_event
+
+        await publish_domain_event(
+            "policy.endorsed",
+            f"/policies/{policy_id}",
+            {"policy_id": policy_id, "endorsement_id": eid, "premium_delta": body.premium_delta},
+        )
+    except Exception:
+        _logger.debug("event.publish_skipped", event="policy.endorsed")
+
     return EndorsementResponse(policy_id=policy_id, **endorsement)
 
 
@@ -358,6 +371,17 @@ async def renew_policy(policy_id: str) -> RenewalResponse:
         "updated_at": now,
     }
     await _repo.create(renewal)
+
+    try:
+        from openinsure.services.event_publisher import publish_domain_event
+
+        await publish_domain_event(
+            "policy.renewed",
+            f"/policies/{policy_id}",
+            {"policy_id": policy_id, "renewal_policy_id": new_pid},
+        )
+    except Exception:
+        _logger.debug("event.publish_skipped", event="policy.renewed")
 
     return RenewalResponse(
         policy_id=policy_id,
@@ -401,6 +425,17 @@ async def cancel_policy(policy_id: str, body: CancelRequest) -> CancelResponse:
 
     record["status"] = PolicyStatus.CANCELLED
     record["updated_at"] = now
+
+    try:
+        from openinsure.services.event_publisher import publish_domain_event
+
+        await publish_domain_event(
+            "policy.cancelled",
+            f"/policies/{policy_id}",
+            {"policy_id": policy_id, "reason": body.reason, "return_premium": return_premium},
+        )
+    except Exception:
+        _logger.debug("event.publish_skipped", event="policy.cancelled")
 
     return CancelResponse(
         policy_id=policy_id,
