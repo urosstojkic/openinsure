@@ -1,11 +1,14 @@
 """Policy lifecycle management service.
 
-Handles the full lifecycle of insurance policies: binding, endorsement,
-renewal, and cancellation with earned/unearned premium calculations.
+Single source of truth for all policy business logic: binding, endorsement,
+renewal, cancellation, and reinstatement.  The agent layer
+(``agents/policy_agent.py``) delegates here for business rules; this module
+owns validation, premium calculations, and state transitions.
 """
 
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from decimal import ROUND_HALF_UP, Decimal
+from typing import Any
 
 import structlog
 from pydantic import BaseModel, Field
@@ -24,9 +27,15 @@ from openinsure.domain.policy import (
     Policy,
     PolicyStatus,
 )
+from openinsure.domain.state_machine import validate_policy_transition
 from openinsure.domain.submission import Submission
 
 logger = structlog.get_logger()
+
+
+# ------------------------------------------------------------------
+# Request / Response models
+# ------------------------------------------------------------------
 
 
 class BindRequest(BaseModel):
@@ -63,6 +72,111 @@ class PolicyLifecycleResult(BaseModel):
     message: str
 
 
+# ------------------------------------------------------------------
+# Pure business-logic helpers (shared by service & agent layers)
+# ------------------------------------------------------------------
+
+
+def validate_bind_requirements(
+    quote: dict[str, Any],
+    submission: dict[str, Any],
+) -> list[str]:
+    """Validate that all prerequisites for binding are satisfied."""
+    errors: list[str] = []
+    if not quote.get("terms"):
+        errors.append("Quote has no terms")
+    authority = quote.get("authority", {})
+    if authority.get("requires_referral") and not authority.get("referral_approved"):
+        errors.append("Quote requires referral approval before binding")
+    if not submission.get("line_of_business"):
+        errors.append("Submission missing line of business")
+    return errors
+
+
+def calculate_endorsement_premium(
+    request: dict[str, Any],
+    current_premium: Decimal,
+) -> Decimal:
+    """Calculate the premium change for an endorsement.
+
+    If the request already contains an explicit ``premium_change`` it is
+    used directly; otherwise the change is derived from ``change_type``.
+    """
+    if "premium_change" in request:
+        return Decimal(str(request["premium_change"]))
+
+    change_type = request.get("change_type", "")
+    increases: dict[str, Decimal] = {
+        "increase_limit": Decimal("0.15"),
+        "add_coverage": Decimal("0.20"),
+    }
+    decreases: dict[str, Decimal] = {
+        "decrease_limit": Decimal("0.10"),
+        "remove_coverage": Decimal("0.15"),
+    }
+
+    if change_type in increases:
+        return (current_premium * increases[change_type]).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    if change_type in decreases:
+        return -(current_premium * decreases[change_type]).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    return Decimal("0.00")
+
+
+def compute_renewal_factor(claims_history: list[dict[str, Any]]) -> Decimal:
+    """Compute the renewal premium multiplier from claims history."""
+    if not claims_history:
+        return Decimal("0.95")  # Claims-free discount
+
+    total_incurred = sum(Decimal(str(c.get("total_incurred", "0"))) for c in claims_history)
+    count = len(claims_history)
+
+    if count >= 3 or total_incurred > Decimal("500000"):
+        return Decimal("1.35")
+    if count >= 2 or total_incurred > Decimal("100000"):
+        return Decimal("1.20")
+    if total_incurred > Decimal("25000"):
+        return Decimal("1.10")
+    return Decimal("1.05")
+
+
+def earned_premium_fraction(
+    effective: date,
+    expiration: date,
+    as_of: date,
+) -> Decimal:
+    """Return the fraction of premium earned as of *as_of*."""
+    total_days = (expiration - effective).days
+    if total_days <= 0:
+        return Decimal("1.0")
+    elapsed_days = min(max((as_of - effective).days, 0), total_days)
+    return (Decimal(str(elapsed_days)) / Decimal(str(total_days))).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+
+
+def calculate_earned_unearned(
+    total_premium: Decimal,
+    effective_date: str,
+    expiration_date: str,
+    cancel_date: str,
+) -> tuple[Decimal, Decimal]:
+    """Pro-rata earned/unearned premium split from ISO date strings."""
+    eff = date.fromisoformat(str(effective_date))
+    exp = date.fromisoformat(str(expiration_date))
+    cancel = date.fromisoformat(str(cancel_date))
+
+    total_days = max((exp - eff).days, 1)
+    elapsed_days = max((cancel - eff).days, 0)
+    frac = Decimal(str(elapsed_days)) / Decimal(str(total_days))
+
+    earned = (total_premium * frac).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    unearned = total_premium - earned
+    return earned, unearned
+
+
+# ------------------------------------------------------------------
+# Internal helpers
+# ------------------------------------------------------------------
+
+
 def _generate_policy_number() -> str:
     """Generate a unique policy number."""
     uid = new_id()
@@ -75,21 +189,17 @@ def _generate_endorsement_number(policy: Policy) -> str:
     return f"{policy.policy_number}-END-{seq:03d}"
 
 
-def _earned_premium_fraction(
-    effective: date,
-    expiration: date,
-    as_of: date,
-) -> Decimal:
-    """Calculate the earned fraction of a policy term."""
-    total_days = (expiration - effective).days
-    if total_days <= 0:
-        return Decimal("1.0")
-    elapsed_days = min(max((as_of - effective).days, 0), total_days)
-    return (Decimal(str(elapsed_days)) / Decimal(str(total_days))).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+# ------------------------------------------------------------------
+# Service class
+# ------------------------------------------------------------------
 
 
 class PolicyLifecycleService:
-    """Service managing the full policy lifecycle."""
+    """Service managing the full policy lifecycle.
+
+    All state-changing operations enforce domain state-machine transitions
+    via ``validate_policy_transition`` from ``domain.state_machine``.
+    """
 
     def bind_policy(self, request: BindRequest) -> PolicyLifecycleResult:
         """Create a new policy from a submission and bind it."""
@@ -164,7 +274,7 @@ class PolicyLifecycleService:
         policy.written_premium += request.premium_change
 
         # Recalculate earned/unearned as of now
-        fraction = _earned_premium_fraction(policy.effective_date, policy.expiration_date, date.today())
+        fraction = earned_premium_fraction(policy.effective_date, policy.expiration_date, date.today())
         policy.earned_premium = (policy.total_premium * fraction).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
         policy.unearned_premium = policy.total_premium - policy.earned_premium
         policy.updated_at = datetime.now(UTC)
@@ -201,7 +311,7 @@ class PolicyLifecycleService:
         term_days = (policy.expiration_date - policy.effective_date).days
 
         new_effective = policy.expiration_date
-        new_expiration = policy.expiration_date + __import__("datetime").timedelta(days=term_days)
+        new_expiration = policy.expiration_date + timedelta(days=term_days)
 
         renewal = Policy(
             policy_number=renewal_number,
@@ -247,11 +357,9 @@ class PolicyLifecycleService:
         request: CancellationRequest,
     ) -> PolicyLifecycleResult:
         """Cancel a policy and calculate earned/unearned premium split."""
-        if policy.status != PolicyStatus.active:
-            msg = f"Cannot cancel policy in {policy.status} status"
-            raise ValueError(msg)
+        validate_policy_transition(policy.status.value, "cancelled")
 
-        fraction = _earned_premium_fraction(policy.effective_date, policy.expiration_date, request.effective_date)
+        fraction = earned_premium_fraction(policy.effective_date, policy.expiration_date, request.effective_date)
         earned = (policy.total_premium * fraction).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
         unearned = policy.total_premium - earned
 
@@ -282,4 +390,27 @@ class PolicyLifecycleService:
             policy=policy,
             events=[event],
             message=f"Policy {policy.policy_number} cancelled — unearned premium: ${unearned:,.2f}",
+        )
+
+    def reinstate_policy(self, policy: Policy) -> PolicyLifecycleResult:
+        """Reinstate a previously cancelled policy."""
+        validate_policy_transition(policy.status.value, "reinstated")
+
+        policy.status = PolicyStatus.reinstated
+        policy.updated_at = datetime.now(UTC)
+
+        # Recalculate earned/unearned as of today
+        fraction = earned_premium_fraction(policy.effective_date, policy.expiration_date, date.today())
+        policy.earned_premium = (policy.total_premium * fraction).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        policy.unearned_premium = policy.total_premium - policy.earned_premium
+
+        logger.info(
+            "policy.reinstated",
+            policy_number=policy.policy_number,
+        )
+
+        return PolicyLifecycleResult(
+            policy=policy,
+            events=[],
+            message=f"Policy {policy.policy_number} reinstated",
         )

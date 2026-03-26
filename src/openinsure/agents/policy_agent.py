@@ -1,11 +1,15 @@
 """Policy lifecycle management agent for OpenInsure.
 
-Manages binding, endorsements, renewals, and cancellations of insurance
-policies.  Every lifecycle action produces a full DecisionRecord for
-EU AI Act compliance.
+Manages binding, endorsements, renewals, cancellations, and
+reinstatements of insurance policies.  Every lifecycle action produces a
+full DecisionRecord for EU AI Act compliance.
+
+Business logic is delegated to :mod:`openinsure.services.policy_lifecycle`
+— this agent handles only prompt building, Foundry invocation, and
+result formatting.
 """
 
-from datetime import UTC, date, datetime
+from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 from uuid import uuid4
@@ -13,6 +17,13 @@ from uuid import uuid4
 import structlog
 
 from openinsure.agents.base import AgentCapability, AgentConfig, InsuranceAgent
+from openinsure.domain.limits import PLATFORM_LIMITS
+from openinsure.services.policy_lifecycle import (
+    calculate_earned_unearned,
+    calculate_endorsement_premium,
+    compute_renewal_factor,
+    validate_bind_requirements,
+)
 
 logger = structlog.get_logger()
 
@@ -26,6 +37,7 @@ class PolicyAgent(InsuranceAgent):
     - ``endorse`` – validate change → recalculate premium → update policy.
     - ``renew`` – pull updated data → generate renewal terms.
     - ``cancel`` – process cancellation → calculate earned/unearned premium.
+    - ``reinstate`` – reinstate a cancelled policy.
     """
 
     def __init__(self, config: AgentConfig | None = None):
@@ -34,7 +46,7 @@ class PolicyAgent(InsuranceAgent):
             or AgentConfig(
                 agent_id="policy_agent",
                 agent_version="0.1.0",
-                authority_limit=Decimal("5000000"),
+                authority_limit=PLATFORM_LIMITS.agents.policy_agent,
             )
         )
 
@@ -70,6 +82,12 @@ class PolicyAgent(InsuranceAgent):
                 produces=["cancellation_result"],
             ),
             AgentCapability(
+                name="reinstate_policy",
+                description="Reinstate a previously cancelled policy",
+                required_inputs=["policy_id"],
+                produces=["reinstated_policy"],
+            ),
+            AgentCapability(
                 name="generate_documents",
                 description="Trigger generation of policy documents",
                 required_inputs=["policy_id", "document_type"],
@@ -88,6 +106,7 @@ class PolicyAgent(InsuranceAgent):
             "endorse": self._endorse,
             "renew": self._renew,
             "cancel": self._cancel,
+            "reinstate": self._reinstate,
         }.get(task_type)
 
         if handler is None:
@@ -97,7 +116,7 @@ class PolicyAgent(InsuranceAgent):
         return await handler(task)
 
     # ------------------------------------------------------------------
-    # Bind
+    # Bind — delegates validation to policy_lifecycle
     # ------------------------------------------------------------------
 
     async def _bind(self, task: dict[str, Any]) -> dict[str, Any]:
@@ -106,8 +125,7 @@ class PolicyAgent(InsuranceAgent):
         submission = task.get("submission", {})
         terms = quote.get("terms", {})
 
-        # Validate bind requirements
-        errors = self._validate_bind_requirements(quote, submission)
+        errors = validate_bind_requirements(quote, submission)
         if errors:
             return {
                 "success": False,
@@ -118,7 +136,6 @@ class PolicyAgent(InsuranceAgent):
             }
 
         policy_number = f"POL-{uuid4().hex[:8].upper()}"
-        now = datetime.now(UTC)
         premium = Decimal(terms.get("annual_premium", "0"))
 
         policy = {
@@ -143,7 +160,6 @@ class PolicyAgent(InsuranceAgent):
             "written_premium": str(premium),
             "earned_premium": "0.00",
             "unearned_premium": str(premium),
-            "bound_at": now.isoformat(),
             "documents_requested": ["declarations", "policy_form"],
         }
 
@@ -166,20 +182,8 @@ class PolicyAgent(InsuranceAgent):
             "knowledge_queries": ["bind_requirements", "document_templates"],
         }
 
-    @staticmethod
-    def _validate_bind_requirements(quote: dict[str, Any], submission: dict[str, Any]) -> list[str]:
-        errors: list[str] = []
-        if not quote.get("terms"):
-            errors.append("Quote has no terms")
-        authority = quote.get("authority", {})
-        if authority.get("requires_referral") and not authority.get("referral_approved"):
-            errors.append("Quote requires referral approval before binding")
-        if not submission.get("line_of_business"):
-            errors.append("Submission missing line of business")
-        return errors
-
     # ------------------------------------------------------------------
-    # Endorse
+    # Endorse — delegates premium calc to policy_lifecycle
     # ------------------------------------------------------------------
 
     async def _endorse(self, task: dict[str, Any]) -> dict[str, Any]:
@@ -189,7 +193,7 @@ class PolicyAgent(InsuranceAgent):
         change_type = request.get("change_type", "unknown")
 
         current_premium = Decimal(str(policy.get("total_premium", "0")))
-        premium_change = self._calculate_endorsement_premium(request, current_premium)
+        premium_change = calculate_endorsement_premium(request, current_premium)
         new_premium = current_premium + premium_change
 
         endorsement = {
@@ -225,25 +229,8 @@ class PolicyAgent(InsuranceAgent):
             ],
         }
 
-    @staticmethod
-    def _calculate_endorsement_premium(request: dict[str, Any], current_premium: Decimal) -> Decimal:
-        """Calculate premium change for an endorsement."""
-        if "premium_change" in request:
-            return Decimal(str(request["premium_change"]))
-
-        change_type = request.get("change_type", "")
-        if change_type == "increase_limit":
-            return (current_premium * Decimal("0.15")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-        if change_type == "decrease_limit":
-            return -(current_premium * Decimal("0.10")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-        if change_type == "add_coverage":
-            return (current_premium * Decimal("0.20")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-        if change_type == "remove_coverage":
-            return -(current_premium * Decimal("0.15")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-        return Decimal("0.00")
-
     # ------------------------------------------------------------------
-    # Renew
+    # Renew — delegates factor calc to policy_lifecycle
     # ------------------------------------------------------------------
 
     async def _renew(self, task: dict[str, Any]) -> dict[str, Any]:
@@ -252,7 +239,7 @@ class PolicyAgent(InsuranceAgent):
         claims_history = task.get("claims_history", [])
         current_premium = Decimal(str(policy.get("total_premium", "0")))
 
-        renewal_factor = self._compute_renewal_factor(claims_history)
+        renewal_factor = compute_renewal_factor(claims_history)
         new_premium = (current_premium * renewal_factor).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
         today = date.today()
@@ -292,25 +279,8 @@ class PolicyAgent(InsuranceAgent):
             ],
         }
 
-    @staticmethod
-    def _compute_renewal_factor(claims_history: list[dict[str, Any]]) -> Decimal:
-        """Compute renewal premium factor based on claims history."""
-        if not claims_history:
-            return Decimal("0.95")  # Claims-free discount
-
-        total_incurred = sum(Decimal(str(c.get("total_incurred", "0"))) for c in claims_history)
-        count = len(claims_history)
-
-        if count >= 3 or total_incurred > Decimal("500000"):
-            return Decimal("1.35")
-        if count >= 2 or total_incurred > Decimal("100000"):
-            return Decimal("1.20")
-        if total_incurred > Decimal("25000"):
-            return Decimal("1.10")
-        return Decimal("1.05")
-
     # ------------------------------------------------------------------
-    # Cancel
+    # Cancel — delegates earned/unearned calc to policy_lifecycle
     # ------------------------------------------------------------------
 
     async def _cancel(self, task: dict[str, Any]) -> dict[str, Any]:
@@ -320,7 +290,7 @@ class PolicyAgent(InsuranceAgent):
         cancel_date = task.get("cancel_date", str(date.today()))
 
         total_premium = Decimal(str(policy.get("total_premium", "0")))
-        earned, unearned = self._calculate_earned_unearned(
+        earned, unearned = calculate_earned_unearned(
             total_premium,
             policy.get("effective_date", str(date.today())),
             policy.get("expiration_date", str(date.today())),
@@ -358,22 +328,22 @@ class PolicyAgent(InsuranceAgent):
             "knowledge_queries": ["cancellation_rules", "return_premium_methods"],
         }
 
-    @staticmethod
-    def _calculate_earned_unearned(
-        total_premium: Decimal,
-        effective_date: str,
-        expiration_date: str,
-        cancel_date: str,
-    ) -> tuple[Decimal, Decimal]:
-        """Pro-rata earned/unearned premium calculation."""
-        eff = date.fromisoformat(str(effective_date))
-        exp = date.fromisoformat(str(expiration_date))
-        cancel = date.fromisoformat(str(cancel_date))
+    # ------------------------------------------------------------------
+    # Reinstate
+    # ------------------------------------------------------------------
 
-        total_days = max((exp - eff).days, 1)
-        elapsed_days = max((cancel - eff).days, 0)
-        earned_fraction = Decimal(str(elapsed_days)) / Decimal(str(total_days))
+    async def _reinstate(self, task: dict[str, Any]) -> dict[str, Any]:
+        """Reinstate a previously cancelled policy."""
+        policy = task.get("policy", {})
+        policy_number = policy.get("policy_number", "unknown")
 
-        earned = (total_premium * earned_fraction).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-        unearned = total_premium - earned
-        return earned, unearned
+        self.logger.info("policy.reinstated", policy_number=policy_number)
+
+        return {
+            "success": True,
+            "policy": {**policy, "status": "reinstated"},
+            "confidence": 0.90,
+            "reasoning": {"step": "reinstate", "policy_number": policy_number},
+            "data_sources": ["policy"],
+            "knowledge_queries": ["reinstatement_rules"],
+        }

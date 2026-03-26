@@ -22,6 +22,7 @@ class PolicyStatus(StrEnum):
     cancelled = "cancelled"
     pending = "pending"
     suspended = "suspended"
+    reinstated = "reinstated"
 
 
 class Coverage(BaseModel):
@@ -97,3 +98,4 @@ class Policy(DomainEntity):
     bound_at: datetime | None = None
     cancelled_at: datetime | None = None
     cancel_reason: str | None = None
+    reinstated_at: datetime | None = None
