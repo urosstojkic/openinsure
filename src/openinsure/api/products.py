@@ -340,12 +340,26 @@ async def create_product(body: ProductCreate, background_tasks: BackgroundTasks)
     """Create a new insurance product definition."""
     pid = str(uuid.uuid4())
     now = _now()
+
+    # Auto-generate product code: LOB prefix + short UUID (e.g., CYBER-A1B2C3)
+    prefix = body.product_line.upper().replace("_", "-")
+    suffix = pid[:8].upper()
+    product_code = f"{prefix}-{suffix}"
+
+    # SQL column `version` is INT — coerce string versions like "1.0" to int
+    try:
+        version_int = int(float(body.version))
+    except (ValueError, TypeError):
+        version_int = 1
+
     record: dict[str, Any] = {
         "id": pid,
+        "code": product_code,
+        "product_code": product_code,
         "name": body.name,
         "product_line": body.product_line,
         "description": body.description,
-        "version": body.version,
+        "version": version_int,
         "status": ProductStatus.DRAFT,
         "coverages": [c.model_dump() for c in body.coverages],
         "rating_rules": body.rating_rules,
