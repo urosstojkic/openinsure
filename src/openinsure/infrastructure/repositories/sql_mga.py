@@ -93,7 +93,14 @@ class SqlMGAAuthorityRepository(BaseRepository):
 
     async def create(self, entity: dict[str, Any]) -> dict[str, Any]:
         now = datetime.now(UTC).isoformat()
+        # The API layer may set id = mga_id (a human-readable string).
+        # The SQL column `id` is UNIQUEIDENTIFIER, so always use a proper UUID.
         entity.setdefault("id", str(uuid4()))
+        # If `id` is not a valid UUID (e.g., "mga-001"), generate a real one
+        try:
+            UUID(str(entity["id"]))
+        except (ValueError, AttributeError):
+            entity["id"] = str(uuid4())
         entity.setdefault("status", "active")
         entity.setdefault("created_at", now)
         entity.setdefault("updated_at", now)
@@ -274,6 +281,11 @@ class SqlMGABordereauRepository(BaseRepository):
     async def create(self, entity: dict[str, Any]) -> dict[str, Any]:
         now = datetime.now(UTC).isoformat()
         entity.setdefault("id", str(uuid4()))
+        # Ensure id is a valid UUID for the UNIQUEIDENTIFIER column
+        try:
+            UUID(str(entity["id"]))
+        except (ValueError, AttributeError):
+            entity["id"] = str(uuid4())
         entity.setdefault("status", "pending")
         entity.setdefault("submitted_at", now)
 
