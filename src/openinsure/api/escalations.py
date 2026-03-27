@@ -50,10 +50,12 @@ class EscalationResponse(BaseModel):
 
 
 class EscalationList(BaseModel):
-    """List of escalation items."""
+    """Paginated list of escalation items."""
 
     items: list[EscalationResponse]
     total: int
+    skip: int
+    limit: int
 
 
 class CountResponse(BaseModel):
@@ -77,10 +79,19 @@ async def escalation_count() -> CountResponse:
 async def list_escalations(
     status: str | None = Query(None, description="Filter by status: pending, approved, rejected"),
     role: str | None = Query(None, description="Filter by required/escalation-chain role"),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
 ) -> EscalationList:
     """List escalation items with optional filters."""
     items = await escalation.get_queue(status=status, role=role)
-    return EscalationList(items=[EscalationResponse(**i) for i in items], total=len(items))
+    total = len(items)
+    page = items[skip : skip + limit]
+    return EscalationList(
+        items=[EscalationResponse(**i) for i in page],
+        total=total,
+        skip=skip,
+        limit=limit,
+    )
 
 
 @router.get("/{item_id}", response_model=EscalationResponse)

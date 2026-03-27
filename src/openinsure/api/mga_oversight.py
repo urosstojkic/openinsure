@@ -198,22 +198,45 @@ class PerformanceSummary(BaseModel):
     authorities: list[AuthorityResponse]
 
 
+class AuthorityList(BaseModel):
+    items: list[AuthorityResponse]
+    total: int
+    skip: int
+    limit: int
+
+
+class BordereauList(BaseModel):
+    items: list[BordereauResponse]
+    total: int
+    skip: int
+    limit: int
+
+
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
 
 
-@router.get("/authorities", response_model=list[AuthorityResponse])
+@router.get("/authorities", response_model=AuthorityList)
 async def list_authorities(
     status: str | None = Query(None, description="Filter by status"),
-) -> list[AuthorityResponse]:
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+) -> AuthorityList:
     """List all MGA authorities."""
     _seed()
     filters: dict[str, Any] = {}
     if status:
         filters["status"] = status
-    items = await _authority_repo.list_all(filters=filters or None)
-    return [AuthorityResponse(**a) for a in items]
+    all_items = await _authority_repo.list_all(filters=filters or None)
+    total = len(all_items)
+    page = all_items[skip : skip + limit]
+    return AuthorityList(
+        items=[AuthorityResponse(**a) for a in page],
+        total=total,
+        skip=skip,
+        limit=limit,
+    )
 
 
 @router.get("/authorities/{mga_id}", response_model=AuthorityResponse)
@@ -283,17 +306,26 @@ async def submit_bordereau(body: BordereauSubmit) -> BordereauResponse:
     return BordereauResponse(**record)
 
 
-@router.get("/bordereaux", response_model=list[BordereauResponse])
+@router.get("/bordereaux", response_model=BordereauList)
 async def list_bordereaux(
     mga_id: str | None = Query(None, description="Filter by MGA"),
-) -> list[BordereauResponse]:
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+) -> BordereauList:
     """List bordereaux."""
     _seed()
     filters: dict[str, Any] = {}
     if mga_id:
         filters["mga_id"] = mga_id
-    items = await _bordereau_repo.list_all(filters=filters or None)
-    return [BordereauResponse(**b) for b in items]
+    all_items = await _bordereau_repo.list_all(filters=filters or None)
+    total = len(all_items)
+    page = all_items[skip : skip + limit]
+    return BordereauList(
+        items=[BordereauResponse(**b) for b in page],
+        total=total,
+        skip=skip,
+        limit=limit,
+    )
 
 
 @router.get("/performance", response_model=PerformanceSummary)

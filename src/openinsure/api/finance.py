@@ -99,6 +99,13 @@ class ReconciliationItem(BaseModel):
     status: str
 
 
+class ReconciliationList(BaseModel):
+    items: list[ReconciliationItem]
+    total: int
+    skip: int
+    limit: int
+
+
 class BordereauGenerateRequest(BaseModel):
     mga_id: str
     period: str
@@ -259,8 +266,8 @@ async def commissions() -> CommissionSummary:
     )
 
 
-@router.get("/reconciliation", response_model=list[ReconciliationItem])
-async def reconciliation() -> list[ReconciliationItem]:
+@router.get("/reconciliation", response_model=ReconciliationList)
+async def reconciliation() -> ReconciliationList:
     """Reconciliation items derived from actual policy/claim totals."""
     pol_repo = get_policy_repository()
     clm_repo = get_claim_repository()
@@ -279,7 +286,7 @@ async def reconciliation() -> list[ReconciliationItem]:
     reins_actual = round(total_paid * 0.23, 2)
     tax_amount = round(total_premium * 0.03, 2)
 
-    return [
+    result = [
         ReconciliationItem(
             item="Premium receivables",
             expected=round(premium_unearned, 2),
@@ -316,6 +323,7 @@ async def reconciliation() -> list[ReconciliationItem]:
             status="matched",
         ),
     ]
+    return ReconciliationList(items=result, total=len(result), skip=0, limit=len(result))
 
 
 @router.post("/bordereaux/generate", response_model=BordereauGenerateResponse, status_code=201)

@@ -323,16 +323,30 @@ class SubrogationQueueItem(BaseModel):
     created_at: str = ""
 
 
+class SubrogationResponseList(BaseModel):
+    items: list[SubrogationResponse]
+    total: int
+    skip: int
+    limit: int
+
+
+class SubrogationQueueList(BaseModel):
+    items: list[SubrogationQueueItem]
+    total: int
+    skip: int
+    limit: int
+
+
 # In-memory subrogation store
 _subrogation_records: list[dict[str, Any]] = []
 
 
-@router.get("/subrogation/queue", response_model=list[SubrogationQueueItem])
+@router.get("/subrogation/queue", response_model=SubrogationQueueList)
 async def subrogation_queue(
     status: str | None = Query(None),
     skip: int = Query(0, ge=0),
-    limit: int = Query(50, ge=1, le=200),
-) -> list[SubrogationQueueItem]:
+    limit: int = Query(20, ge=1, le=100),
+) -> SubrogationQueueList:
     """List all active subrogation pursuits."""
     from datetime import date
 
@@ -362,7 +376,9 @@ async def subrogation_queue(
                 created_at=r.get("created_at", ""),
             )
         )
-    return items[skip : skip + limit]
+    total = len(items)
+    page = items[skip : skip + limit]
+    return SubrogationQueueList(items=page, total=total, skip=skip, limit=limit)
 
 
 @router.post("", response_model=ClaimResponse, status_code=201)
@@ -987,11 +1003,12 @@ async def create_subrogation(claim_id: str, body: SubrogationCreate) -> Subrogat
     return SubrogationResponse(**record)  # type: ignore[arg-type]
 
 
-@router.get("/{claim_id}/subrogation", response_model=list[SubrogationResponse])
-async def get_subrogation(claim_id: str) -> list[SubrogationResponse]:
+@router.get("/{claim_id}/subrogation", response_model=SubrogationResponseList)
+async def get_subrogation(claim_id: str) -> SubrogationResponseList:
     """Get subrogation records for a claim."""
     claim = await _repo.get_by_id(claim_id)
     if claim is None:
         raise HTTPException(status_code=404, detail=f"Claim {claim_id} not found")
     records = [r for r in _subrogation_records if r["claim_id"] == claim_id]
-    return [SubrogationResponse(**r) for r in records]
+    items = [SubrogationResponse(**r) for r in records]
+    return SubrogationResponseList(items=items, total=len(items), skip=0, limit=len(items))

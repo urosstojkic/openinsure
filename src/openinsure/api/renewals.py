@@ -84,6 +84,8 @@ class RenewalRecordResponse(BaseModel):
 class RenewalRecordList(BaseModel):
     items: list[RenewalRecordResponse]
     total: int
+    skip: int
+    limit: int
 
 
 class RenewalQueueItem(BaseModel):
@@ -101,6 +103,13 @@ class RenewalQueueItem(BaseModel):
     ai_terms: dict[str, Any] | None = None
     created_at: str = ""
     updated_at: str = ""
+
+
+class RenewalQueueList(BaseModel):
+    items: list[RenewalQueueItem]
+    total: int
+    skip: int
+    limit: int
 
 
 # ---------------------------------------------------------------------------
@@ -149,14 +158,23 @@ async def run_renewal_scheduler() -> dict[str, Any]:
     return {"status": "completed", "stats": stats}
 
 
-@router.get("/queue", response_model=list[RenewalQueueItem])
+@router.get("/queue", response_model=RenewalQueueList)
 async def list_renewal_queue(
     status: str | None = Query(None, description="Filter by queue status"),
     sort_by: str = Query("days_to_expiry", description="Sort field"),
-) -> list[RenewalQueueItem]:
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+) -> RenewalQueueList:
     """Prioritized renewal queue for UW workbench."""
-    items = await get_renewal_queue(status=status, sort_by=sort_by)
-    return [RenewalQueueItem(**i) for i in items]
+    all_items = await get_renewal_queue(status=status, sort_by=sort_by)
+    total = len(all_items)
+    page = all_items[skip : skip + limit]
+    return RenewalQueueList(
+        items=[RenewalQueueItem(**i) for i in page],
+        total=total,
+        skip=skip,
+        limit=limit,
+    )
 
 
 @router.post("/{policy_id}/terms")
@@ -347,4 +365,6 @@ async def list_renewal_records(
     return RenewalRecordList(
         items=[RenewalRecordResponse(**r) for r in items],
         total=total,
+        skip=skip,
+        limit=limit,
     )

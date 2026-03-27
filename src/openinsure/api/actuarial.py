@@ -107,6 +107,13 @@ class ReserveResponse(BaseModel):
     notes: str = ""
 
 
+class ReserveList(BaseModel):
+    items: list[ReserveResponse]
+    total: int
+    skip: int
+    limit: int
+
+
 class TriangleEntryResponse(BaseModel):
     accident_year: int
     development_month: int
@@ -204,11 +211,13 @@ def _build_triangle_entries(
 # ---------------------------------------------------------------------------
 
 
-@router.get("/reserves", response_model=list[ReserveResponse])
+@router.get("/reserves", response_model=ReserveList)
 async def list_reserves(
     lob: str | None = Query(None, description="Filter by line of business"),
     accident_year: int | None = Query(None, description="Filter by accident year"),
-) -> list[ReserveResponse]:
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+) -> ReserveList:
     """Actuarial reserves derived from SUM(total_reserved) on actual claims."""
     claims, _pols, _subs, pol_lob = await _load_lob_mappings()
 
@@ -247,7 +256,9 @@ async def list_reserves(
                 notes=f"{int(data['count'])} claims",
             )
         )
-    return reserves
+    total = len(reserves)
+    page = reserves[skip : skip + limit]
+    return ReserveList(items=page, total=total, skip=skip, limit=limit)
 
 
 @router.post("/reserves", response_model=ReserveResponse, status_code=201)
