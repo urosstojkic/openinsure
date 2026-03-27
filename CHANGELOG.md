@@ -5,6 +5,19 @@ All notable changes to OpenInsure will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## v98 — Foundry Agents Live + Portal E2E Fixes (2026-03-27)
+
+### Fixed
+- **Foundry agents now invoked** — deployed gpt-5.2 model, fixed `agent_reference` key (#118)
+  - Triage returns real AI risk analysis (appetite matching, industry scrutiny, data completeness)
+  - Risk scores are AI-assessed (not flat 5.0)
+- **Dashboard form field mapping** — 13 fields corrected: applicant_name, risk_data.*, cyber_risk_data.* (#117)
+- **Dashboard API auth** — nginx forwards X-API-Key header, removed mock fallbacks (#115)
+- **CodeQL + Dependabot** — 12 CodeQL alerts fixed (stack trace exposure, sensitive logging), 3 npm vulnerabilities patched (#116)
+
+### Added
+- 12 GitHub issues filed from UX review (#119-#130): pagination, confirmation dialogs, toast feedback, status-aware buttons, mobile responsive fixes
+
 ## v96 — Bug Fixes: Auth Enforcement, Product Creation, Claims Validation, Compliance UI (2026-03-27)
 
 ### Fixed
