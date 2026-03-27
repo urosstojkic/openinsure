@@ -20,8 +20,12 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-# Migration directory — resolved relative to the package root
+# Migration directory — resolved relative to the package root.
+# When running from source (local dev), parents[2] is ``src/``.
+# When installed in a container, try ``/app/src/`` as fallback.
 _MIGRATION_DIR = Path(__file__).resolve().parents[2] / "scripts" / "migrations"
+if not _MIGRATION_DIR.is_dir():
+    _MIGRATION_DIR = Path("/app/src/scripts/migrations")
 
 
 async def apply_pending_migrations() -> list[str]:
