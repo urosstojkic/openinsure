@@ -2,15 +2,15 @@
 OpenInsure v95 Comprehensive Playwright E2E Tests
 Tests ALL portal pages with proper role-based access across 11 personas.
 """
+# ruff: noqa: T201
 
 import asyncio
 import os
 import re
 import sys
-import time
 from dataclasses import dataclass, field
 
-from playwright.async_api import async_playwright, Page, expect
+from playwright.async_api import Page, async_playwright
 
 # ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -22,6 +22,7 @@ NAV_TIMEOUT = 15_000
 
 # ── Personas ───────────────────────────────────────────────────────────────────
 
+
 @dataclass
 class Persona:
     name: str
@@ -29,60 +30,147 @@ class Persona:
     landing: str
     nav_routes: list = field(default_factory=list)
 
+
 PERSONAS = {
-    "ceo": Persona("Alexandra Reed", "ceo", "/executive",
-        ["/", "/decisions", "/escalations", "/finance", "/compliance", "/products",
-         "/analytics/underwriting", "/analytics/claims", "/workbench/actuarial", "/executive"]),
-    "cuo": Persona("Sarah Chen", "cuo", "/",
-        ["/", "/submissions", "/policies", "/claims", "/decisions", "/escalations",
-         "/finance", "/compliance", "/knowledge", "/products",
-         "/analytics/underwriting", "/analytics/claims",
-         "/workbench/underwriting", "/workbench/reinsurance", "/workbench/actuarial", "/executive"]),
-    "senior_uw": Persona("James Wright", "senior_uw", "/workbench/underwriting",
-        ["/", "/submissions", "/policies", "/escalations", "/knowledge",
-         "/analytics/underwriting", "/workbench/underwriting"]),
-    "uw_analyst": Persona("Maria Lopez", "uw_analyst", "/workbench/underwriting",
-        ["/", "/submissions", "/policies", "/analytics/underwriting", "/workbench/underwriting"]),
-    "claims_manager": Persona("David Park", "claims_manager", "/workbench/claims",
-        ["/", "/claims", "/escalations", "/policies", "/analytics/claims", "/workbench/claims"]),
-    "adjuster": Persona("Lisa Martinez", "adjuster", "/workbench/claims",
-        ["/", "/claims", "/escalations", "/analytics/claims", "/workbench/claims"]),
-    "cfo": Persona("Michael Torres", "cfo", "/executive",
-        ["/", "/policies", "/escalations", "/finance", "/analytics/underwriting",
-         "/analytics/claims", "/workbench/reinsurance", "/workbench/actuarial", "/executive"]),
-    "compliance": Persona("Anna Kowalski", "compliance", "/workbench/compliance",
-        ["/", "/policies", "/claims", "/decisions", "/compliance", "/knowledge",
-         "/workbench/compliance"]),
-    "product_mgr": Persona("Robert Chen", "product_mgr", "/products",
-        ["/", "/submissions", "/decisions", "/knowledge", "/products",
-         "/analytics/underwriting", "/workbench/actuarial"]),
-    "operations": Persona("Emily Davis", "operations", "/finance",
-        ["/", "/submissions", "/finance"]),
-    "broker": Persona("Thomas Anderson", "broker", "/portal/broker",
-        ["/portal/broker"]),
+    "ceo": Persona(
+        "Alexandra Reed",
+        "ceo",
+        "/executive",
+        [
+            "/",
+            "/decisions",
+            "/escalations",
+            "/finance",
+            "/compliance",
+            "/products",
+            "/analytics/underwriting",
+            "/analytics/claims",
+            "/workbench/actuarial",
+            "/executive",
+        ],
+    ),
+    "cuo": Persona(
+        "Sarah Chen",
+        "cuo",
+        "/",
+        [
+            "/",
+            "/submissions",
+            "/policies",
+            "/claims",
+            "/decisions",
+            "/escalations",
+            "/finance",
+            "/compliance",
+            "/knowledge",
+            "/products",
+            "/analytics/underwriting",
+            "/analytics/claims",
+            "/workbench/underwriting",
+            "/workbench/reinsurance",
+            "/workbench/actuarial",
+            "/executive",
+        ],
+    ),
+    "senior_uw": Persona(
+        "James Wright",
+        "senior_uw",
+        "/workbench/underwriting",
+        [
+            "/",
+            "/submissions",
+            "/policies",
+            "/escalations",
+            "/knowledge",
+            "/analytics/underwriting",
+            "/workbench/underwriting",
+        ],
+    ),
+    "uw_analyst": Persona(
+        "Maria Lopez",
+        "uw_analyst",
+        "/workbench/underwriting",
+        ["/", "/submissions", "/policies", "/analytics/underwriting", "/workbench/underwriting"],
+    ),
+    "claims_manager": Persona(
+        "David Park",
+        "claims_manager",
+        "/workbench/claims",
+        ["/", "/claims", "/escalations", "/policies", "/analytics/claims", "/workbench/claims"],
+    ),
+    "adjuster": Persona(
+        "Lisa Martinez",
+        "adjuster",
+        "/workbench/claims",
+        ["/", "/claims", "/escalations", "/analytics/claims", "/workbench/claims"],
+    ),
+    "cfo": Persona(
+        "Michael Torres",
+        "cfo",
+        "/executive",
+        [
+            "/",
+            "/policies",
+            "/escalations",
+            "/finance",
+            "/analytics/underwriting",
+            "/analytics/claims",
+            "/workbench/reinsurance",
+            "/workbench/actuarial",
+            "/executive",
+        ],
+    ),
+    "compliance": Persona(
+        "Anna Kowalski",
+        "compliance",
+        "/workbench/compliance",
+        ["/", "/policies", "/claims", "/decisions", "/compliance", "/knowledge", "/workbench/compliance"],
+    ),
+    "product_mgr": Persona(
+        "Robert Chen",
+        "product_mgr",
+        "/products",
+        [
+            "/",
+            "/submissions",
+            "/decisions",
+            "/knowledge",
+            "/products",
+            "/analytics/underwriting",
+            "/workbench/actuarial",
+        ],
+    ),
+    "operations": Persona("Emily Davis", "operations", "/finance", ["/", "/submissions", "/finance"]),
+    "broker": Persona("Thomas Anderson", "broker", "/portal/broker", ["/portal/broker"]),
 }
 
 # ── Result Tracking ───────────────────────────────────────────────────────────
 
 results: list[tuple[str, str, str]] = []  # (status, name, detail)
 
+
 def PASS(name: str, detail: str = ""):
     results.append(("PASS", name, detail))
     print(f"  [PASS] {name}{(' — ' + detail) if detail else ''}")
+
 
 def FAIL(name: str, detail: str = ""):
     results.append(("FAIL", name, detail))
     print(f"  [FAIL] {name}{(' — ' + detail) if detail else ''}")
 
+
 def WARN(name: str, detail: str = ""):
     results.append(("WARN", name, detail))
     print(f"  [WARN] {name}{(' — ' + detail) if detail else ''}")
 
+
 # ── Helpers ────────────────────────────────────────────────────────────────────
+
 
 async def screenshot(page: Page, name: str):
     path = os.path.join(SCREENSHOT_DIR, name)
     await page.screenshot(path=path, full_page=True)
+
 
 async def login_as(page: Page, role: str) -> bool:
     """Login as a specific persona. Returns True on success."""
@@ -107,6 +195,7 @@ async def login_as(page: Page, role: str) -> bool:
     body = await page.inner_text("body")
     return len(body) > 500
 
+
 async def navigate_to(page: Page, path: str, wait_for_content: bool = True):
     """Navigate to a path and wait for content to load."""
     url = DASHBOARD_URL + path
@@ -118,14 +207,15 @@ async def navigate_to(page: Page, path: str, wait_for_content: bool = True):
             loading = page.locator('text="Loading"')
             if await loading.count() > 0:
                 await loading.first.wait_for(state="hidden", timeout=15000)
-        except Exception:
+        except Exception:  # noqa: S110
             pass
         try:
             spinner = page.locator('[class*="animate-spin"]')
             if await spinner.count() > 0:
                 await spinner.first.wait_for(state="hidden", timeout=15000)
-        except Exception:
+        except Exception:  # noqa: S110
             pass
+
 
 async def check_no_blank_page(page: Page, context: str) -> bool:
     """Check that the page has meaningful content."""
@@ -140,6 +230,7 @@ async def check_no_blank_page(page: Page, context: str) -> bool:
         return False
     return True
 
+
 async def collect_console_errors(page: Page) -> list[str]:
     """Collect JS console errors."""
     errors = []
@@ -150,6 +241,7 @@ async def collect_console_errors(page: Page) -> list[str]:
 # ══════════════════════════════════════════════════════════════════════════════
 #  PHASE 1 — Login & Role Selection
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 async def phase1_login_and_roles(page: Page):
     print("\n═══ PHASE 1: Login & Role Selection ═══")
@@ -181,7 +273,8 @@ async def phase1_login_and_roles(page: Page):
                     if len(visible_links) >= len(persona.nav_routes) * 0.5:
                         PASS(f"nav:{role_key}", f"{len(visible_links)}/{len(persona.nav_routes)} nav items visible")
                     else:
-                        WARN(f"nav:{role_key}", f"Only {len(visible_links)}/{len(persona.nav_routes)} nav items visible")
+                        msg = f"Only {len(visible_links)}/{len(persona.nav_routes)} nav items visible"
+                        WARN(f"nav:{role_key}", msg)
                 else:
                     WARN(f"nav:{role_key}", "No sidebar found")
             else:
@@ -199,6 +292,7 @@ async def phase1_login_and_roles(page: Page):
 # ══════════════════════════════════════════════════════════════════════════════
 #  PHASE 2 — Core Workflow Tests
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 async def phase2a_submissions(page: Page):
     """Test submission flow as CUO (Sarah Chen)."""
@@ -218,7 +312,9 @@ async def phase2a_submissions(page: Page):
 
     # Try New Submission
     try:
-        new_btn = page.locator('button:has-text("New Submission"), a:has-text("New Submission"), a[href="/submissions/new"]')
+        new_btn = page.locator(
+            'button:has-text("New Submission"), a:has-text("New Submission"), a[href="/submissions/new"]'
+        )
         if await new_btn.count() > 0:
             await new_btn.first.click()
             await page.wait_for_timeout(3000)
@@ -281,7 +377,7 @@ async def phase2c_policies(page: Page):
     has_content = await check_no_blank_page(page, "policies")
     if has_content:
         # Check for policy count
-        numbers = re.findall(r'\b\d{2,4}\b', body)
+        numbers = re.findall(r"\b\d{2,4}\b", body)
         if numbers:
             PASS("policies-list", f"Policies page loads, found numbers: {numbers[:5]}")
         else:
@@ -305,7 +401,9 @@ async def phase2d_claims(page: Page):
 
         # Test filters
         try:
-            filters = page.locator('button:has-text("Open"), button:has-text("Closed"), button:has-text("All"), select, [role="tab"]')
+            filters = page.locator(
+                'button:has-text("Open"), button:has-text("Closed"), button:has-text("All"), select, [role="tab"]'
+            )
             if await filters.count() > 0:
                 PASS("claims-filters", f"Found {await filters.count()} filter controls")
             else:
@@ -354,10 +452,14 @@ async def phase2e_products(page: Page):
                 await screenshot(page, "product-detail.png")
 
                 # Check tabs
-                for tab_name, ss_name in [("Coverages", "product-coverages.png"),
-                                           ("Rating", "product-rating.png"),
-                                           ("Performance", "product-performance.png")]:
-                    tab = page.locator(f'button:has-text("{tab_name}"), [role="tab"]:has-text("{tab_name}"), a:has-text("{tab_name}")')
+                for tab_name, ss_name in [
+                    ("Coverages", "product-coverages.png"),
+                    ("Rating", "product-rating.png"),
+                    ("Performance", "product-performance.png"),
+                ]:
+                    tab = page.locator(
+                        f'button:has-text("{tab_name}"), [role="tab"]:has-text("{tab_name}"), a:has-text("{tab_name}")'
+                    )
                     if await tab.count() > 0:
                         await tab.first.click()
                         await page.wait_for_timeout(2000)
@@ -392,12 +494,12 @@ async def phase2f_executive(page: Page):
         if passed >= 3:
             PASS("executive-dashboard", f"Executive Dashboard renders ({passed}/4 sections found)")
         elif passed >= 1:
-            WARN("executive-dashboard", f"Only {passed}/4 sections found: {[k for k,v in checks.items() if v]}")
+            WARN("executive-dashboard", f"Only {passed}/4 sections found: {[k for k, v in checks.items() if v]}")
         else:
             FAIL("executive-dashboard", "Executive Dashboard has no expected content")
 
         # Check for GWP number ($24M+)
-        gwp_match = re.search(r'\$[\d,.]+[MBK]?', body)
+        gwp_match = re.search(r"\$[\d,.]+[MBK]?", body)
         if gwp_match:
             PASS("executive-gwp-figure", f"GWP figure found: {gwp_match.group()}")
         else:
@@ -421,7 +523,9 @@ async def phase2g_knowledge(page: Page):
             WARN("knowledge-base", "Knowledge Base loaded but expected keywords missing")
 
         # Check for tabs
-        tabs = page.locator('[role="tab"], button:has-text("Guidelines"), button:has-text("Products"), button:has-text("Rating")')
+        tabs = page.locator(
+            '[role="tab"], button:has-text("Guidelines"), button:has-text("Products"), button:has-text("Rating")'
+        )
         if await tabs.count() > 0:
             PASS("knowledge-tabs", f"Found {await tabs.count()} tabs/sections")
             # Click through first couple of tabs
@@ -452,7 +556,7 @@ async def phase2h_compliance(page: Page):
         if passed >= 2:
             PASS("compliance-workbench", f"Compliance Workbench renders ({passed}/3 sections)")
         elif passed >= 1:
-            WARN("compliance-workbench", f"Only {passed}/3 sections: {[k for k,v in checks.items() if v]}")
+            WARN("compliance-workbench", f"Only {passed}/3 sections: {[k for k, v in checks.items() if v]}")
         else:
             FAIL("compliance-workbench", "Compliance Workbench missing expected sections")
 
@@ -490,7 +594,7 @@ async def phase2i_billing(page: Page):
             FAIL("billing-finance", "Finance Dashboard missing expected content")
 
         # Check for non-zero amounts
-        amounts = re.findall(r'\$[\d,.]+', body)
+        amounts = re.findall(r"\$[\d,.]+", body)
         if amounts:
             PASS("billing-amounts", f"Found {len(amounts)} dollar amounts, e.g. {amounts[0]}")
         else:
@@ -584,6 +688,7 @@ async def phase2l_broker(page: Page):
 #  PHASE 2 — Additional analytics/workbench pages
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 async def phase2_analytics(page: Page):
     """Test analytics pages."""
     print("\n─── 2m: Analytics Pages ───")
@@ -637,6 +742,7 @@ async def phase2_analytics(page: Page):
 # ══════════════════════════════════════════════════════════════════════════════
 #  PHASE 3 — Edge Cases & Negative Tests
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 async def phase3a_blank_page_detection(page: Page):
     """Check all major pages for blank page issues."""
@@ -710,7 +816,7 @@ async def phase3b_navigation_edge_cases(page: Page):
     body = await page.inner_text("body")
     url = page.url
     if "404" in body or "/nonexistent" not in url or len(body.strip()) > 20:
-        PASS("invalid-route", f"Invalid route handled (redirected or 404)")
+        PASS("invalid-route", "Invalid route handled (redirected or 404)")
     else:
         WARN("invalid-route", "Invalid route response unclear")
     await screenshot(page, "404-page.png")
@@ -780,12 +886,12 @@ async def phase3d_data_integrity(page: Page):
     # Get GWP from executive
     await navigate_to(page, "/executive")
     exec_body = await page.inner_text("body")
-    exec_amounts = re.findall(r'\$[\d,.]+[MBK]?', exec_body)
+    exec_amounts = re.findall(r"\$[\d,.]+[MBK]?", exec_body)
 
     # Get finance data
     await navigate_to(page, "/finance")
     fin_body = await page.inner_text("body")
-    fin_amounts = re.findall(r'\$[\d,.]+[MBK]?', fin_body)
+    fin_amounts = re.findall(r"\$[\d,.]+[MBK]?", fin_body)
 
     if exec_amounts and fin_amounts:
         PASS("data-integrity", f"Executive has {len(exec_amounts)} amounts, Finance has {len(fin_amounts)} amounts")
@@ -799,14 +905,15 @@ async def phase3d_data_integrity(page: Page):
 #  MAIN — Run all phases
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 async def main():
     os.makedirs(SCREENSHOT_DIR, exist_ok=True)
 
-    print(f"╔══════════════════════════════════════════════════════════════╗")
-    print(f"║  OpenInsure v95 Comprehensive E2E Test Suite                ║")
+    print("╔══════════════════════════════════════════════════════════════╗")
+    print("║  OpenInsure v95 Comprehensive E2E Test Suite                ║")
     print(f"║  Dashboard: {DASHBOARD_URL[:50]}...  ║")
     print(f"║  Screenshots: {SCREENSHOT_DIR:<46s}║")
-    print(f"╚══════════════════════════════════════════════════════════════╝")
+    print("╚══════════════════════════════════════════════════════════════╝")
 
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True)
@@ -848,6 +955,7 @@ async def main():
         except Exception as e:
             FAIL("test-suite", f"Unhandled exception: {e}")
             import traceback
+
             traceback.print_exc()
 
         finally:
@@ -873,20 +981,20 @@ async def main():
     warn_count = sum(1 for s, _, _ in results if s == "WARN")
 
     print(f"\n  {'Status':<8} {'Count':>5}")
-    print(f"  {'─'*8} {'─'*5}")
+    print(f"  {'─' * 8} {'─' * 5}")
     print(f"  PASS   {pass_count:>5}")
     print(f"  FAIL   {fail_count:>5}")
     print(f"  WARN   {warn_count:>5}")
     print(f"  TOTAL  {len(results):>5}")
 
     if fail_count > 0:
-        print(f"\n  ❌ FAILURES:")
+        print("\n  ❌ FAILURES:")
         for s, name, detail in results:
             if s == "FAIL":
                 print(f"    • {name}: {detail}")
 
     if warn_count > 0:
-        print(f"\n  ⚠️  WARNINGS:")
+        print("\n  ⚠️  WARNINGS:")
         for s, name, detail in results:
             if s == "WARN":
                 print(f"    • {name}: {detail}")

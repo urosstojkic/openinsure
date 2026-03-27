@@ -18,7 +18,7 @@ def _make_rate_limited_app(limit: str = "3/minute") -> FastAPI:
 
     @app.get("/limited")
     @test_limiter.limit(limit)
-    async def limited_endpoint(request: Request) -> dict[str, str]:
+    async def limited_endpoint(request: Request) -> dict[str, str]:  # noqa: ARG001
         return {"ok": "true"}
 
     @app.get("/unlimited")
