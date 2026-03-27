@@ -6,10 +6,8 @@ Uses in-memory storage as a placeholder until the database adapter is wired in.
 
 from __future__ import annotations
 
-import json
 import uuid
-from datetime import UTC, datetime, timedelta
-from decimal import Decimal
+from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any
 
@@ -20,7 +18,6 @@ from pydantic import BaseModel, Field
 from openinsure.infrastructure.factory import get_blob_storage, get_submission_repository
 from openinsure.rate_limit import limiter
 from openinsure.rbac.auth import CurrentUser, get_current_user
-from openinsure.rbac.authority import AuthorityDecision, AuthorityEngine
 
 router = APIRouter()
 _logger = structlog.get_logger(__name__)
@@ -29,106 +26,6 @@ _logger = structlog.get_logger(__name__)
 # Repository — resolved by factory (in-memory or SQL depending on config)
 # ---------------------------------------------------------------------------
 _repo = get_submission_repository()
-
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-
-def _build_policy_data(
-    submission: dict[str, Any],
-    premium: float,
-    *,
-    policy_id: str | None = None,
-    policy_number: str | None = None,
-) -> dict[str, Any]:
-    """Build a complete policy record from a submission.
-
-    Ensures all business-required fields are populated:
-    policyholder_name, coverages, effective/expiration dates, premium.
-    """
-    now = _now()
-    pid = policy_id or str(uuid.uuid4())
-    pnum = policy_number or f"POL-{datetime.now(UTC).strftime('%Y')}-{uuid.uuid4().hex[:6].upper()}"
-    applicant = submission.get("applicant_name", "") or submission.get("insured_name", "Unknown Insured")
-    lob = submission.get("line_of_business", "cyber")
-
-    # Build default cyber coverages from the submission
-    cyber_data = submission.get("cyber_risk_data", {})
-    if isinstance(cyber_data, str):
-        try:
-            cyber_data = json.loads(cyber_data)
-        except (json.JSONDecodeError, TypeError):
-            cyber_data = {}
-
-    limit = float(cyber_data.get("requested_limit", 1000000) if cyber_data else 1000000)
-    deductible = float(cyber_data.get("requested_deductible", 10000) if cyber_data else 10000)
-
-    coverages = [
-        {
-            "coverage_code": "BREACH-RESP",
-            "coverage_name": "First-Party Breach Response",
-            "limit": limit,
-            "deductible": deductible,
-            "premium": round(premium * 0.30, 2),
-        },
-        {
-            "coverage_code": "THIRD-PARTY",
-            "coverage_name": "Third-Party Liability",
-            "limit": limit,
-            "deductible": deductible,
-            "premium": round(premium * 0.30, 2),
-        },
-        {
-            "coverage_code": "REG-DEFENSE",
-            "coverage_name": "Regulatory Defense & Penalties",
-            "limit": limit * 0.5,
-            "deductible": deductible,
-            "premium": round(premium * 0.15, 2),
-        },
-        {
-            "coverage_code": "BUS-INTERRUPT",
-            "coverage_name": "Business Interruption",
-            "limit": limit * 0.5,
-            "deductible": deductible,
-            "premium": round(premium * 0.15, 2),
-        },
-        {
-            "coverage_code": "RANSOMWARE",
-            "coverage_name": "Ransomware & Extortion",
-            "limit": limit * 0.5,
-            "deductible": deductible,
-            "premium": round(premium * 0.10, 2),
-        },
-    ]
-
-    return {
-        "id": pid,
-        "policy_number": pnum,
-        "policyholder_name": applicant,
-        "status": "active",
-        "product_id": submission.get("product_id", f"{lob}-smb"),
-        "submission_id": submission.get("id", ""),
-        "insured_name": applicant,
-        "effective_date": str(submission.get("requested_effective_date") or now[:10]),
-        "expiration_date": str(
-            submission.get("requested_expiration_date")
-            or (datetime.now(UTC) + timedelta(days=365)).strftime("%Y-%m-%d")
-        ),
-        "premium": premium,
-        "total_premium": premium,
-        "written_premium": premium,
-        "earned_premium": 0,
-        "unearned_premium": premium,
-        "coverages": coverages,
-        "endorsements": [],
-        "metadata": {"lob": lob, "source": "workflow"},
-        "documents": [],
-        "bound_at": now,
-        "created_at": now,
-        "updated_at": now,
-    }
 
 
 # ---------------------------------------------------------------------------
@@ -465,155 +362,22 @@ async def update_submission(submission_id: str, body: SubmissionUpdate) -> Submi
 async def triage_submission(request: Request, submission_id: str) -> TriageResult:
     """Trigger AI-powered triage on a submission.
 
-    Calls the Foundry triage agent to assess risk appetite, assign a risk
-    score, and recommend next steps.  Falls back to deterministic local
-    logic when Foundry is unavailable.
-
     Advances the submission from **received** → **underwriting**.
     """
-    from openinsure.agents.foundry_client import get_foundry_client
-
     record = await _get_submission(submission_id)
     if record["status"] not in {SubmissionStatus.RECEIVED, SubmissionStatus.TRIAGING}:
         raise HTTPException(status_code=409, detail="Submission is not in a triageable state")
 
-    foundry = get_foundry_client()
+    from openinsure.services.submission_service import SubmissionService
 
-    if foundry.is_available:
-        from openinsure.agents.prompts import build_triage_prompt, get_triage_context
-
-        guidelines = await get_triage_context(record)
-        triage_prompt = build_triage_prompt(record, guidelines=guidelines or None)
-        result = await foundry.invoke(
-            "openinsure-submission",
-            triage_prompt,
-        )
-        resp = result.get("response", {})
-        if isinstance(resp, dict) and result.get("source") == "foundry":
-            record["status"] = SubmissionStatus.UNDERWRITING
-            record["triage_result"] = resp
-            record["updated_at"] = _now()
-            await _repo.update(
-                submission_id,
-                {"status": "underwriting", "triage_result": json.dumps(resp), "updated_at": record["updated_at"]},
-            )
-
-            # Record triage decision
-            try:
-                from openinsure.infrastructure.factory import get_compliance_repository
-
-                compliance_repo = get_compliance_repository()
-                await compliance_repo.store_decision(
-                    {
-                        "decision_id": str(uuid.uuid4()),
-                        "agent_id": "openinsure-submission",
-                        "decision_type": "triage",
-                        "entity_id": submission_id,
-                        "entity_type": "submission",
-                        "confidence": float(resp.get("confidence", 0.85)),
-                        "input_summary": {
-                            "submission_id": submission_id,
-                            "prompt_length": len(triage_prompt),
-                        },
-                        "output": resp,
-                        "reasoning": str(resp.get("reasoning", "")),
-                        "model_used": "gpt-5.1",
-                        "human_oversight": ("required" if float(resp.get("confidence", 0.85)) < 0.7 else "recommended"),
-                        "created_at": _now(),
-                    }
-                )
-            except Exception:
-                _logger.warning(
-                    "submissions.decision_recording_failed",
-                    decision_type="triage",
-                    submission_id=submission_id,
-                    exc_info=True,
-                )
-
-            from openinsure.services.event_publisher import publish_domain_event
-
-            await publish_domain_event(
-                "submission.triaged",
-                f"/submissions/{submission_id}",
-                {"submission_id": submission_id},
-            )
-            appetite = str(resp.get("appetite_match", "yes")).lower()
-            recommendation = "decline" if appetite in ("no", "decline") else "proceed_to_quote"
-            flags: list[str] = []
-            if resp.get("reasoning"):
-                flags.append(str(resp["reasoning"]))
-            return TriageResult(
-                submission_id=submission_id,
-                status=SubmissionStatus.UNDERWRITING,
-                risk_score=float(resp.get("risk_score", 5)),
-                recommendation=recommendation,
-                flags=flags,
-            )
-
-    # Local fallback — use knowledge store for rule-based triage
-    from openinsure.infrastructure.knowledge_store import get_knowledge_store as get_mem_store
-
-    mem = get_mem_store()
-    lob = record.get("line_of_business", "cyber")
-    gl = mem.get_guidelines(lob)
-    risk_data = record.get("risk_data", {})
-    cyber_data = record.get("cyber_risk_data", {})
-    if isinstance(risk_data, str):
-        try:
-            risk_data = json.loads(risk_data)
-        except (json.JSONDecodeError, TypeError):
-            risk_data = {}
-    if isinstance(cyber_data, str):
-        try:
-            cyber_data = json.loads(cyber_data)
-        except (json.JSONDecodeError, TypeError):
-            cyber_data = {}
-    merged_risk = {**risk_data, **cyber_data}
-
-    # Rule-based appetite check using knowledge store guidelines
-    fallback_score = 5
-    fallback_recommendation = "proceed_to_quote"
-    fallback_flags: list[str] = ["source:local_fallback"]
-    if gl:
-        appetite = gl.get("appetite", {})
-        revenue = merged_risk.get("annual_revenue", 0) or 0
-        rev_range = appetite.get("revenue_range", {})
-        if revenue and (revenue < rev_range.get("min", 0) or revenue > rev_range.get("max", float("inf"))):
-            fallback_score = 8
-            fallback_flags.append("revenue_outside_appetite")
-            fallback_recommendation = "refer"
-        security_score = merged_risk.get("security_maturity_score", 0) or 0
-        min_security = appetite.get("security_requirements", {}).get("minimum_score", 0)
-        if security_score and security_score < min_security:
-            fallback_score = max(fallback_score, 7)
-            fallback_flags.append("security_below_minimum")
-            fallback_recommendation = "refer"
-        prior_incidents = merged_risk.get("prior_incidents", 0) or 0
-        if prior_incidents > appetite.get("max_prior_incidents", 3):
-            fallback_score = 9
-            fallback_flags.append("incidents_exceed_maximum")
-            fallback_recommendation = "decline"
-
-    record["status"] = SubmissionStatus.UNDERWRITING
-    record["updated_at"] = _now()
-    fallback_triage = json.dumps(
-        {
-            "risk_score": fallback_score,
-            "recommendation": fallback_recommendation,
-            "source": "local_rule_based",
-            "flags": fallback_flags,
-        }
-    )
-    await _repo.update(
-        submission_id, {"status": "underwriting", "triage_result": fallback_triage, "updated_at": record["updated_at"]}
-    )
-
+    svc = SubmissionService()
+    result = await svc.run_triage(submission_id, record)
     return TriageResult(
         submission_id=submission_id,
-        status=SubmissionStatus.UNDERWRITING,
-        risk_score=fallback_score,
-        recommendation=fallback_recommendation,
-        flags=fallback_flags,
+        status=SubmissionStatus(result["status"]),
+        risk_score=result["risk_score"],
+        recommendation=result["recommendation"],
+        flags=result["flags"],
     )
 
 
@@ -622,492 +386,76 @@ async def triage_submission(request: Request, submission_id: str) -> TriageResul
 async def generate_quote(
     request: Request, submission_id: str, user: CurrentUser = Depends(get_current_user)
 ) -> QuoteResponse:
-    """Generate a quote for the submission.
-
-    Calls the Foundry underwriting agent when available, falling back to
-    deterministic local logic.
-    """
-    from openinsure.agents.foundry_client import get_foundry_client
-
+    """Generate a quote for the submission."""
     record = await _get_submission(submission_id)
-    if record["status"] not in {SubmissionStatus.UNDERWRITING, SubmissionStatus.UNDERWRITING}:
+    if record["status"] not in {SubmissionStatus.UNDERWRITING}:
         raise HTTPException(status_code=409, detail="Submission must be triaged before quoting")
 
-    foundry = get_foundry_client()
+    from openinsure.services.submission_service import SubmissionService
 
-    if foundry.is_available:
-        from openinsure.agents.prompts import (
-            _get_rating_breakdown,
-            build_underwriting_prompt,
-            get_triage_context,
-        )
-
-        triage_result = record.get("triage_result")
-        if isinstance(triage_result, str):
-            try:
-                triage_result = json.loads(triage_result)
-            except (json.JSONDecodeError, TypeError):
-                triage_result = None
-        guidelines = await get_triage_context(record)
-        rating_breakdown = _get_rating_breakdown(record)
-        underwriting_prompt = build_underwriting_prompt(
-            record,
-            triage_result=triage_result,
-            guidelines=guidelines or None,
-            rating_breakdown=rating_breakdown,
-        )
-        result = await foundry.invoke(
-            "openinsure-underwriting",
-            underwriting_prompt,
-        )
-        resp = result.get("response", {})
-        if isinstance(resp, dict) and "recommended_premium" in resp:
-            raw_premium = resp["recommended_premium"]
-            premium = float(raw_premium) if raw_premium is not None else 5000.0
-            premium = premium or 5000.0  # fallback if agent returns 0
-            record["status"] = SubmissionStatus.QUOTED
-            record["quoted_premium"] = premium
-            record["updated_at"] = _now()
-            await _repo.update(
-                submission_id, {"status": "quoted", "quoted_premium": premium, "updated_at": record["updated_at"]}
-            )
-
-            # Record underwriting/quote decision
-            try:
-                from openinsure.infrastructure.factory import get_compliance_repository
-
-                compliance_repo = get_compliance_repository()
-                await compliance_repo.store_decision(
-                    {
-                        "decision_id": str(uuid.uuid4()),
-                        "agent_id": "openinsure-underwriting",
-                        "decision_type": "underwriting",
-                        "entity_id": submission_id,
-                        "entity_type": "submission",
-                        "confidence": float(resp.get("confidence", 0.85)),
-                        "input_summary": {
-                            "submission_id": submission_id,
-                            "prompt_length": len(underwriting_prompt),
-                        },
-                        "output": resp,
-                        "reasoning": str(resp.get("reasoning", "")),
-                        "model_used": "gpt-5.1",
-                        "human_oversight": ("required" if float(resp.get("confidence", 0.85)) < 0.7 else "recommended"),
-                        "created_at": _now(),
-                    }
-                )
-            except Exception:
-                _logger.warning(
-                    "submissions.decision_recording_failed",
-                    decision_type="quote",
-                    submission_id=submission_id,
-                    exc_info=True,
-                )
-
-            from openinsure.services.event_publisher import publish_domain_event
-
-            # Authority check
-            engine = AuthorityEngine()
-            user_role = user.roles[0] if user.roles else "openinsure-uw-analyst"
-            auth_result = engine.check_quote_authority(Decimal(str(premium)), user_role)
-            if auth_result.decision == AuthorityDecision.ESCALATE:
-                from starlette.responses import JSONResponse
-
-                from openinsure.services.escalation import escalate
-
-                esc = await escalate(
-                    action="quote",
-                    entity_type="submission",
-                    entity_id=submission_id,
-                    requested_by=user.display_name,
-                    requested_role=user_role,
-                    amount=float(premium),
-                    authority_result={
-                        "required_role": auth_result.required_role,
-                        "escalation_chain": auth_result.escalation_chain,
-                        "reason": auth_result.reason,
-                    },
-                )
-                return JSONResponse(  # type: ignore[return-value]
-                    status_code=202,
-                    content={
-                        "status": "escalated",
-                        "escalation_id": esc["id"],
-                        "reason": auth_result.reason,
-                        "required_role": auth_result.required_role,
-                        "message": f"Action requires approval from {auth_result.required_role}",
-                    },
-                )
-            await publish_domain_event(
-                "authority.checked",
-                f"/submissions/{submission_id}",
-                {
-                    "action": "quote",
-                    "amount": str(premium),
-                    "user_role": user_role,
-                    "decision": auth_result.decision,
-                    "reason": auth_result.reason,
-                },
-            )
-
-            await publish_domain_event(
-                "submission.quoted",
-                f"/submissions/{submission_id}",
-                {"submission_id": submission_id, "premium": premium},
-            )
-            return QuoteResponse(
-                submission_id=submission_id,
-                quote_id=str(uuid.uuid4()),
-                premium=premium,
-                currency="USD",
-                coverages=[{"name": "Cyber Liability", "limit": 1_000_000, "deductible": 10_000}],
-                valid_until=_now(),
-                authority={"decision": auth_result.decision, "reason": auth_result.reason},
-                rating_breakdown=rating_breakdown,
-            )
-
-    # Local fallback — use deterministic rating engine for risk-based pricing
-    premium = 5000.00
-    rating_breakdown = None
-    try:
-        from openinsure.agents.prompts import _get_rating_breakdown
-
-        rating_breakdown = _get_rating_breakdown(record)
-        if rating_breakdown and rating_breakdown.get("final_premium"):
-            premium = float(rating_breakdown["final_premium"])
-            _logger.info(
-                "submissions.fallback_quote_rated",
-                submission_id=submission_id,
-                premium=premium,
-                source="rating_engine",
-            )
-    except Exception:
-        _logger.debug("submissions.rating_engine_fallback_failed", exc_info=True)
-
-    record["status"] = SubmissionStatus.QUOTED
-    record["updated_at"] = _now()
-    await _repo.update(
-        submission_id, {"status": "quoted", "quoted_premium": premium, "updated_at": record["updated_at"]}
-    )
-    valid_until = datetime(2099, 12, 31, tzinfo=UTC).isoformat()
-
-    # Authority check
-    from openinsure.services.event_publisher import publish_domain_event
-
-    engine = AuthorityEngine()
     user_role = user.roles[0] if user.roles else "openinsure-uw-analyst"
-    auth_result = engine.check_quote_authority(Decimal(str(premium)), user_role)
-    if auth_result.decision == AuthorityDecision.ESCALATE:
+    svc = SubmissionService()
+    result = await svc.generate_quote(submission_id, record, user_role, user.display_name)
+
+    if result.get("escalated"):
         from starlette.responses import JSONResponse
 
-        from openinsure.services.escalation import escalate
-
-        esc = await escalate(
-            action="quote",
-            entity_type="submission",
-            entity_id=submission_id,
-            requested_by=user.display_name,
-            requested_role=user_role,
-            amount=float(premium),
-            authority_result={
-                "required_role": auth_result.required_role,
-                "escalation_chain": auth_result.escalation_chain,
-                "reason": auth_result.reason,
-            },
-        )
         return JSONResponse(  # type: ignore[return-value]
             status_code=202,
             content={
                 "status": "escalated",
-                "escalation_id": esc["id"],
-                "reason": auth_result.reason,
-                "required_role": auth_result.required_role,
-                "message": f"Action requires approval from {auth_result.required_role}",
+                "escalation_id": result["escalation_id"],
+                "reason": result["reason"],
+                "required_role": result["required_role"],
+                "message": f"Action requires approval from {result['required_role']}",
             },
         )
-    await publish_domain_event(
-        "authority.checked",
-        f"/submissions/{submission_id}",
-        {
-            "action": "quote",
-            "amount": str(premium),
-            "user_role": user_role,
-            "decision": auth_result.decision,
-            "reason": auth_result.reason,
-        },
-    )
 
     return QuoteResponse(
         submission_id=submission_id,
         quote_id=str(uuid.uuid4()),
-        premium=premium,
+        premium=result["premium"],
         currency="USD",
-        coverages=[{"name": "Cyber Liability", "limit": 1_000_000, "deductible": 10_000}],
-        valid_until=valid_until,
-        authority={"decision": auth_result.decision, "reason": auth_result.reason},
-        rating_breakdown=rating_breakdown,
+        coverages=result["coverages"],
+        valid_until=result["valid_until"],
+        authority=result.get("authority"),
+        rating_breakdown=result.get("rating_breakdown"),
     )
 
 
 @router.post("/{submission_id}/bind", response_model=BindResponse)
 async def bind_submission(submission_id: str, user: CurrentUser = Depends(get_current_user)) -> BindResponse:
     """Bind the submission, creating a real policy and billing account."""
-    from openinsure.infrastructure.factory import get_policy_repository
-    from openinsure.services.event_publisher import publish_domain_event
-
     record = await _get_submission(submission_id)
     if record["status"] != SubmissionStatus.QUOTED:
         raise HTTPException(status_code=409, detail="Submission must be quoted before binding")
 
-    now = _now()
-    policy_id = str(uuid.uuid4())
-    policy_number = f"POL-{datetime.now(UTC).strftime('%Y')}-{uuid.uuid4().hex[:6].upper()}"
-    premium = record.get("quoted_premium", 0) or record.get("total_premium", 10000)
+    from openinsure.services.submission_service import SubmissionService
 
-    # Authority check before binding
-    engine = AuthorityEngine()
     user_role = user.roles[0] if user.roles else "openinsure-uw-analyst"
-    cyber_data = record.get("risk_data", {})
-    if isinstance(cyber_data, str):
-        try:
-            cyber_data = json.loads(cyber_data)
-        except (json.JSONDecodeError, TypeError):
-            cyber_data = {}
-    limit = Decimal(str(cyber_data.get("requested_limit", 1000000) if cyber_data else 1000000))
-    auth_result = engine.check_bind_authority(Decimal(str(premium)), user_role, limit)
-    if auth_result.decision == AuthorityDecision.ESCALATE:
+    svc = SubmissionService()
+    result = await svc.bind(submission_id, record, user_role, user.display_name)
+
+    if result.get("escalated"):
         from starlette.responses import JSONResponse
 
-        from openinsure.services.escalation import escalate
-
-        esc = await escalate(
-            action="bind",
-            entity_type="submission",
-            entity_id=submission_id,
-            requested_by=user.display_name,
-            requested_role=user_role,
-            amount=float(premium),
-            authority_result={
-                "required_role": auth_result.required_role,
-                "escalation_chain": auth_result.escalation_chain,
-                "reason": auth_result.reason,
-            },
-        )
         return JSONResponse(  # type: ignore[return-value]
             status_code=202,
             content={
                 "status": "escalated",
-                "escalation_id": esc["id"],
-                "reason": auth_result.reason,
-                "required_role": auth_result.required_role,
-                "message": f"Action requires approval from {auth_result.required_role}",
+                "escalation_id": result["escalation_id"],
+                "reason": result["reason"],
+                "required_role": result["required_role"],
+                "message": f"Action requires approval from {result['required_role']}",
             },
         )
-    # Create the actual policy record
-    policy_repo = get_policy_repository()
-    policy_data = _build_policy_data(record, premium, policy_id=policy_id, policy_number=policy_number)
-
-    # Invoke Foundry policy agent for issuance review
-    from openinsure.agents.foundry_client import get_foundry_client
-
-    foundry = get_foundry_client()
-    if foundry.is_available:
-        from openinsure.agents.prompts import build_policy_review_prompt
-
-        uw_result = record.get("triage_result")
-        if isinstance(uw_result, str):
-            try:
-                uw_result = json.loads(uw_result)
-            except (json.JSONDecodeError, TypeError):
-                uw_result = None
-        policy_review_prompt = build_policy_review_prompt(record, underwriting_result=uw_result)
-        policy_review = await foundry.invoke(
-            "openinsure-policy",
-            policy_review_prompt,
-        )
-        from openinsure.services.event_publisher import publish_domain_event as _pub
-
-        await _pub(
-            "policy.ai_review",
-            f"/policies/{policy_id}",
-            {
-                "policy_id": policy_id,
-                "source": policy_review.get("source", "unknown"),
-                "recommendation": policy_review.get("response", {}).get("recommendation")
-                if isinstance(policy_review.get("response"), dict)
-                else None,
-            },
-        )
-
-        # Record policy review decision
-        try:
-            from openinsure.infrastructure.factory import get_compliance_repository
-
-            compliance_repo = get_compliance_repository()
-            pr_resp = policy_review.get("response", {})
-            pr_confidence = float(pr_resp.get("confidence", 0.9)) if isinstance(pr_resp, dict) else 0.9
-            await compliance_repo.store_decision(
-                {
-                    "decision_id": str(uuid.uuid4()),
-                    "agent_id": "openinsure-policy",
-                    "decision_type": "policy_review",
-                    "entity_id": submission_id,
-                    "entity_type": "submission",
-                    "confidence": pr_confidence,
-                    "input_summary": {
-                        "submission_id": submission_id,
-                        "policy_number": policy_number,
-                        "prompt_length": len(policy_review_prompt),
-                    },
-                    "output": pr_resp if isinstance(pr_resp, dict) else {"raw": str(pr_resp)[:500]},
-                    "reasoning": str(pr_resp.get("notes", "")) if isinstance(pr_resp, dict) else "",
-                    "model_used": "gpt-5.1",
-                    "human_oversight": "required" if pr_confidence < 0.7 else "recommended",
-                    "created_at": _now(),
-                }
-            )
-        except Exception:
-            _logger.warning(
-                "submissions.decision_recording_failed",
-                decision_type="bind",
-                submission_id=submission_id,
-                exc_info=True,
-            )
-
-    await policy_repo.create(policy_data)
-
-    # Auto-generate declaration page via Foundry document agent
-    if foundry.is_available:
-        try:
-            from openinsure.agents.prompts import build_document_prompt
-
-            doc_prompt = build_document_prompt(policy_data, record, "declaration")
-            doc_result = await foundry.invoke("openinsure-document", doc_prompt)
-            await _pub(
-                "policy.document_generated",
-                f"/policies/{policy_id}",
-                {
-                    "policy_id": policy_id,
-                    "document_type": "declaration",
-                    "source": doc_result.get("source", "unknown"),
-                },
-            )
-            _logger.info(
-                "submissions.bind_document_generated",
-                policy_id=policy_id,
-                source=doc_result.get("source", "unknown"),
-            )
-        except Exception:
-            _logger.warning(
-                "submissions.bind_document_generation_failed",
-                policy_id=policy_id,
-                exc_info=True,
-            )
-
-    # Create billing account with auto-invoicing (#77)
-    from openinsure.api.billing import create_billing_account_on_bind
-
-    billing_plan = record.get("billing_plan", "full_pay")
-    installments = {"full_pay": 1, "quarterly": 4, "monthly": 12}.get(billing_plan, 1)
-    applicant = record.get("applicant_name", "") or record.get("insured_name", "Unknown")
-    await create_billing_account_on_bind(
-        policy_id=policy_id,
-        policyholder_name=applicant,
-        total_premium=premium,
-        installments=installments,
-        effective_date=policy_data.get("effective_date"),
-    )
-
-    # Auto-calculate cessions based on active treaties
-    try:
-        from openinsure.domain.reinsurance import ReinsuranceContract
-        from openinsure.infrastructure.factory import get_cession_repository, get_reinsurance_repository
-        from openinsure.services.reinsurance import calculate_cession
-
-        treaty_repo = get_reinsurance_repository()
-        cession_repo = get_cession_repository()
-        raw_treaties = await treaty_repo.list_all(filters={"status": "active"})
-
-        if raw_treaties:
-            treaties = []
-            for t in raw_treaties:
-                try:
-                    treaties.append(
-                        ReinsuranceContract(
-                            id=t["id"],
-                            treaty_number=t["treaty_number"],
-                            treaty_type=t["treaty_type"],
-                            reinsurer_name=t["reinsurer_name"],
-                            status=t.get("status", "active"),
-                            effective_date=t["effective_date"],
-                            expiration_date=t["expiration_date"],
-                            lines_of_business=t.get("lines_of_business", []),
-                            retention=t.get("retention", 0),
-                            limit=t.get("limit", 0),
-                            rate=t.get("rate", 0),
-                            capacity_total=t.get("capacity_total", 0),
-                            capacity_used=t.get("capacity_used", 0),
-                        )
-                    )
-                except Exception:  # noqa: S112
-                    continue
-
-            cessions = calculate_cession(policy_data, treaties)
-            for cession in cessions:
-                cession_record = {
-                    "id": str(uuid.uuid4()),
-                    "treaty_id": str(cession.treaty_id),
-                    "policy_id": policy_id,
-                    "policy_number": policy_number,
-                    "ceded_premium": float(cession.ceded_premium),
-                    "ceded_limit": float(cession.ceded_limit),
-                    "cession_date": _now()[:10],
-                    "created_at": _now(),
-                }
-                await cession_repo.create(cession_record)
-
-                # Update treaty capacity
-                for raw_t in raw_treaties:
-                    if str(raw_t.get("id")) == str(cession.treaty_id):
-                        raw_t["capacity_used"] = raw_t.get("capacity_used", 0) + float(cession.ceded_limit)
-                        break
-    except Exception:
-        _logger.warning("submissions.auto_cession_failed", submission_id=submission_id, exc_info=True)
-
-    # Update submission status
-    record["status"] = SubmissionStatus.BOUND
-    record["updated_at"] = now
-    await _repo.update(submission_id, {"status": "bound", "updated_at": now})
-
-    # Publish domain events
-    await publish_domain_event(
-        "authority.checked",
-        f"/submissions/{submission_id}",
-        {
-            "action": "bind",
-            "amount": str(premium),
-            "user_role": user_role,
-            "decision": auth_result.decision,
-            "reason": auth_result.reason,
-        },
-    )
-    await publish_domain_event(
-        event_type="policy.bound",
-        subject=f"/policies/{policy_id}",
-        data={
-            "policy_id": policy_id,
-            "policy_number": policy_number,
-            "premium": str(premium),
-            "submission_id": submission_id,
-        },
-    )
 
     return BindResponse(
         submission_id=submission_id,
-        policy_id=policy_id,
+        policy_id=result["policy_id"],
         status=SubmissionStatus.BOUND,
-        bound_at=now,
-        authority={"decision": auth_result.decision, "reason": auth_result.reason},
+        bound_at=result["bound_at"],
+        authority=result.get("authority"),
     )
 
 
@@ -1341,257 +689,13 @@ async def get_submission_comparables(
 
 @router.post("/{submission_id}/process")
 async def process_submission(submission_id: str, user: CurrentUser = Depends(get_current_user)) -> dict[str, object]:
-    """Run the full multi-agent new business workflow.
-
-    Delegates to ``/api/v1/workflows/new-business/{submission_id}`` — the
-    canonical workflow endpoint.  Business logic (authority checks, policy
-    creation, billing) is applied on top of the workflow results.
-    """
-    from openinsure.infrastructure.factory import (
-        get_billing_repository,
-        get_compliance_repository,
-        get_policy_repository,
-    )
-    from openinsure.services.event_publisher import publish_domain_event
-    from openinsure.services.workflow_engine import execute_workflow
-
+    """Run the full multi-agent new business workflow."""
     submission = await _repo.get_by_id(submission_id)
     if not submission:
         raise HTTPException(status_code=404, detail="Submission not found")
 
-    # --- Run multi-agent workflow ---
-    execution = await execute_workflow("new_business", submission_id, "submission", submission)
+    from openinsure.services.submission_service import SubmissionService
 
-    now = _now()
-    results: dict[str, Any] = {s["name"]: s for s in execution.steps_completed}
-
-    # --- Interpret triage result ---
-    intake_step = results.get("intake", {})
-    triage_resp = intake_step.get("response", {})
-    appetite = "yes"
-    if isinstance(triage_resp, dict):
-        match_val = str(triage_resp.get("appetite_match", "yes")).lower().strip()
-        appetite = "no" if match_val in ("no", "decline", "false", "reject", "outside") else "yes"
-    elif isinstance(triage_resp, str):
-        appetite = "no" if any(w in triage_resp.lower() for w in ["decline", "reject", "outside appetite"]) else "yes"
-
-    await _repo.update(
-        submission_id,
-        {
-            "status": "underwriting",
-            "triage_result": json.dumps(triage_resp) if isinstance(triage_resp, dict) else str(triage_resp),
-            "updated_at": now,
-        },
-    )
-    await publish_domain_event("submission.triaged", f"/submissions/{submission_id}", {"submission_id": submission_id})
-
-    # Early decline if outside appetite
-    if appetite in ("no", "decline", "false"):
-        await _repo.update(submission_id, {"status": "declined", "updated_at": now})
-        await publish_domain_event(
-            "submission.declined",
-            f"/submissions/{submission_id}",
-            {"submission_id": submission_id, "reason": "outside_appetite"},
-        )
-        return json.loads(
-            json.dumps(
-                {
-                    "submission_id": submission_id,
-                    "workflow": "new_business",
-                    "workflow_id": execution.id,
-                    "outcome": "declined",
-                    "reason": "outside_appetite",
-                    "policy_id": None,
-                    "policy_number": None,
-                    "premium": None,
-                    "steps": results,
-                    "authority": {
-                        "decision": "auto_execute",
-                        "reason": "Declined at triage; no bind authority required",
-                    },
-                },
-                default=str,
-            )
-        )
-
-    # --- Extract underwriting premium ---
-    uw_step = results.get("underwriting", {})
-    uw_resp = uw_step.get("response", {})
-    premium: float = 10000  # fallback
-    if isinstance(uw_resp, dict):
-        premium = float(uw_resp.get("recommended_premium", uw_resp.get("premium", 10000)) or 10000)
-    await _repo.update(
-        submission_id,
-        {
-            "status": "quoted",
-            "quoted_premium": premium,
-            "triage_result": json.dumps(triage_resp) if isinstance(triage_resp, dict) else str(triage_resp),
-            "updated_at": now,
-        },
-    )
-    await publish_domain_event(
-        "submission.quoted", f"/submissions/{submission_id}", {"submission_id": submission_id, "premium": premium}
-    )
-
-    # --- Authority check & auto-bind ---
-    engine = AuthorityEngine()
     user_role = user.roles[0] if user.roles else "openinsure-uw-analyst"
-    cyber_data = submission.get("cyber_risk_data", submission.get("risk_data", {}))
-    if isinstance(cyber_data, str):
-        try:
-            cyber_data = json.loads(cyber_data)
-        except (json.JSONDecodeError, TypeError):
-            cyber_data = {}
-    bind_limit = Decimal(str(cyber_data.get("requested_limit", 1000000) if cyber_data else 1000000))
-    bind_auth = engine.check_bind_authority(Decimal(str(premium)), user_role, bind_limit)
-    await publish_domain_event(
-        "authority.checked",
-        f"/submissions/{submission_id}",
-        {
-            "action": "bind",
-            "amount": str(premium),
-            "user_role": user_role,
-            "decision": bind_auth.decision,
-            "reason": bind_auth.reason,
-        },
-    )
-    policy_id = None
-    policy_number = None
-    escalation_id = None
-    if bind_auth.decision == AuthorityDecision.ESCALATE:
-        from openinsure.services.escalation import escalate
-
-        esc = await escalate(
-            action="bind",
-            entity_type="submission",
-            entity_id=submission_id,
-            requested_by=user.display_name,
-            requested_role=user_role,
-            amount=float(premium),
-            authority_result={
-                "required_role": bind_auth.required_role,
-                "escalation_chain": bind_auth.escalation_chain,
-                "reason": bind_auth.reason,
-            },
-        )
-        escalation_id = esc["id"]
-    else:
-        policy_id = str(uuid.uuid4())
-        policy_number = f"POL-{datetime.now(UTC).strftime('%Y')}-{uuid.uuid4().hex[:6].upper()}"
-        policy_repo = get_policy_repository()
-        policy_data = _build_policy_data(submission, premium, policy_id=policy_id, policy_number=policy_number)
-        await policy_repo.create(policy_data)
-
-        billing_repo = get_billing_repository()
-        await billing_repo.create(
-            {
-                "id": str(uuid.uuid4()),
-                "policy_id": policy_id,
-                "billing_plan": "direct_bill",
-                "total_premium": premium,
-                "balance_due": premium,
-                "created_at": now,
-                "updated_at": now,
-            }
-        )
-
-        # Auto-calculate cessions based on active treaties
-        try:
-            from openinsure.domain.reinsurance import ReinsuranceContract
-            from openinsure.infrastructure.factory import get_cession_repository, get_reinsurance_repository
-            from openinsure.services.reinsurance import calculate_cession
-
-            treaty_repo = get_reinsurance_repository()
-            cession_repo = get_cession_repository()
-            raw_treaties = await treaty_repo.list_all(filters={"status": "active"})
-
-            if raw_treaties:
-                treaties = []
-                for t in raw_treaties:
-                    try:
-                        treaties.append(
-                            ReinsuranceContract(
-                                id=t["id"],
-                                treaty_number=t["treaty_number"],
-                                treaty_type=t["treaty_type"],
-                                reinsurer_name=t["reinsurer_name"],
-                                status=t.get("status", "active"),
-                                effective_date=t["effective_date"],
-                                expiration_date=t["expiration_date"],
-                                lines_of_business=t.get("lines_of_business", []),
-                                retention=t.get("retention", 0),
-                                limit=t.get("limit", 0),
-                                rate=t.get("rate", 0),
-                                capacity_total=t.get("capacity_total", 0),
-                                capacity_used=t.get("capacity_used", 0),
-                            )
-                        )
-                    except Exception:  # noqa: S112
-                        continue
-
-                cessions = calculate_cession(policy_data, treaties)
-                for cession in cessions:
-                    cession_record = {
-                        "id": str(uuid.uuid4()),
-                        "treaty_id": str(cession.treaty_id),
-                        "policy_id": policy_id,
-                        "policy_number": policy_number,
-                        "ceded_premium": float(cession.ceded_premium),
-                        "ceded_limit": float(cession.ceded_limit),
-                        "cession_date": _now()[:10],
-                        "created_at": _now(),
-                    }
-                    await cession_repo.create(cession_record)
-
-                    # Update treaty capacity
-                    for raw_t in raw_treaties:
-                        if str(raw_t.get("id")) == str(cession.treaty_id):
-                            raw_t["capacity_used"] = raw_t.get("capacity_used", 0) + float(cession.ceded_limit)
-                            break
-        except Exception:
-            _logger.warning("submissions.auto_cession_failed", submission_id=submission_id, exc_info=True)
-
-        await _repo.update(submission_id, {"status": "bound", "updated_at": now})
-        await publish_domain_event(
-            "policy.bound",
-            f"/policies/{policy_id}",
-            {
-                "policy_id": policy_id,
-                "policy_number": policy_number,
-                "premium": premium,
-                "submission_id": submission_id,
-            },
-        )
-
-    # --- Store compliance decision ---
-    compliance_repo = get_compliance_repository()
-    if compliance_repo:
-        await compliance_repo.store_decision(
-            {
-                "decision_id": str(uuid.uuid4()),
-                "agent_id": "openinsure-orchestrator",
-                "decision_type": "new_business_workflow",
-                "input_summary": {"submission_id": submission_id},
-                "output": {"premium": premium, "policy_id": policy_id, "outcome": "bound" if policy_id else "quoted"},
-                "confidence": float(uw_resp.get("confidence", 0.8)) if isinstance(uw_resp, dict) else 0.8,
-                "model_used": "gpt-5.1",
-            }
-        )
-
-    outcome = "bound" if policy_id else "quoted_pending_approval"
-    result: dict[str, Any] = {
-        "submission_id": submission_id,
-        "workflow": "new_business",
-        "workflow_id": execution.id,
-        "outcome": outcome,
-        "policy_id": policy_id,
-        "policy_number": policy_number,
-        "premium": premium,
-        "escalation_id": escalation_id,
-        "steps": results,
-        "authority": {
-            "decision": bind_auth.decision,
-            "reason": bind_auth.reason,
-        },
-    }
-    return json.loads(json.dumps(result, default=str))
+    svc = SubmissionService()
+    return await svc.process(submission_id, submission, user_role, user.display_name)
