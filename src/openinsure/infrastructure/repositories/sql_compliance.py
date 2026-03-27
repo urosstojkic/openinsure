@@ -233,6 +233,51 @@ class SqlComplianceRepository(BaseRepository):
     async def clear_audit_events(self) -> None:
         await self.db.execute_query("DELETE FROM audit_events")
 
+    # -- aggregate stats (computed across ALL decisions) ----------------------
+
+    async def get_stats(self) -> dict[str, Any]:
+        """Compute aggregate compliance statistics using SQL aggregates."""
+        agg_row = await self.db.fetch_one("SELECT COUNT(*) AS cnt, AVG(confidence) AS avg_conf FROM decision_records")
+        total = agg_row.get("cnt", 0) if agg_row else 0
+        avg_confidence = float(agg_row.get("avg_conf", 0) or 0) if agg_row else 0.0
+
+        # Oversight counts derived from human_oversight JSON and confidence
+        req_row = await self.db.fetch_one(
+            "SELECT COUNT(*) AS cnt FROM decision_records "
+            "WHERE JSON_VALUE(human_oversight, '$.human_override') = 'true'"
+        )
+        oversight_required = req_row.get("cnt", 0) if req_row else 0
+
+        rec_row = await self.db.fetch_one(
+            "SELECT COUNT(*) AS cnt FROM decision_records "
+            "WHERE (JSON_VALUE(human_oversight, '$.human_override') IS NULL "
+            "OR JSON_VALUE(human_oversight, '$.human_override') = 'false') "
+            "AND confidence < 0.7"
+        )
+        oversight_recommended = rec_row.get("cnt", 0) if rec_row else 0
+
+        # Breakdown by decision_type
+        type_rows = await self.db.fetch_all(
+            "SELECT decision_type, COUNT(*) AS cnt FROM decision_records GROUP BY decision_type"
+        )
+        by_type = {r["decision_type"]: r["cnt"] for r in type_rows}
+
+        # Breakdown by agent_id (mapped to display names on the API layer)
+        agent_rows = await self.db.fetch_all("SELECT agent_id, COUNT(*) AS cnt FROM decision_records GROUP BY agent_id")
+        by_agent: dict[str, int] = {}
+        for r in agent_rows:
+            name = _deserialize_agent_name(r.get("agent_id", ""))
+            by_agent[name] = by_agent.get(name, 0) + r["cnt"]
+
+        return {
+            "total_decisions": total,
+            "avg_confidence": avg_confidence,
+            "oversight_required_count": oversight_required,
+            "oversight_recommended_count": oversight_recommended,
+            "decisions_by_type": by_type,
+            "decisions_by_agent": by_agent,
+        }
+
     # -- agent-level persistence (wired from agents.base → Foundry flow) ------
 
     async def store_decision(self, record: dict[str, Any]) -> str:
@@ -313,6 +358,26 @@ class SqlComplianceRepository(BaseRepository):
             ],
         )
         return event_id
+
+
+def _deserialize_agent_name(agent_id: str) -> str:
+    """Map an agent_id to a human-readable display name."""
+    _agent_display = {
+        "openinsure-submission": "Submission Triage Agent",
+        "openinsure-underwriting": "Underwriting Agent",
+        "openinsure-policy": "Policy Review Agent",
+        "openinsure-orchestrator": "Orchestrator Agent",
+        "openinsure-claims": "Claims Assessment Agent",
+        "triage-agent-v1": "Submission Triage Agent",
+        "underwriting-agent-v1": "Underwriting Agent",
+        "fraud-detection-v1": "Claims Fraud Detection",
+        "rating-engine-v1": "Rating Engine",
+        "gpt-5.1": "Foundry GPT-5.1",
+    }
+    return _agent_display.get(
+        agent_id,
+        agent_id.replace("-", " ").replace("_", " ").title() if agent_id else "Unknown Agent",
+    )
 
 
 def _deserialize_decision(row: dict[str, Any]) -> dict[str, Any]:

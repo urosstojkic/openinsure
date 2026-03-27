@@ -39,3 +39,19 @@ def test_get_system_inventory(client: TestClient):
     assert "systems" in data
     assert isinstance(data["systems"], list)
     assert data["total"] > 0
+
+
+def test_get_compliance_stats(client: TestClient):
+    """GET /api/v1/compliance/stats returns aggregate stats across all decisions."""
+    resp = client.get("/api/v1/compliance/stats")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "total_decisions" in data
+    assert "avg_confidence" in data
+    assert isinstance(data["avg_confidence"], (int, float))
+    assert "oversight_required_count" in data
+    assert "oversight_recommended_count" in data
+    assert "decisions_by_type" in data
+    assert isinstance(data["decisions_by_type"], dict)
+    assert "decisions_by_agent" in data
+    assert isinstance(data["decisions_by_agent"], dict)

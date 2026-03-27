@@ -174,6 +174,17 @@ class SystemInventoryResponse(BaseModel):
     generated_at: str
 
 
+class ComplianceStatsResponse(BaseModel):
+    """Aggregate compliance statistics computed across ALL decisions."""
+
+    total_decisions: int
+    avg_confidence: float
+    oversight_required_count: int
+    oversight_recommended_count: int
+    decisions_by_type: dict[str, int]
+    decisions_by_agent: dict[str, int]
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -186,6 +197,13 @@ def _now() -> str:
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
+
+
+@router.get("/stats", response_model=ComplianceStatsResponse)
+async def get_compliance_stats() -> ComplianceStatsResponse:
+    """Aggregate compliance statistics computed across ALL decisions."""
+    stats = await _compliance_repo.get_stats()
+    return ComplianceStatsResponse(**stats)
 
 
 @router.get("/decisions", response_model=DecisionList)

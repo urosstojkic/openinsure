@@ -90,7 +90,7 @@ const DECISION_TYPE_TO_AGENT: Record<string, string> = {
   renewal: 'Renewal Agent',
 };
 
-function deriveAgentName(d: Record<string, unknown>): string {
+export function deriveAgentName(d: Record<string, unknown>): string {
   if (typeof d.agent_name === 'string' && d.agent_name) return d.agent_name;
   if (typeof d.agent === 'string' && d.agent) return d.agent;
   const dt = String(d.decision_type || '');
@@ -100,36 +100,28 @@ function deriveAgentName(d: Record<string, unknown>): string {
 export async function getComplianceSummary(): Promise<ComplianceSummary> {
   if (USE_MOCK) return mockCompliance;
   try {
-    const [decisions, audit, systems] = await Promise.all([
-      client.get('/compliance/decisions').catch(() => ({ data: { items: [], total: 0 } })),
+    const [stats, audit, systems] = await Promise.all([
+      client.get('/compliance/stats').catch(() => ({
+        data: {
+          total_decisions: 0,
+          avg_confidence: 0,
+          oversight_required_count: 0,
+          oversight_recommended_count: 0,
+          decisions_by_type: {},
+          decisions_by_agent: {},
+        },
+      })),
       client.get('/compliance/audit-trail').catch(() => ({ data: { items: [] } })),
       client.get('/compliance/system-inventory').catch(() => ({ data: { systems: [] } })),
     ]);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const decisionItems: any[] = decisions.data.items || [];
-    const decisions_by_agent: Record<string, number> = {};
-    const decisions_by_type: Record<string, number> = {};
-    let oversightRequired = 0;
-    let oversightRecommended = 0;
-    let totalConfidence = 0;
-
-    for (const d of decisionItems) {
-      const agent = deriveAgentName(d);
-      const dtype = d.decision_type || 'unknown';
-      decisions_by_agent[agent] = (decisions_by_agent[agent] || 0) + 1;
-      decisions_by_type[dtype] = (decisions_by_type[dtype] || 0) + 1;
-      if (d.human_oversight === 'required') oversightRequired++;
-      if (d.human_oversight === 'recommended') oversightRecommended++;
-      totalConfidence += d.confidence || 0;
-    }
 
     return {
-      total_decisions: decisions.data.total || decisionItems.length,
-      decisions_by_agent,
-      decisions_by_type,
-      oversight_required_count: oversightRequired,
-      oversight_recommended_count: oversightRecommended,
-      avg_confidence: decisionItems.length > 0 ? totalConfidence / decisionItems.length : 0,
+      total_decisions: stats.data.total_decisions || 0,
+      decisions_by_agent: stats.data.decisions_by_agent || {},
+      decisions_by_type: stats.data.decisions_by_type || {},
+      oversight_required_count: stats.data.oversight_required_count || 0,
+      oversight_recommended_count: stats.data.oversight_recommended_count || 0,
+      avg_confidence: stats.data.avg_confidence || 0,
       bias_metrics: [],
       audit_trail: audit.data.items || [],
       ai_systems: systems.data.systems || [],

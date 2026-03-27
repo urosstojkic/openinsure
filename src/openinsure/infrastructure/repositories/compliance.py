@@ -127,6 +127,40 @@ class InMemoryComplianceRepository(BaseRepository):
     async def clear_audit_events(self) -> None:
         self._audit_events.clear()
 
+    # -- aggregate stats (computed across ALL decisions) ----------------------
+
+    async def get_stats(self) -> dict[str, Any]:
+        """Compute aggregate compliance statistics across all decisions."""
+        all_decisions = list(self._decisions.values())
+        total = len(all_decisions)
+        total_confidence = 0.0
+        oversight_required = 0
+        oversight_recommended = 0
+        by_type: dict[str, int] = {}
+        by_agent: dict[str, int] = {}
+
+        for d in all_decisions:
+            total_confidence += d.get("confidence", 0)
+            ho = d.get("human_override", False)
+            conf = d.get("confidence", 0)
+            if ho:
+                oversight_required += 1
+            elif isinstance(conf, (int, float)) and conf < 0.7:
+                oversight_recommended += 1
+            dtype = d.get("decision_type", "unknown")
+            by_type[dtype] = by_type.get(dtype, 0) + 1
+            agent = d.get("agent_name") or _agent_display_name(d.get("model_id", d.get("agent_id", "")))
+            by_agent[agent] = by_agent.get(agent, 0) + 1
+
+        return {
+            "total_decisions": total,
+            "avg_confidence": total_confidence / total if total else 0,
+            "oversight_required_count": oversight_required,
+            "oversight_recommended_count": oversight_recommended,
+            "decisions_by_type": by_type,
+            "decisions_by_agent": by_agent,
+        }
+
     # -- agent-level persistence (wired from agents.base → Foundry flow) ------
 
     async def store_decision(self, record: dict[str, Any]) -> str:
