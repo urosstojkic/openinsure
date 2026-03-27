@@ -4,6 +4,10 @@ Supports three modes:
 1. Dev mode: No auth, default CUO user (for local development)
 2. API key mode: X-API-Key header with configurable role (for demo/testing)
 3. JWT mode: Bearer token with Entra ID role claims (for production)
+
+JWT validation modes (``jwt_validation_mode`` setting):
+- ``"dev"``: Decode payload, check expiry — no signature verification.
+- ``"production"``: Full JWKS validation (signature, issuer, audience, expiry).
 """
 
 from __future__ import annotations
@@ -11,13 +15,17 @@ from __future__ import annotations
 import base64
 import json
 import secrets
+import time
 from dataclasses import dataclass
 from typing import Any
 
+import structlog
 from fastapi import Depends, HTTPException, Request, status
 
 from openinsure.config import Settings, get_settings
 from openinsure.rbac.roles import Role
+
+logger = structlog.get_logger(__name__)
 
 
 @dataclass
@@ -61,23 +69,95 @@ def _dev_user(deployment_type: str) -> CurrentUser:
 # ---------------------------------------------------------------------------
 
 
-def _decode_jwt_payload(token: str) -> dict[str, Any]:
-    """Decode JWT payload *without* signature verification.
+def _decode_jwt_payload_unsafe(token: str) -> dict[str, Any]:
+    """Decode JWT payload without signature verification (base64 only).
 
-    .. warning::
-        In production, use ``azure-identity`` or a proper JWT library to
-        validate Entra ID tokens (issuer, audience, signature, expiry).
+    Used internally by ``_validate_jwt`` in dev mode.
     """
     parts = token.split(".")
     if len(parts) != 3:
         msg = "Invalid JWT format"
         raise ValueError(msg)
     payload_b64 = parts[1]
-    # Fix base64 padding
     payload_b64 += "=" * (-len(payload_b64) % 4)
     decoded = base64.urlsafe_b64decode(payload_b64)
     result: dict[str, Any] = json.loads(decoded)
     return result
+
+
+def _validate_jwt(token: str, settings: Settings) -> dict[str, Any]:
+    """Validate a JWT token according to ``jwt_validation_mode``.
+
+    Modes
+    -----
+    dev
+        Decode payload without signature verification.  Check ``exp`` claim
+        if present; check ``iss`` if ``jwt_issuer`` is configured.  A warning
+        is logged on every call to remind operators that signature verification
+        is disabled.
+
+    production
+        Full validation via ``PyJWT`` with JWKS (signature, issuer, audience,
+        expiry).  Requires ``jwt_issuer`` and ``jwt_audience`` to be set.
+    """
+    mode = settings.jwt_validation_mode
+
+    if mode == "production":
+        return _validate_jwt_production(token, settings)
+
+    # --- dev mode -----------------------------------------------------------
+    logger.warning(
+        "jwt.dev_mode",
+        msg="JWT signature verification is DISABLED in dev mode",
+    )
+    claims = _decode_jwt_payload_unsafe(token)
+
+    # Even in dev mode, reject expired tokens
+    exp = claims.get("exp")
+    if exp is not None and float(exp) < time.time():
+        msg = "Token has expired"
+        raise ValueError(msg)
+
+    # Validate issuer if configured
+    if settings.jwt_issuer:
+        token_iss = claims.get("iss", "")
+        if token_iss != settings.jwt_issuer:
+            msg = f"Invalid issuer: {token_iss}"
+            raise ValueError(msg)
+
+    return claims
+
+
+def _validate_jwt_production(token: str, settings: Settings) -> dict[str, Any]:
+    """Full JWKS-based JWT validation for Entra ID tokens."""
+    import jwt as pyjwt
+    from jwt import PyJWKClient
+
+    if not settings.jwt_issuer or not settings.jwt_audience:
+        msg = "jwt_issuer and jwt_audience must be configured in production mode"
+        raise ValueError(msg)
+
+    # Entra ID v2 JWKS endpoint (derived from issuer)
+    issuer = settings.jwt_issuer
+    # Standard OIDC: https://login.microsoftonline.com/{tenant}/v2.0
+    # JWKS:          https://login.microsoftonline.com/{tenant}/discovery/v2.0/keys
+    if "login.microsoftonline.com" in issuer:
+        tenant = issuer.rstrip("/").split("/")[-2]
+        jwks_url = f"https://login.microsoftonline.com/{tenant}/discovery/v2.0/keys"
+    else:
+        jwks_url = issuer.rstrip("/") + "/.well-known/jwks.json"
+
+    jwk_client = PyJWKClient(jwks_url)
+    signing_key = jwk_client.get_signing_key_from_jwt(token)
+
+    claims: dict[str, Any] = pyjwt.decode(
+        token,
+        signing_key.key,
+        algorithms=["RS256"],
+        audience=settings.jwt_audience,
+        issuer=settings.jwt_issuer,
+    )
+    return claims
 
 
 # ---------------------------------------------------------------------------
@@ -98,7 +178,7 @@ async def get_current_user(
        unauthenticated access.
     2. If no ``api_key`` and ``require_auth=False`` → dev mode (default CUO).
     3. ``X-API-Key`` header → validate against ``settings.api_key``.
-    4. ``Authorization: Bearer <jwt>`` → decode token claims.
+    4. ``Authorization: Bearer <jwt>`` → validate token claims.
     5. Fail with 401.
     """
     deployment_type = settings.deployment_type
@@ -159,11 +239,11 @@ async def get_current_user(
     if auth_header and auth_header.lower().startswith("bearer "):
         token = auth_header[7:]
         try:
-            claims = _decode_jwt_payload(token)
-        except (ValueError, json.JSONDecodeError) as exc:
+            claims = _validate_jwt(token, settings)
+        except Exception as exc:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid bearer token",
+                detail=f"Invalid bearer token: {exc}",
             ) from exc
         return CurrentUser(
             user_id=claims.get("sub", "unknown"),

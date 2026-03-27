@@ -29,6 +29,8 @@ dependencies = [
     "structlog>=24.4.0",
     "tenacity>=9.0.0",
     "mcp>=1.0.0",
+    "slowapi>=0.1.9",
+    "PyJWT>=2.8.0",
 ]
 
 [project.optional-dependencies]

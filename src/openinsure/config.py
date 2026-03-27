@@ -61,6 +61,14 @@ class Settings(BaseSettings):
     # Authentication
     api_key: str = ""
     require_auth: bool = False
+    jwt_validation_mode: str = "dev"  # "dev" = check expiry only; "production" = full JWKS validation
+    jwt_issuer: str = ""  # Expected issuer (iss) claim, e.g. https://login.microsoftonline.com/{tenant}/v2.0
+    jwt_audience: str = ""  # Expected audience (aud) claim, e.g. api://<client-id>
+
+    # Rate limiting
+    rate_limit_per_minute: int = 100
+    rate_limit_auth_per_minute: int = 10
+    rate_limit_foundry_per_minute: int = 20
 
     # Deployment
     deployment_type: str = "mga"  # "carrier" or "mga"

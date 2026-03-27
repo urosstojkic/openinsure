@@ -2,6 +2,7 @@
 
 import base64
 import json
+import time
 
 from fastapi import Depends, FastAPI
 from fastapi.testclient import TestClient
@@ -152,6 +153,57 @@ class TestJWTMode:
         client = TestClient(_make_app(require_auth=True, api_key=_KEY))
         resp = client.get("/protected", headers={"Authorization": "Bearer not-a-jwt"})
         assert resp.status_code == 401
+
+    def test_expired_jwt_rejected(self):
+        """JWT with expired ``exp`` claim should be rejected even in dev mode."""
+        client = TestClient(_make_app(require_auth=True, api_key=_KEY))
+        token = _make_jwt({"sub": "u", "roles": [Role.CUO], "exp": int(time.time()) - 60})
+        resp = client.get("/protected", headers={"Authorization": f"Bearer {token}"})
+        assert resp.status_code == 401
+        assert "expired" in resp.json()["detail"].lower()
+
+    def test_valid_jwt_with_future_exp(self):
+        """JWT with future ``exp`` should be accepted."""
+        client = TestClient(_make_app(require_auth=True, api_key=_KEY))
+        token = _make_jwt({"sub": "u2", "roles": [Role.CUO], "exp": int(time.time()) + 3600})
+        resp = client.get("/protected", headers={"Authorization": f"Bearer {token}"})
+        assert resp.status_code == 200
+        assert resp.json()["user"] == "u2"
+
+    def test_jwt_issuer_mismatch_rejected(self):
+        """JWT with wrong issuer is rejected when ``jwt_issuer`` is configured."""
+        app = _make_app(require_auth=True, api_key=_KEY)
+        settings = Settings(
+            require_auth=True,
+            api_key=_KEY,
+            debug=True,
+            jwt_issuer="https://expected-issuer.example.com",
+        )
+        app.dependency_overrides[get_settings] = lambda: settings
+        client = TestClient(app)
+        token = _make_jwt({"sub": "u", "roles": [Role.CUO], "iss": "https://evil.example.com"})
+        resp = client.get("/protected", headers={"Authorization": f"Bearer {token}"})
+        assert resp.status_code == 401
+        assert "issuer" in resp.json()["detail"].lower()
+
+    def test_jwt_issuer_match_accepted(self):
+        """JWT with correct issuer is accepted."""
+        app = _make_app(require_auth=True, api_key=_KEY)
+        settings = Settings(
+            require_auth=True,
+            api_key=_KEY,
+            debug=True,
+            jwt_issuer="https://login.microsoftonline.com/tenant/v2.0",
+        )
+        app.dependency_overrides[get_settings] = lambda: settings
+        client = TestClient(app)
+        token = _make_jwt({
+            "sub": "u",
+            "roles": [Role.CUO],
+            "iss": "https://login.microsoftonline.com/tenant/v2.0",
+        })
+        resp = client.get("/protected", headers={"Authorization": f"Bearer {token}"})
+        assert resp.status_code == 200
 
 
 # ---------------------------------------------------------------------------

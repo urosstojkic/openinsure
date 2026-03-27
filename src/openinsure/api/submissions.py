@@ -14,10 +14,11 @@ from enum import StrEnum
 from typing import Any
 
 import structlog
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
 from pydantic import BaseModel, Field
 
 from openinsure.infrastructure.factory import get_blob_storage, get_submission_repository
+from openinsure.rate_limit import limiter
 from openinsure.rbac.auth import CurrentUser, get_current_user
 from openinsure.rbac.authority import AuthorityDecision, AuthorityEngine
 
@@ -460,7 +461,8 @@ async def update_submission(submission_id: str, body: SubmissionUpdate) -> Submi
 
 
 @router.post("/{submission_id}/triage", response_model=TriageResult)
-async def triage_submission(submission_id: str) -> TriageResult:
+@limiter.limit("20/minute")
+async def triage_submission(request: Request, submission_id: str) -> TriageResult:
     """Trigger AI-powered triage on a submission.
 
     Calls the Foundry triage agent to assess risk appetite, assign a risk
@@ -616,7 +618,10 @@ async def triage_submission(submission_id: str) -> TriageResult:
 
 
 @router.post("/{submission_id}/quote", response_model=QuoteResponse)
-async def generate_quote(submission_id: str, user: CurrentUser = Depends(get_current_user)) -> QuoteResponse:
+@limiter.limit("20/minute")
+async def generate_quote(
+    request: Request, submission_id: str, user: CurrentUser = Depends(get_current_user)
+) -> QuoteResponse:
     """Generate a quote for the submission.
 
     Calls the Foundry underwriting agent when available, falling back to

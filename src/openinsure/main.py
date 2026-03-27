@@ -8,10 +8,30 @@ import structlog
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
 
 from openinsure.api.errors import make_error
 from openinsure.api.router import api_router
 from openinsure.config import get_settings
+from openinsure.logging import redact_pii_processor
+from openinsure.rate_limit import limiter
+
+# Configure structlog with PII redaction processor
+structlog.configure(
+    processors=[
+        structlog.contextvars.merge_contextvars,
+        structlog.stdlib.add_log_level,
+        structlog.processors.TimeStamper(fmt="iso"),
+        structlog.processors.StackInfoRenderer(),
+        redact_pii_processor,
+        structlog.processors.format_exc_info,
+        structlog.processors.JSONRenderer(),
+    ],
+    wrapper_class=structlog.stdlib.BoundLogger,
+    logger_factory=structlog.PrintLoggerFactory(),
+    cache_logger_on_first_use=True,
+)
 
 logger = structlog.get_logger()
 
@@ -103,6 +123,11 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
+    # Rate limiting — configured via settings
+    limiter.default_limits = [f"{settings.rate_limit_per_minute}/minute"]
+    app.state.limiter = limiter
+    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
     # CORS middleware — environment-aware origin list (no wildcard)
     allowed_origins = ["http://localhost:3000", "http://127.0.0.1:3000"]
     if settings.debug:
@@ -118,6 +143,11 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    # Rate-limiting middleware (must be added after CORS so CORS headers are included in 429 responses)
+    from slowapi.middleware import SlowAPIMiddleware
+
+    app.add_middleware(SlowAPIMiddleware)
 
     @app.exception_handler(Exception)
     async def _global_exception_handler(request: Request, exc: Exception) -> JSONResponse:
