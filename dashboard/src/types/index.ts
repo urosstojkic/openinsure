@@ -165,6 +165,13 @@ export interface AgentDecision {
   reasoning: string[];
   outcome: string;
   metadata: Record<string, unknown>;
+  model_id?: string;
+  model_version?: string;
+  entity_id?: string;
+  entity_type?: string;
+  input_summary?: Record<string, unknown>;
+  output_summary?: Record<string, unknown>;
+  processing_time_ms?: number;
 }
 
 export interface ComplianceSummary {

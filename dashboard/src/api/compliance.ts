@@ -61,6 +61,13 @@ export async function getDecisions(): Promise<AgentDecision[]> {
         reasoning: deriveReasoning(d),
         outcome: deriveOutcome(d),
         metadata: (d.metadata as Record<string, unknown>) || {},
+        model_id: (d.model_id as string) || undefined,
+        model_version: (d.model_version as string) || undefined,
+        entity_id: entityId || undefined,
+        entity_type: entityType || undefined,
+        input_summary: (d.input_summary as Record<string, unknown>) || undefined,
+        output_summary: (d.output_summary as Record<string, unknown>) || undefined,
+        processing_time_ms: (d.processing_time_ms as number) || undefined,
       };
     });
   } catch (error) {

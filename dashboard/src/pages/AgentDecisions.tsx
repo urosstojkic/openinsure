@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { Link } from 'react-router-dom';
 import DataTable, { type Column } from '../components/DataTable';
 import TrafficLight from '../components/TrafficLight';
 import ConfidenceBar from '../components/ConfidenceBar';
@@ -10,7 +11,7 @@ import { TableSkeleton } from '../components/Skeleton';
 import { getDecisions } from '../api/compliance';
 import { formatTimestamp } from '../utils/formatDate';
 import type { AgentDecision, AgentName, OversightLevel } from '../types';
-import { Bot } from 'lucide-react';
+import { Bot, ChevronDown, Cpu, ExternalLink, Eye, EyeOff, ShieldCheck, Timer, X } from 'lucide-react';
 
 const agentLabels: Record<AgentName, string> = {
   triage_agent: 'Triage Agent',
@@ -25,6 +26,207 @@ const oversightVariant: Record<OversightLevel, 'green' | 'yellow' | 'red'> = {
   recommended: 'yellow',
   required: 'red',
 };
+
+const oversightIcon: Record<OversightLevel, React.ReactNode> = {
+  none: <EyeOff size={14} className="text-green-600" />,
+  recommended: <Eye size={14} className="text-amber-600" />,
+  required: <ShieldCheck size={14} className="text-red-600" />,
+};
+
+function confidenceBadge(value: number) {
+  const pct = Math.round(value * 100);
+  const color =
+    value >= 0.8
+      ? 'bg-emerald-50 text-emerald-700 ring-emerald-200'
+      : value >= 0.6
+        ? 'bg-amber-50 text-amber-700 ring-amber-200'
+        : 'bg-red-50 text-red-700 ring-red-200';
+  return (
+    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1 ring-inset ${color}`}>
+      {pct}%
+    </span>
+  );
+}
+
+function linkedEntityLink(dec: AgentDecision) {
+  if (dec.submission_id) {
+    return (
+      <Link to={`/submissions/${dec.submission_id}`} className="inline-flex items-center gap-1 text-indigo-600 hover:text-indigo-800 hover:underline text-sm font-mono">
+        Submission {dec.submission_id.slice(0, 8)}… <ExternalLink size={12} />
+      </Link>
+    );
+  }
+  if (dec.claim_id) {
+    return (
+      <Link to={`/claims/${dec.claim_id}`} className="inline-flex items-center gap-1 text-indigo-600 hover:text-indigo-800 hover:underline text-sm font-mono">
+        Claim {dec.claim_id.slice(0, 8)}… <ExternalLink size={12} />
+      </Link>
+    );
+  }
+  if (dec.policy_id) {
+    return (
+      <Link to={`/policies/${dec.policy_id}`} className="inline-flex items-center gap-1 text-indigo-600 hover:text-indigo-800 hover:underline text-sm font-mono">
+        Policy {dec.policy_id.slice(0, 8)}… <ExternalLink size={12} />
+      </Link>
+    );
+  }
+  if (dec.entity_id) {
+    return <span className="text-sm font-mono text-slate-500">{dec.entity_type}: {dec.entity_id.slice(0, 8)}…</span>;
+  }
+  return <span className="text-sm text-slate-400">—</span>;
+}
+
+function renderOutputSummary(output: Record<string, unknown> | undefined) {
+  if (!output || Object.keys(output).length === 0) return <span className="text-slate-400 text-sm">No output data</span>;
+
+  return (
+    <div className="space-y-1.5">
+      {Object.entries(output).map(([key, value]) => {
+        const label = key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+        if (Array.isArray(value)) {
+          return (
+            <div key={key}>
+              <span className="text-xs font-medium text-slate-500">{label}:</span>
+              <ul className="ml-4 mt-0.5 list-disc space-y-0.5">
+                {value.slice(0, 8).map((item, i) => (
+                  <li key={i} className="text-sm text-slate-600">
+                    {typeof item === 'object' ? JSON.stringify(item) : String(item)}
+                  </li>
+                ))}
+                {value.length > 8 && (
+                  <li className="text-xs text-slate-400">+ {value.length - 8} more</li>
+                )}
+              </ul>
+            </div>
+          );
+        }
+        if (typeof value === 'object' && value !== null) {
+          return (
+            <div key={key}>
+              <span className="text-xs font-medium text-slate-500">{label}:</span>
+              <pre className="mt-0.5 rounded-md bg-slate-50 px-2 py-1 text-xs text-slate-600 overflow-x-auto">{JSON.stringify(value, null, 2)}</pre>
+            </div>
+          );
+        }
+        return (
+          <div key={key} className="flex items-baseline gap-2 text-sm">
+            <span className="text-xs font-medium text-slate-500 shrink-0">{label}:</span>
+            <span className="text-slate-700">{typeof value === 'boolean' ? (value ? '✓ Yes' : '✗ No') : String(value)}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function renderInputSummary(input: Record<string, unknown> | undefined) {
+  if (!input || Object.keys(input).length === 0) return <span className="text-slate-400 text-sm">No input data</span>;
+  return (
+    <div className="flex flex-wrap gap-3">
+      {Object.entries(input).map(([key, value]) => {
+        const label = key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+        return (
+          <div key={key} className="rounded-lg bg-slate-50 px-3 py-1.5 text-sm">
+            <span className="text-xs font-medium text-slate-400">{label}</span>
+            <div className="text-slate-700 font-mono text-xs mt-0.5">
+              {typeof value === 'object' ? JSON.stringify(value) : String(value)}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function DecisionDetailPanel({ dec, onClose }: { dec: AgentDecision; onClose: () => void }) {
+  return (
+    <div className="border-t-2 border-indigo-200 bg-gradient-to-b from-indigo-50/40 to-white px-6 py-5">
+      {/* Header */}
+      <div className="mb-4 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Cpu size={16} className="text-indigo-500" />
+          <h3 className="text-sm font-bold text-slate-900">Decision Detail</h3>
+          <span className="font-mono text-xs text-slate-400">{dec.id}</span>
+        </div>
+        <button
+          onClick={(e) => { e.stopPropagation(); onClose(); }}
+          className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
+          aria-label="Close detail panel"
+        >
+          <X size={16} />
+        </button>
+      </div>
+
+      {/* Top metadata row */}
+      <div className="mb-5 grid grid-cols-2 gap-4 sm:grid-cols-4 lg:grid-cols-6">
+        <div>
+          <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Agent</span>
+          <div className="mt-0.5 text-sm font-medium text-slate-800">{agentLabels[dec.agent] ?? dec.agent}</div>
+          {dec.model_id && (
+            <div className="text-xs text-slate-500 mt-0.5">{dec.model_id}{dec.model_version ? ` (${dec.model_version})` : ''}</div>
+          )}
+        </div>
+        <div>
+          <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Decision Type</span>
+          <div className="mt-0.5 text-sm capitalize text-slate-800">{dec.decision_type.replace(/_/g, ' ')}</div>
+        </div>
+        <div>
+          <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Confidence</span>
+          <div className="mt-1 flex items-center gap-2">
+            {confidenceBadge(dec.confidence)}
+            <div className="w-20"><ConfidenceBar value={dec.confidence} showLabel={false} /></div>
+          </div>
+        </div>
+        <div>
+          <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Human Oversight</span>
+          <div className="mt-1 flex items-center gap-1.5">
+            {oversightIcon[dec.human_oversight]}
+            <StatusBadge label={dec.human_oversight} variant={oversightVariant[dec.human_oversight]} />
+          </div>
+        </div>
+        <div>
+          <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Linked Entity</span>
+          <div className="mt-1">{linkedEntityLink(dec)}</div>
+        </div>
+        <div>
+          <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Timestamp</span>
+          <div className="mt-0.5 text-sm text-slate-700">{formatTimestamp(dec.timestamp || dec.created_at)}</div>
+          {dec.processing_time_ms != null && (
+            <div className="flex items-center gap-1 mt-0.5 text-xs text-slate-500">
+              <Timer size={10} /> {dec.processing_time_ms}ms
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Reasoning */}
+      <div className="mb-4">
+        <ReasoningPanel
+          agent={agentLabels[dec.agent] ?? dec.agent}
+          decision={dec.outcome}
+          confidence={dec.confidence}
+          reasoning={dec.reasoning}
+          timestamp={dec.timestamp || dec.created_at || ''}
+          defaultOpen
+        />
+      </div>
+
+      {/* Input + Output grid */}
+      <div className="grid gap-4 lg:grid-cols-2">
+        <div className="rounded-xl border border-slate-200/60 bg-white p-4">
+          <h4 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-400">Input Summary</h4>
+          {renderInputSummary(dec.input_summary)}
+        </div>
+        <div className="rounded-xl border border-slate-200/60 bg-white p-4">
+          <h4 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-400">Output</h4>
+          <div className="max-h-64 overflow-y-auto">
+            {renderOutputSummary(dec.output_summary)}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 const AgentDecisions: React.FC = () => {
   const { data: decisions = [], isLoading } = useQuery({ queryKey: ['decisions'], queryFn: getDecisions });
@@ -48,6 +250,16 @@ const AgentDecisions: React.FC = () => {
       key: 'signal',
       header: '',
       render: (r) => <TrafficLight confidence={r.confidence} humanOversight={r.human_oversight} size="sm" />,
+    },
+    {
+      key: 'expand',
+      header: '',
+      render: (r) => (
+        <ChevronDown
+          size={14}
+          className={`text-slate-400 transition-transform duration-200 ${expandedId === r.id ? 'rotate-180' : ''}`}
+        />
+      ),
     },
     {
       key: 'id',
@@ -165,57 +377,12 @@ const AgentDecisions: React.FC = () => {
           data={filtered}
           keyExtractor={(r) => r.id}
           onRowClick={(r) => setExpandedId(expandedId === r.id ? null : r.id)}
+          expandedRowKey={expandedId}
+          expandedRowRender={(dec) => (
+            <DecisionDetailPanel dec={dec} onClose={() => setExpandedId(null)} />
+          )}
         />
       )}
-
-      {/* Expanded reasoning panel */}
-      {expandedId && (() => {
-        const dec = decisions.find((d) => d.id === expandedId);
-        if (!dec) return null;
-        return (
-          <div className="rounded-xl border-2 border-indigo-200 bg-indigo-50/30 p-4">
-            <div className="mb-3 flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-slate-900">Decision Detail — {dec.id}</h3>
-              <button
-                onClick={() => setExpandedId(null)}
-                className="text-xs text-slate-400 hover:text-slate-600"
-              >
-                Close
-              </button>
-            </div>
-            <ReasoningPanel
-              agent={agentLabels[dec.agent] ?? dec.agent}
-              decision={dec.outcome}
-              confidence={dec.confidence}
-              reasoning={dec.reasoning}
-              timestamp={dec.timestamp || dec.created_at || ''}
-              defaultOpen
-            />
-            <div className="mt-3 grid grid-cols-3 gap-4 text-sm">
-              <div>
-                <span className="text-slate-400">Decision Type:</span>{' '}
-                <span className="capitalize">{dec.decision_type.replace(/_/g, ' ')}</span>
-              </div>
-              <div>
-                <span className="text-slate-400">Oversight Level:</span>{' '}
-                <StatusBadge label={dec.human_oversight} variant={oversightVariant[dec.human_oversight]} />
-              </div>
-              {dec.submission_id && (
-                <div>
-                  <span className="text-slate-400">Submission:</span>{' '}
-                  <span className="font-mono text-xs">{dec.submission_id}</span>
-                </div>
-              )}
-              {dec.claim_id && (
-                <div>
-                  <span className="text-slate-400">Claim:</span>{' '}
-                  <span className="font-mono text-xs">{dec.claim_id}</span>
-                </div>
-              )}
-            </div>
-          </div>
-        );
-      })()}
     </div>
   );
 };

@@ -19,9 +19,11 @@ interface Props<T> {
   keyExtractor: (row: T) => string;
   emptyMessage?: string;
   isLoading?: boolean;
+  expandedRowKey?: string | null;
+  expandedRowRender?: (row: T) => React.ReactNode;
 }
 
-function DataTable<T>({ columns, data, onRowClick, keyExtractor, emptyMessage = 'No data available', isLoading }: Props<T>) {
+function DataTable<T>({ columns, data, onRowClick, keyExtractor, emptyMessage = 'No data available', isLoading, expandedRowKey, expandedRowRender }: Props<T>) {
   const [sortKey, setSortKey] = useState<string | null>(null);
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
 
@@ -89,26 +91,40 @@ function DataTable<T>({ columns, data, onRowClick, keyExtractor, emptyMessage = 
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-50">
-          {sorted.map((row) => (
-            <tr
-              key={keyExtractor(row)}
-              className={`transition-colors duration-100 ${
-                onRowClick
-                  ? 'cursor-pointer hover:bg-indigo-50/40 active:bg-indigo-50/60'
-                  : 'hover:bg-slate-50/50'
-              }`}
-              onClick={onRowClick ? () => onRowClick(row) : undefined}
-            >
-              {columns.map((col) => (
-                <td
-                  key={col.key}
-                  className={`whitespace-nowrap px-4 py-3 text-sm text-slate-600 ${alignClass(col.align)} ${col.className ?? ''}`}
+          {sorted.map((row) => {
+            const rowKey = keyExtractor(row);
+            const isExpanded = expandedRowKey === rowKey;
+            return (
+              <React.Fragment key={rowKey}>
+                <tr
+                  className={`transition-colors duration-100 ${
+                    isExpanded ? 'bg-indigo-50/50' : ''
+                  } ${
+                    onRowClick
+                      ? 'cursor-pointer hover:bg-indigo-50/40 active:bg-indigo-50/60'
+                      : 'hover:bg-slate-50/50'
+                  }`}
+                  onClick={onRowClick ? () => onRowClick(row) : undefined}
                 >
-                  {col.render(row)}
-                </td>
-              ))}
-            </tr>
-          ))}
+                  {columns.map((col) => (
+                    <td
+                      key={col.key}
+                      className={`whitespace-nowrap px-4 py-3 text-sm text-slate-600 ${alignClass(col.align)} ${col.className ?? ''}`}
+                    >
+                      {col.render(row)}
+                    </td>
+                  ))}
+                </tr>
+                {isExpanded && expandedRowRender && (
+                  <tr>
+                    <td colSpan={columns.length} className="p-0">
+                      {expandedRowRender(row)}
+                    </td>
+                  </tr>
+                )}
+              </React.Fragment>
+            );
+          })}
         </tbody>
       </table>
     </div>
