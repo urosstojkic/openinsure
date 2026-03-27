@@ -1,27 +1,26 @@
 import client from './client';
-import type { DashboardStats, AgentStatus, ActivityEvent, AgentName } from '../types';
+import type { DashboardStats, AgentStatus, ActivityEvent } from '../types';
 import { mockDashboardStats } from '../data/mock';
 
 const USE_MOCK = typeof window !== 'undefined' && localStorage.getItem('openinsure_mock') === 'true';
 
-/** The 6 Foundry agents */
-const FOUNDRY_AGENTS: { name: AgentName; display_name: string }[] = [
-  { name: 'triage_agent', display_name: 'Triage Agent' },
-  { name: 'underwriting_agent', display_name: 'Underwriting Agent' },
-  { name: 'claims_agent', display_name: 'Claims Agent' },
-  { name: 'compliance_agent', display_name: 'Compliance Agent' },
-  { name: 'fraud_agent', display_name: 'Fraud Detection Agent' },
-  // orchestrator counted as a logical agent
-  { name: 'triage_agent' as AgentName, display_name: 'Orchestrator Agent' },
-];
+/** Shape returned by GET /metrics/agent-status */
+interface AgentStatusAPIItem {
+  name: string;
+  display_name: string;
+  status: 'active' | 'idle' | 'error';
+  last_action: string;
+  decisions_today: number;
+  total_decisions: number;
+}
 
 export async function getDashboardStats(): Promise<DashboardStats> {
   if (USE_MOCK) return mockDashboardStats;
   try {
-    // Fetch core metrics, decisions, and recent submissions in parallel
-    const [metricsRes, decisionsRes, submissionsRes, claimsRes] = await Promise.all([
+    // Fetch core metrics, agent status, and recent submissions in parallel
+    const [metricsRes, agentStatusRes, submissionsRes, claimsRes] = await Promise.all([
       client.get('/metrics/summary').catch(() => null),
-      client.get('/compliance/decisions', { params: { limit: 10 } }).catch(() => null),
+      client.get('/metrics/agent-status').catch(() => null),
       client.get('/submissions').catch(() => null),
       client.get('/claims').catch(() => null),
     ]);
@@ -34,35 +33,17 @@ export async function getDashboardStats(): Promise<DashboardStats> {
       ?? data.claims?.total
       ?? 0;
 
-    // ── Agent Decisions Today (#74) ──
-    const decisionItems: Record<string, unknown>[] = decisionsRes?.data?.items || (Array.isArray(decisionsRes?.data) ? decisionsRes.data : []);
-    const today = new Date().toISOString().slice(0, 10);
-    const todayDecisions = decisionItems.filter(
-      (d) => ((d.timestamp as string) || (d.created_at as string) || '').slice(0, 10) === today,
-    );
-    const agentDecisionCounts: Record<string, number> = {};
-    const agentLastAction: Record<string, string> = {};
-    for (const d of todayDecisions) {
-      const agent = (d.agent_name as string) || (d.agent as string) || 'unknown';
-      agentDecisionCounts[agent] = (agentDecisionCounts[agent] || 0) + 1;
-      if (!agentLastAction[agent]) {
-        agentLastAction[agent] = (d.outcome as string) || (d.decision_type as string) || '';
-      }
-    }
+    // ── Agent Status — real data from /metrics/agent-status (#155) ──
+    const agentItems: AgentStatusAPIItem[] = agentStatusRes?.data?.agents ?? [];
+    const agentStatuses: AgentStatus[] = agentItems.map((a) => ({
+      name: a.name as AgentStatus['name'],
+      display_name: a.display_name,
+      status: a.status,
+      last_action: a.last_action || 'Ready',
+      decisions_today: a.decisions_today,
+    }));
 
-    // ── Agent Status (#74) — show all 6 Foundry agents ──
-    const agentStatuses: AgentStatus[] = FOUNDRY_AGENTS.slice(0, 6).map(({ name, display_name }) => {
-      const count = agentDecisionCounts[name] || 0;
-      return {
-        name,
-        display_name,
-        status: count > 0 ? 'active' as const : 'idle' as const,
-        last_action: agentLastAction[name] || (count > 0 ? 'Processed decisions today' : 'Ready'),
-        decisions_today: count,
-      };
-    });
-
-    // ── Recent Activity (#74) — last 5 submissions + claims ──
+    // ── Recent Activity — last 5 submissions + claims ──
     const recentActivity: ActivityEvent[] = [];
     const subs: Record<string, unknown>[] = submissionsRes?.data?.items || (Array.isArray(submissionsRes?.data) ? submissionsRes.data : []);
     for (const s of subs.slice(0, 5)) {

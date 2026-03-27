@@ -236,7 +236,7 @@ export interface ActivityEvent {
 }
 
 export interface AgentStatus {
-  name: AgentName;
+  name: string;
   display_name: string;
   status: 'active' | 'idle' | 'error';
   last_action: string;

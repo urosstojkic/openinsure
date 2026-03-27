@@ -3,13 +3,14 @@
 Computes KPIs from Azure SQL data for CEO, CUO, and operations views.
 """
 
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
 from openinsure.infrastructure.factory import (
     get_claim_repository,
+    get_compliance_repository,
     get_policy_repository,
     get_submission_repository,
 )
@@ -74,6 +75,25 @@ class PipelineMetricsResponse(BaseModel):
 class AgentMetricsResponse(BaseModel):
     agent_activity: dict[str, int] = Field(default_factory=dict)
     total_events: int = 0
+
+
+class AgentStatusItem(BaseModel):
+    """Status of an individual AI agent derived from real decision records."""
+
+    name: str = Field(description="Internal agent key")
+    display_name: str = Field(description="Human-readable agent name")
+    status: Literal["active", "idle", "error"] = "idle"
+    last_action: str = ""
+    decisions_today: int = 0
+    total_decisions: int = 0
+
+
+class AgentStatusResponse(BaseModel):
+    """Aggregated agent status for the dashboard Agent Status tile."""
+
+    agents: list[AgentStatusItem] = Field(default_factory=list)
+    total_decisions: int = 0
+    decisions_today: int = 0
 
 
 class PremiumTrendItem(BaseModel):
@@ -233,7 +253,71 @@ async def get_agent_metrics() -> dict[str, Any]:
     }
 
 
-@router.get("/premium-trend", response_model=PremiumTrendResponse)
+@router.get("/agent-status", response_model=AgentStatusResponse)
+async def get_agent_status() -> AgentStatusResponse:
+    """Real-time agent status derived from decision_records.
+
+    Returns per-agent activity stats (decisions today, last action,
+    active/idle status) for the dashboard Agent Status tile.
+    """
+    from datetime import UTC, datetime
+
+    repo = get_compliance_repository()
+    all_rows = await repo.list_decisions(skip=0, limit=5000)
+
+    today = datetime.now(UTC).strftime("%Y-%m-%d")
+
+    # Accumulate per-agent stats
+    agent_totals: dict[str, int] = {}
+    agent_today: dict[str, int] = {}
+    agent_last_ts: dict[str, str] = {}
+    agent_last_action: dict[str, str] = {}
+    agent_display: dict[str, str] = {}
+
+    for row in all_rows:
+        aid = row.get("model_id", row.get("agent_id", "unknown"))
+        display = row.get("agent_name", "") or aid.replace("-", " ").replace("_", " ").title()
+        decision_type = row.get("decision_type", "")
+
+        agent_totals[aid] = agent_totals.get(aid, 0) + 1
+        agent_display[aid] = display
+
+        ts_raw = row.get("created_at", "")
+        ts = ts_raw.isoformat() if hasattr(ts_raw, "isoformat") else str(ts_raw)
+
+        if ts[:10] == today:
+            agent_today[aid] = agent_today.get(aid, 0) + 1
+
+        if aid not in agent_last_ts or ts > agent_last_ts[aid]:
+            agent_last_ts[aid] = ts
+            entity_id = str(row.get("entity_id", ""))[:12]
+            agent_last_action[aid] = (
+                f"{decision_type.replace('_', ' ').capitalize()} — {entity_id}"
+                if entity_id
+                else decision_type.replace("_", " ").capitalize()
+            )
+
+    agents: list[AgentStatusItem] = []
+    for aid in sorted(agent_totals, key=lambda k: agent_totals[k], reverse=True):
+        today_count = agent_today.get(aid, 0)
+        agents.append(
+            AgentStatusItem(
+                name=aid,
+                display_name=agent_display[aid],
+                status="active" if today_count > 0 else "idle",
+                last_action=agent_last_action.get(aid, "Ready"),
+                decisions_today=today_count,
+                total_decisions=agent_totals[aid],
+            )
+        )
+
+    return AgentStatusResponse(
+        agents=agents,
+        total_decisions=len(all_rows),
+        decisions_today=sum(agent_today.values()),
+    )
+
+
 async def get_premium_trend() -> dict[str, Any]:
     """Monthly premium trend from policies."""
     repo = get_policy_repository()
