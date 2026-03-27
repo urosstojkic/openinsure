@@ -196,6 +196,8 @@ graph LR
     CMP --> BM
 ```
 
+**Key design principle:** API endpoints are thin delegators (~10-25 LOC). All business logic — Foundry agent invocations, rating calculations, authority checks, escalation, compliance recording, event publishing — lives in the **Service Layer**. This ensures testability (services can be unit-tested without HTTP), reusability (MCP tools and CLI can call services directly), and maintainability (business rules change in one place).
+
 ### Data Flow: Submission → Triage → Quote → Bind → Policy
 
 ```mermaid
@@ -755,6 +757,7 @@ stateDiagram-v2
 - All endpoints under `/api/v1/` with OpenAPI documentation at `/docs`
 - Pydantic v2 request/response validation on every endpoint
 - Consistent error format with correlation IDs
+- **Thin handlers** — API endpoints extract request params, delegate to service-layer methods, and format the response. No business logic in the API layer (enforced since v105, #137).
 
 ### Authentication
 

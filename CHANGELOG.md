@@ -5,6 +5,30 @@ All notable changes to OpenInsure will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## v105 — Service Layer Extraction for Submissions (#137) (2026-03-27)
+
+### Refactored
+- **800+ LOC of business logic extracted from API handlers into `SubmissionService`** — Triage, quote, bind, and full-workflow logic previously inline in `api/submissions.py` endpoint handlers is now encapsulated in `services/submission_service.py`. API handlers are thin (~10-25 LOC) delegators that extract request params, call the service, and return the response.
+- **`SubmissionService.run_triage()`** — Foundry triage invocation, compliance decision recording, domain event publishing, and knowledge-store rule-based fallback.
+- **`SubmissionService.generate_quote()`** — Foundry underwriting with prompt builder, rating engine fallback, authority check with escalation, compliance recording.
+- **`SubmissionService.bind()`** — Authority check, Foundry policy review, declaration page generation, billing account creation, reinsurance cession calculation, domain event publishing.
+- **`SubmissionService.process()`** — Full multi-agent workflow orchestration (triage → quote → authority → auto-bind) with compliance recording.
+- **Shared helpers extracted** — `_record_decision()`, `_check_authority_and_escalate()`, `_auto_cession()`, `_build_policy_data()`, `_parse_json_field()` reduce duplication across service methods.
+
+### Architecture
+- **API layer is now thin** — No endpoint handler exceeds 30 LOC. All business logic (Foundry calls, rating calculations, authority checks, escalation, compliance recording, event publishing) lives in the service layer.
+- **Testability improved** — Business logic can be unit-tested by instantiating `SubmissionService` directly, without going through HTTP. Foundry client and repos are mockable.
+- **Reusability** — MCP tools, CLI, or other interfaces can call `SubmissionService` methods directly without duplicating logic.
+
+### Agents
+- Backend (#137)
+
+### Metrics
+- 627 unit tests passing
+- Live lifecycle test (Create → Triage → Quote → Bind) verified on deployed backend
+
+---
+
 ## v104 — Transaction Management for Multi-Step Operations (2026-03-27)
 
 ### Fixed
