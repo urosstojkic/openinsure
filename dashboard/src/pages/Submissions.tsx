@@ -66,6 +66,20 @@ const Submissions: React.FC = () => {
         addToast('success', policyId ? `Bound! Policy ID: ${policyId}` : 'Policy bound successfully!');
       }
     } catch (err: unknown) {
+      // On timeout/network errors, check if the action actually succeeded server-side
+      const isTimeout = (err as { code?: string })?.code === 'ECONNABORTED'
+        || (err as { message?: string })?.message?.includes('timeout');
+      if (isTimeout) {
+        try {
+          const { data: updated } = await client.get(`/submissions/${id}`);
+          const expectedStatus = action === 'triage' ? 'underwriting' : action === 'quote' ? 'quoted' : 'bound';
+          if (updated?.status === expectedStatus) {
+            await refetch();
+            addToast('success', `${action.charAt(0).toUpperCase() + action.slice(1)} completed (AI processing took longer than usual)`);
+            return;
+          }
+        } catch { /* ignore verification errors */ }
+      }
       const msg = (err as { response?: { data?: { detail?: string } }; message?: string })?.response?.data?.detail
         ?? (err as { message?: string })?.message ?? 'Unknown error';
       addToast('error', `Failed to ${action}: ${msg}`);
