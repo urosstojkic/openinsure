@@ -73,7 +73,39 @@ def _apply_sync(db: Any) -> list[str]:
         )
         row = cursor.fetchone()
         cursor.close()
-        if row and row[0] > 0:
+
+        already_recorded = row and row[0] > 0
+
+        # Repair: if recorded but target tables are missing, delete the
+        # stale record so the migration re-runs.  Extract table names from
+        # CREATE TABLE statements in the SQL file.
+        if already_recorded:
+            sql_text = path.read_text(encoding="utf-8")
+            table_names = re.findall(r"(?i)CREATE\s+TABLE\s+(\w+)", sql_text)
+            if table_names:
+                cursor = conn.cursor()
+                missing = False
+                for tbl in table_names:
+                    cursor.execute(
+                        "SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = ?",
+                        [tbl],
+                    )
+                    tbl_row = cursor.fetchone()
+                    if not tbl_row or tbl_row[0] == 0:
+                        missing = True
+                        break
+                cursor.close()
+                if missing:
+                    logger.info("Repair: migration %s recorded but tables missing, re-applying", name)
+                    cursor = conn.cursor()
+                    cursor.execute(
+                        "DELETE FROM _migration_history WHERE migration_name = ?",
+                        [name],
+                    )
+                    cursor.close()
+                    already_recorded = False
+
+        if already_recorded:
             continue
 
         # Read and execute
