@@ -197,11 +197,13 @@ class TestJWTMode:
         )
         app.dependency_overrides[get_settings] = lambda: settings
         client = TestClient(app)
-        token = _make_jwt({
-            "sub": "u",
-            "roles": [Role.CUO],
-            "iss": "https://login.microsoftonline.com/tenant/v2.0",
-        })
+        token = _make_jwt(
+            {
+                "sub": "u",
+                "roles": [Role.CUO],
+                "iss": "https://login.microsoftonline.com/tenant/v2.0",
+            }
+        )
         resp = client.get("/protected", headers={"Authorization": f"Bearer {token}"})
         assert resp.status_code == 200
 

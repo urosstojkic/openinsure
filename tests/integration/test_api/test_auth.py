@@ -38,9 +38,7 @@ def test_health_no_auth_required():
 def test_api_no_auth_in_dev_mode():
     """When require_auth=False and no api_key configured, API works without key."""
     app = create_app()
-    app.dependency_overrides[get_settings] = lambda: _make_settings(
-        require_auth=False, api_key=""
-    )
+    app.dependency_overrides[get_settings] = lambda: _make_settings(require_auth=False, api_key="")
     client = TestClient(app)
     resp = client.get("/api/v1/submissions")
     assert resp.status_code == 200
