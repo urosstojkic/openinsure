@@ -59,6 +59,10 @@ export interface Submission {
   agent_recommendation?: AgentRecommendation;
   decision_history: DecisionEvent[];
   cyber_risk_data?: CyberRiskData;
+  quoted_premium?: number;
+  rating_breakdown?: RatingBreakdown;
+  recommendation?: string;
+  policy_id?: string;
 }
 
 export interface Document {

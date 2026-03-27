@@ -9,6 +9,7 @@ export interface Column<T> {
   sortable?: boolean;
   sortValue?: (row: T) => string | number;
   align?: 'left' | 'center' | 'right';
+  className?: string;
 }
 
 interface Props<T> {
@@ -72,7 +73,7 @@ function DataTable<T>({ columns, data, onRowClick, keyExtractor, emptyMessage = 
                 key={col.key}
                 className={`sticky top-0 z-10 bg-slate-50/80 backdrop-blur-sm px-4 py-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400 ${alignClass(col.align)} ${
                   col.sortable ? 'cursor-pointer select-none transition-colors hover:text-slate-600' : ''
-                }`}
+                } ${col.className ?? ''}`}
                 onClick={col.sortable ? () => handleSort(col.key) : undefined}
               >
                 <span className="inline-flex items-center gap-1">
@@ -101,7 +102,7 @@ function DataTable<T>({ columns, data, onRowClick, keyExtractor, emptyMessage = 
               {columns.map((col) => (
                 <td
                   key={col.key}
-                  className={`whitespace-nowrap px-4 py-3 text-sm text-slate-600 ${alignClass(col.align)}`}
+                  className={`whitespace-nowrap px-4 py-3 text-sm text-slate-600 ${alignClass(col.align)} ${col.className ?? ''}`}
                 >
                   {col.render(row)}
                 </td>

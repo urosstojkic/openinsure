@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Plus, Play, Sparkles, Eye, Loader2, Search, ChevronLeft, ChevronRight, Download } from 'lucide-react';
+import { Plus, Play, Sparkles, Eye, Loader2, Search, ChevronLeft, ChevronRight } from 'lucide-react';
 import DataTable, { type Column } from '../components/DataTable';
 import StatusBadge from '../components/StatusBadge';
 import { TableSkeleton } from '../components/Skeleton';
@@ -40,7 +40,6 @@ const Submissions: React.FC = () => {
   const [lobFilter, setLobFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const { toasts, addToast, dismissToast } = useToast();
@@ -106,48 +105,8 @@ const Submissions: React.FC = () => {
   const PAGE_SIZE = 25;
   const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
   const paginated = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
-  const pageIds = paginated.map((r) => r.id);
-  const allPageSelected = pageIds.length > 0 && pageIds.every((id) => selectedIds.has(id));
-
-  const toggleSelectAll = () => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (allPageSelected) pageIds.forEach((id) => next.delete(id));
-      else pageIds.forEach((id) => next.add(id));
-      return next;
-    });
-  };
-
-  const toggleSelect = (id: string) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
-
-  const handleExportSelected = () => {
-    const selected = submissions.filter((s) => selectedIds.has(s.id));
-    const headers = ['ID', 'Applicant', 'Company', 'LOB', 'Status', 'Risk Score', 'Priority'];
-    const rows = selected.map((s) => [s.submission_number || s.id, s.applicant_name, s.company_name, s.lob, s.status, s.risk_score, s.priority].join(','));
-    const csv = [headers.join(','), ...rows].join('\n');
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'submissions_export.csv';
-    a.click();
-    URL.revokeObjectURL(url);
-  };
 
   const columns: Column<Submission>[] = [
-    { key: 'select', header: (
-        <input type="checkbox" checked={allPageSelected} onChange={toggleSelectAll} className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
-      ), render: (r) => (
-        <input type="checkbox" checked={selectedIds.has(r.id)} onChange={() => toggleSelect(r.id)} onClick={(e) => e.stopPropagation()} className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
-      ),
-    },
     { key: 'id', header: 'ID',render: (r) => <span className="font-mono text-xs">{r.submission_number || r.id}</span>, sortable: true, sortValue: (r) => r.submission_number || r.id },
     { key: 'applicant', header: 'Applicant', render: (r) => (
         <div>
@@ -155,16 +114,16 @@ const Submissions: React.FC = () => {
           <p className="text-xs text-slate-400">{r.company_name}</p>
         </div>
       ), sortable: true, sortValue: (r) => r.applicant_name },
-    { key: 'lob', header: 'LOB', render: (r) => lobLabels[r.lob] ?? r.lob, sortable: true, sortValue: (r) => r.lob },
+    { key: 'lob', header: 'LOB', render: (r) => lobLabels[r.lob] ?? r.lob, sortable: true, sortValue: (r) => r.lob, className: 'hidden md:table-cell' },
     { key: 'status', header: 'Status', render: (r) => <StatusBadge label={r.status} variant={statusVariant[r.status] || 'gray'} /> },
     { key: 'risk', header: 'Risk Score', render: (r) => (
         <span className={`font-mono text-sm ${r.risk_score >= 70 ? 'text-red-600 font-semibold' : r.risk_score >= 40 ? 'text-amber-600' : 'text-slate-600'}`}>
           {r.risk_score || '—'}
         </span>
-      ), sortable: true, sortValue: (r) => r.risk_score },
-    { key: 'priority', header: 'Priority', render: (r) => <StatusBadge label={r.priority} variant={priorityVariant(r.priority)} /> },
-    { key: 'assigned', header: 'Assigned To', render: (r) => r.assigned_to ?? <span className="text-slate-300">Unassigned</span> },
-    { key: 'date', header: 'Received', render: (r) => r.received_date ? new Date(r.received_date).toLocaleDateString() : '—', sortable: true, sortValue: (r) => r.received_date },
+      ), sortable: true, sortValue: (r) => r.risk_score, className: 'hidden lg:table-cell' },
+    { key: 'priority', header: 'Priority', render: (r) => <StatusBadge label={r.priority} variant={priorityVariant(r.priority)} />, className: 'hidden lg:table-cell' },
+    { key: 'assigned', header: 'Assigned To', render: (r) => r.assigned_to ?? <span className="text-slate-300">Unassigned</span>, className: 'hidden lg:table-cell' },
+    { key: 'date', header: 'Received', render: (r) => r.received_date ? new Date(r.received_date).toLocaleDateString() : '—', sortable: true, sortValue: (r) => r.received_date, className: 'hidden md:table-cell' },
     { key: 'actions', header: 'Actions', render: (r) => {
       const loading = actionLoading?.startsWith(r.id);
       return (
@@ -224,6 +183,19 @@ const Submissions: React.FC = () => {
   return (
     <div className="space-y-4">
       <ToastContainer toasts={toasts} onDismiss={dismissToast} />
+
+      {/* AI processing overlay (#127) */}
+      {actionLoading && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm">
+          <div className="flex flex-col items-center gap-4 rounded-2xl border border-slate-200/60 bg-white px-10 py-8 shadow-xl animate-pulse">
+            <Loader2 size={36} className="animate-spin text-indigo-600" />
+            <div className="text-center">
+              <p className="text-base font-semibold text-slate-900">AI agent processing…</p>
+              <p className="mt-1 text-sm text-slate-500">This may take up to 30 seconds</p>
+            </div>
+          </div>
+        </div>
+      )}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-900">Submissions</h1>
@@ -267,15 +239,6 @@ const Submissions: React.FC = () => {
           ))}
         </select>
         <span className="text-[11px] font-medium text-slate-400">{filtered.length} results</span>
-        {selectedIds.size > 0 && (
-          <div className="ml-auto flex items-center gap-2 rounded-lg border border-indigo-200/60 bg-indigo-50/50 px-3 py-1.5">
-            <span className="text-sm font-medium text-indigo-700">Selected ({selectedIds.size})</span>
-            <button onClick={handleExportSelected} className="inline-flex items-center gap-1 rounded-md bg-indigo-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-indigo-700">
-              <Download size={12} /> Export
-            </button>
-            <button onClick={() => setSelectedIds(new Set())} className="text-xs text-indigo-600 hover:text-indigo-800">Clear</button>
-          </div>
-        )}
       </div>
 
       <DataTable
