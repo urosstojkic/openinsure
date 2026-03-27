@@ -101,7 +101,7 @@ After completing a significant feature block (new process, major fix, architectu
 
 | Metric | Value |
 |--------|-------|
-| Tests | 636 collected (unit, pytest CI green) |
+| Tests | 627 collected (unit, pytest CI green) |
 | API endpoints | 153 across 28 modules |
 | Dashboard pages | 25 (React 18 + TypeScript + Tailwind) |
 | Foundry agents | 10 deployed on Azure AI Foundry (GPT-5.2 + AI Search tools) |

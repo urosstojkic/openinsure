@@ -256,6 +256,38 @@ sequenceDiagram
     API-->>Broker: 200 OK {policy_id, status: bound}
 ```
 
+### Transaction Management
+
+Multi-step operations use explicit database transactions via `DatabaseAdapter.transaction()` to guarantee atomicity. The `TransactionContext` provides async-safe query methods (`async_execute_query`, `async_fetch_one`, `async_fetch_all`) that offload work to the thread-pool executor while sharing a single pyodbc connection.
+
+SQL repository `create()` / `update()` methods accept an optional `txn: TransactionContext` keyword argument. When provided, the query runs on the transaction's connection; otherwise, a pooled connection is acquired and auto-committed as before.
+
+**Transaction boundaries:**
+
+| Operation | Scope | Rollback trigger |
+|-----------|-------|------------------|
+| **Bind** | INSERT policy + INSERT billing_account + UPDATE submission status | Any core step failure rolls back all three |
+| **Cessions** | All INSERT reinsurance_cessions for a single bind | Separate transaction — partial cessions never committed, but cession failure does not roll back the core bind |
+| **Quote** | UPDATE submission (status → quoted, premium) | Single-statement transaction for consistency |
+
+**Excluded from transactions** (non-critical, fail-open):
+- Foundry agent invocations (AI review, document generation)
+- Domain event publishing (Event Grid / Service Bus)
+- Compliance decision recording (Cosmos DB)
+- Treaty capacity in-memory updates
+
+```python
+# Example: bind transaction in SubmissionService.bind()
+db = get_database_adapter()
+if db:
+    async with db.transaction() as txn:
+        await policy_repo.create(policy_data, txn=txn)
+        await create_billing_account_on_bind(..., txn=txn)
+        await submission_repo.update(sid, {"status": "bound"}, txn=txn)
+# Non-critical ops run after commit
+await publish_domain_event("policy.bound", ...)
+```
+
 ### Agent Invocation Pattern
 
 Every AI agent follows the same execution model:
@@ -1405,6 +1437,7 @@ These decisions are foundational and unlikely to change. They are recorded here 
 | **ADR-005** | Microsoft Foundry for AI orchestration | Native agent orchestration, 1,900+ model catalog, guardrails, audit logging, MCP compatibility, M365 publishing |
 | **ADR-006** | EU AI Act compliance-by-design | Insurance underwriting classified as high-risk (Annex III). Deadline Aug 2026, fines up to €15M / 3% turnover. Retroactive compliance would require costly rewrite |
 | **ADR-007** | ACORD-aligned JSON/REST API | Industry-standard terminology for interoperability, modern JSON/REST (no legacy XML overhead), OpenAPI auto-generated |
+| **ADR-008** | Explicit transaction boundaries for multi-step operations | Bind (policy + billing + status) wrapped in a single DB transaction to prevent orphan records. Non-critical ops (events, AI, compliance) excluded to avoid coupling. Cessions use a separate transaction for independent atomicity |
 
 ## Appendix D: Related Documentation
 

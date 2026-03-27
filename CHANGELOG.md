@@ -5,6 +5,25 @@ All notable changes to OpenInsure will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## v104 — Transaction Management for Multi-Step Operations (2026-03-27)
+
+### Fixed
+- **No transaction management (#136)** — Bind, quote, and cession operations now execute within explicit database transactions. Previously, if policy creation succeeded but the billing account or submission status update failed, the system could leave orphan policies and inconsistent state.
+
+### Architecture
+- **`TransactionContext` async wrappers** — Added `async_execute_query`, `async_fetch_one`, `async_fetch_all` to `TransactionContext` so transaction-bound operations can be safely `await`ed from the event loop without blocking.
+- **Repository `txn` parameter** — `SqlSubmissionRepository`, `SqlPolicyRepository`, `SqlBillingRepository`, and `SqlCessionRepository` `create()`/`update()` methods now accept an optional `txn: TransactionContext` keyword argument. When provided, queries run on the transaction's connection instead of acquiring a separate pooled connection.
+- **Bind transaction boundary** — Core bind ops (INSERT policy, INSERT billing account, UPDATE submission status) are wrapped in a single atomic transaction. Cessions use a separate transaction. Non-critical operations (Foundry AI review, event publishing, compliance logging) remain outside transactions.
+- **Quote transaction boundary** — Submission status update to "quoted" is wrapped in a transaction.
+- **Cession atomicity** — All cession INSERTs for a bind are wrapped in their own transaction so partial cession sets are never committed.
+
+### Agents
+- Backend (#136)
+
+### Metrics
+- 627 unit tests passing
+- Live lifecycle test (Create → Triage → Quote → Bind) verified on v104 deployment
+
 ## v98 — Foundry Agents Live + Portal E2E Fixes (2026-03-27)
 
 ### Fixed
