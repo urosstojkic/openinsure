@@ -1,13 +1,14 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { Plus, Play, Sparkles, Eye, Loader2, Search, ChevronLeft, ChevronRight } from 'lucide-react';
 import DataTable, { type Column } from '../components/DataTable';
 import StatusBadge from '../components/StatusBadge';
+import ConfirmDialog from '../components/ConfirmDialog';
 import { TableSkeleton } from '../components/Skeleton';
 import { ToastContainer } from '../components/Toast';
 import { useToast } from '../components/useToast';
-import { getSubmissions } from '../api/submissions';
+import { getSubmissionsPaginated } from '../api/submissions';
 import client from '../api/client';
 import type { Submission, SubmissionStatus, LOB } from '../types';
 
@@ -34,15 +35,29 @@ const lobLabels: Record<LOB, string> = {
 
 const Submissions: React.FC = () => {
   const navigate = useNavigate();
-  const { data: submissions = [], isLoading, refetch } = useQuery({ queryKey: ['submissions'], queryFn: getSubmissions });
+  const PAGE_SIZE = 20;
+  const [currentPage, setCurrentPage] = useState(1);
+  const skip = (currentPage - 1) * PAGE_SIZE;
+
+  const { data: pageData, isLoading, refetch } = useQuery({
+    queryKey: ['submissions', currentPage],
+    queryFn: () => getSubmissionsPaginated(skip, PAGE_SIZE),
+    placeholderData: keepPreviousData,
+  });
+
+  const submissions: Submission[] = pageData?.items ?? [];
+  const totalItems = pageData?.total ?? 0;
+  const totalPages = Math.ceil(totalItems / PAGE_SIZE);
 
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [lobFilter, setLobFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
-  const [currentPage, setCurrentPage] = useState(1);
 
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const { toasts, addToast, dismissToast } = useToast();
+
+  // Bind confirmation dialog state
+  const [bindConfirm, setBindConfirm] = useState<{ id: string; event: React.MouseEvent } | null>(null);
 
   const formatMoney = (n: number) =>
     new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n);
@@ -102,10 +117,6 @@ const Submissions: React.FC = () => {
     return list;
   }, [submissions, statusFilter, lobFilter, searchQuery]);
 
-  const PAGE_SIZE = 25;
-  const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
-  const paginated = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
-
   const columns: Column<Submission>[] = [
     { key: 'id', header: 'ID',render: (r) => <span className="font-mono text-xs">{r.submission_number || r.id}</span>, sortable: true, sortValue: (r) => r.submission_number || r.id },
     { key: 'applicant', header: 'Applicant', render: (r) => (
@@ -150,7 +161,7 @@ const Submissions: React.FC = () => {
           )}
           {r.status === 'quoted' && (
             <button
-              onClick={(e) => handleAction(r.id, 'bind', e)}
+              onClick={(e) => { e.stopPropagation(); setBindConfirm({ id: r.id, event: e }); }}
               disabled={!!loading}
               className="inline-flex items-center gap-1 rounded-md bg-purple-600 px-2.5 py-1 text-xs font-medium text-white shadow-sm hover:bg-purple-700 active:scale-[0.97] disabled:opacity-50 transition-all"
             >
@@ -238,40 +249,57 @@ const Submissions: React.FC = () => {
             <option key={k} value={k}>{v}</option>
           ))}
         </select>
-        <span className="text-[11px] font-medium text-slate-400">{filtered.length} results</span>
+        <span className="text-[11px] font-medium text-slate-400">{totalItems} total · {filtered.length} shown</span>
       </div>
 
       <DataTable
         columns={columns}
-        data={paginated}
+        data={filtered}
         keyExtractor={(r) => r.id}
         onRowClick={(r) => navigate(`/submissions/${r.id}`)}
       />
 
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between rounded-xl border border-slate-200/60 bg-white px-4 py-3">
-          <span className="text-xs text-slate-500">
-            Showing {(currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, filtered.length)} of {filtered.length}
-          </span>
-          <div className="flex items-center gap-2">
-            <button
-              disabled={currentPage <= 1}
-              onClick={() => setCurrentPage((p) => p - 1)}
-              className="inline-flex items-center gap-1 rounded-md border border-slate-200/60 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <ChevronLeft size={14} /> Previous
-            </button>
-            <span className="text-sm text-slate-700">Page {currentPage} of {totalPages}</span>
-            <button
-              disabled={currentPage >= totalPages}
-              onClick={() => setCurrentPage((p) => p + 1)}
-              className="inline-flex items-center gap-1 rounded-md border border-slate-200/60 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              Next <ChevronRight size={14} />
-            </button>
-          </div>
+      {/* Bind confirmation dialog */}
+      <ConfirmDialog
+        open={!!bindConfirm}
+        title="Confirm Bind"
+        message="Are you sure you want to bind this submission? This will create a policy."
+        confirmLabel="Confirm Bind"
+        cancelLabel="Cancel"
+        variant="warning"
+        onConfirm={() => {
+          if (bindConfirm) {
+            handleAction(bindConfirm.id, 'bind', bindConfirm.event);
+            setBindConfirm(null);
+          }
+        }}
+        onCancel={() => setBindConfirm(null)}
+      />
+
+      <div className="flex items-center justify-between rounded-xl border border-slate-200/60 bg-white px-4 py-3">
+        <span className="text-xs text-slate-500">
+          {totalItems > 0
+            ? `Showing ${skip + 1}\u2013${Math.min(skip + PAGE_SIZE, totalItems)} of ${totalItems}`
+            : 'No submissions'}
+        </span>
+        <div className="flex items-center gap-2">
+          <button
+            disabled={currentPage <= 1}
+            onClick={() => setCurrentPage((p) => p - 1)}
+            className="inline-flex items-center gap-1 rounded-md border border-slate-200/60 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <ChevronLeft size={14} /> Previous
+          </button>
+          <span className="text-sm text-slate-700">Page {currentPage} of {totalPages || 1}</span>
+          <button
+            disabled={currentPage >= totalPages}
+            onClick={() => setCurrentPage((p) => p + 1)}
+            className="inline-flex items-center gap-1 rounded-md border border-slate-200/60 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Next <ChevronRight size={14} />
+          </button>
         </div>
-      )}
+      </div>
     </div>
   );
 };

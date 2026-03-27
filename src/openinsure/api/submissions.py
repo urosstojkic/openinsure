@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import json
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from enum import StrEnum
 from typing import Any
@@ -110,8 +110,11 @@ def _build_policy_data(
         "product_id": submission.get("product_id", f"{lob}-smb"),
         "submission_id": submission.get("id", ""),
         "insured_name": applicant,
-        "effective_date": str(submission.get("requested_effective_date", now)),
-        "expiration_date": str(submission.get("requested_expiration_date", now)),
+        "effective_date": str(submission.get("requested_effective_date") or now[:10]),
+        "expiration_date": str(
+            submission.get("requested_expiration_date")
+            or (datetime.now(UTC) + timedelta(days=365)).strftime("%Y-%m-%d")
+        ),
         "premium": premium,
         "total_premium": premium,
         "written_premium": premium,

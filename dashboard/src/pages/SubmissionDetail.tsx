@@ -1,13 +1,17 @@
-import React from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import React, { useState } from 'react';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Download, CheckCircle, XCircle, AlertTriangle, ArrowUpRight, FileText, Shield, Clock } from 'lucide-react';
+import { ArrowLeft, Download, CheckCircle, XCircle, AlertTriangle, ArrowUpRight, FileText, Shield, Clock, Loader2, ExternalLink, Sparkles, Play } from 'lucide-react';
 import StatusBadge from '../components/StatusBadge';
+import ConfirmDialog from '../components/ConfirmDialog';
 import ConfidenceBar from '../components/ConfidenceBar';
 import ReasoningPanel from '../components/ReasoningPanel';
 import TimelineEvent from '../components/TimelineEvent';
 import Skeleton from '../components/Skeleton';
-import { getSubmission, enrichSubmission } from '../api/submissions';
+import { ToastContainer } from '../components/Toast';
+import { useToast } from '../components/useToast';
+import { getSubmission, enrichSubmission, bindSubmission, declineSubmission, referSubmission } from '../api/submissions';
+import client from '../api/client';
 import type { SubmissionStatus } from '../types';
 
 const statusVariant: Record<SubmissionStatus, 'blue' | 'yellow' | 'orange' | 'green' | 'purple' | 'red' | 'cyan'> = {
@@ -168,11 +172,53 @@ function EnrichmentSection({ submissionId, metadata }: { submissionId: string; m
 const SubmissionDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const { toasts, addToast, dismissToast } = useToast();
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
   const { data: sub, isLoading } = useQuery({
     queryKey: ['submission', id],
     queryFn: () => getSubmission(id!),
     enabled: !!id,
   });
+
+  const [bindConfirmOpen, setBindConfirmOpen] = useState(false);
+
+  const handleAction = async (action: 'triage' | 'quote' | 'bind' | 'decline' | 'refer') => {
+    if (!id) return;
+    setActionLoading(action);
+    try {
+      if (action === 'triage' || action === 'quote') {
+        const { data } = await client.post(`/submissions/${id}/${action}`);
+        await queryClient.invalidateQueries({ queryKey: ['submission', id] });
+        if (action === 'triage') {
+          const score = data?.risk_score ?? data?.risk_data?.risk_score ?? '—';
+          addToast('success', `Triaged! Risk score: ${score}`);
+        } else {
+          const premium = data?.premium ?? data?.quote?.premium;
+          addToast('success', premium != null ? `Quoted! Premium: ${money(premium)}` : 'Quote generated successfully!');
+        }
+      } else {
+        const fns = { bind: bindSubmission, decline: declineSubmission, refer: referSubmission };
+        const data = await fns[action](id);
+        await queryClient.invalidateQueries({ queryKey: ['submission', id] });
+        if (action === 'bind') {
+          const policyId = (data as Record<string, unknown>)?.policy_id ?? '';
+          addToast('success', policyId ? `Bound! Policy created: ${policyId}` : 'Policy bound successfully!');
+        } else if (action === 'decline') {
+          addToast('success', 'Submission declined.');
+        } else {
+          addToast('success', 'Submission escalated for manual review.');
+        }
+      }
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { detail?: string } }; message?: string })?.response?.data?.detail
+        ?? (err as { message?: string })?.message ?? 'Unknown error';
+      const labels: Record<string, string> = { triage: 'triage', quote: 'quote', bind: 'bind', decline: 'decline', refer: 'escalate' };
+      addToast('error', `Failed to ${labels[action]}: ${msg}`);
+    } finally {
+      setActionLoading(null);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -209,7 +255,8 @@ const SubmissionDetail: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
+      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
+      {/* Header — #126: show submission_number instead of raw UUID */}
       <div className="flex items-center gap-4">
         <button
           onClick={() => navigate('/submissions')}
@@ -219,15 +266,116 @@ const SubmissionDetail: React.FC = () => {
         </button>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-3">
-            <h1 className="text-xl font-bold tracking-tight text-slate-900">{sub.id}</h1>
+            <h1 className="text-xl font-bold tracking-tight text-slate-900">{sub.submission_number || sub.id}</h1>
             <StatusBadge label={sub.status} variant={statusVariant[sub.status]} />
           </div>
-          <p className="mt-0.5 text-sm text-slate-500">{sub.company_name} · {lobLabels[sub.lob]}</p>
+          <p className="mt-0.5 text-sm text-slate-500">
+            {sub.company_name} · {lobLabels[sub.lob]}
+            {sub.submission_number && (
+              <span className="ml-2 text-xs text-slate-400">ID: {sub.id}</span>
+            )}
+          </p>
         </div>
       </div>
 
       {/* ── Pipeline ── */}
       <Pipeline status={sub.status} />
+
+      {/* ── #120: AI Triage & Underwriting Results ── */}
+      {(sub.risk_score > 0 || sub.quoted_premium || sub.recommendation) && (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          {/* Risk Score with color coding */}
+          {sub.risk_score > 0 && (
+            <div className={`rounded-xl border p-4 shadow-[var(--shadow-xs)] ${
+              sub.risk_score < 4
+                ? 'border-emerald-200/60 bg-emerald-50/50'
+                : sub.risk_score <= 6
+                ? 'border-amber-200/60 bg-amber-50/50'
+                : 'border-red-200/60 bg-red-50/50'
+            }`}>
+              <p className="text-[10px] font-medium uppercase tracking-wider text-slate-400">Risk Score</p>
+              <p className={`mt-1 text-3xl font-bold ${
+                sub.risk_score < 4
+                  ? 'text-emerald-700'
+                  : sub.risk_score <= 6
+                  ? 'text-amber-700'
+                  : 'text-red-700'
+              }`}>
+                {sub.risk_score.toFixed(1)}
+              </p>
+              <p className="mt-0.5 text-xs text-slate-500">
+                {sub.risk_score < 4 ? 'Low risk' : sub.risk_score <= 6 ? 'Medium risk' : 'High risk'}
+              </p>
+            </div>
+          )}
+
+          {/* Quoted Premium */}
+          {sub.quoted_premium != null && sub.quoted_premium > 0 && (
+            <div className="rounded-xl border border-indigo-200/60 bg-indigo-50/50 p-4 shadow-[var(--shadow-xs)]">
+              <p className="text-[10px] font-medium uppercase tracking-wider text-slate-400">Quoted Premium</p>
+              <p className="mt-1 text-3xl font-bold text-indigo-700">{money(sub.quoted_premium)}</p>
+              <p className="mt-0.5 text-xs text-slate-500">Annual premium</p>
+            </div>
+          )}
+
+          {/* Recommendation */}
+          {sub.recommendation && (
+            <div className="rounded-xl border border-slate-200/60 bg-white p-4 shadow-[var(--shadow-xs)]">
+              <p className="text-[10px] font-medium uppercase tracking-wider text-slate-400">Recommendation</p>
+              <p className={`mt-1 text-lg font-bold capitalize ${
+                sub.recommendation.includes('proceed') || sub.recommendation.includes('approve')
+                  ? 'text-emerald-700'
+                  : sub.recommendation.includes('decline')
+                  ? 'text-red-700'
+                  : 'text-amber-700'
+              }`}>
+                {sub.recommendation.replace(/_/g, ' ')}
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Rating Breakdown */}
+      {sub.rating_breakdown && (
+        <div className="rounded-xl border border-slate-200/60 bg-white p-5 shadow-[var(--shadow-xs)]">
+          <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-slate-400">Rating Breakdown</h2>
+          <div className="grid grid-cols-3 gap-4 mb-4">
+            <div>
+              <p className="text-[10px] font-medium uppercase tracking-wider text-slate-400">Base Premium</p>
+              <p className="mt-0.5 text-lg font-bold text-slate-800">{sub.rating_breakdown.base_premium}</p>
+            </div>
+            <div>
+              <p className="text-[10px] font-medium uppercase tracking-wider text-slate-400">Adjusted Premium</p>
+              <p className="mt-0.5 text-lg font-bold text-slate-800">{sub.rating_breakdown.adjusted_premium}</p>
+            </div>
+            <div>
+              <p className="text-[10px] font-medium uppercase tracking-wider text-slate-400">Final Premium</p>
+              <p className="mt-0.5 text-lg font-bold text-emerald-700">{sub.rating_breakdown.final_premium}</p>
+            </div>
+          </div>
+          {Object.keys(sub.rating_breakdown.factors_applied).length > 0 && (
+            <div>
+              <p className="text-[10px] font-medium uppercase tracking-wider text-slate-400 mb-2">Factors Applied</p>
+              <div className="space-y-1">
+                {Object.entries(sub.rating_breakdown.factors_applied).map(([key, value]) => (
+                  <div key={key} className="flex justify-between rounded-lg bg-slate-50 px-3 py-1.5 text-sm">
+                    <span className="text-slate-600 capitalize">{key.replace(/_/g, ' ')}</span>
+                    <span className="font-medium text-slate-800">{value}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          {sub.rating_breakdown.warnings.length > 0 && (
+            <div className="mt-3 flex flex-wrap gap-1.5">
+              {sub.rating_breakdown.warnings.map((w, i) => (
+                <StatusBadge key={i} label={w} variant="yellow" size="sm" />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* ── Left column: details ── */}
@@ -378,24 +526,107 @@ const SubmissionDetail: React.FC = () => {
 
         {/* ── Right column: actions + timeline ── */}
         <div className="space-y-6">
-          {/* Action buttons */}
+          {/* Action buttons — status-aware (#129) */}
           <div className="rounded-xl border border-slate-200/60 bg-white p-5 shadow-[var(--shadow-xs)]">
             <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-400">Actions</h2>
             <div className="space-y-2">
-              <button className="flex w-full items-center gap-2.5 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm shadow-emerald-500/20 transition-all hover:bg-emerald-700 hover:shadow-md hover:shadow-emerald-500/25 active:scale-[0.98]">
-                <CheckCircle size={15} /> Approve Quote
-              </button>
-              <button className="flex w-full items-center gap-2.5 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm shadow-indigo-500/20 transition-all hover:bg-indigo-700 hover:shadow-md hover:shadow-indigo-500/25 active:scale-[0.98]">
-                <AlertTriangle size={15} /> Modify Terms
-              </button>
-              <button className="flex w-full items-center gap-2.5 rounded-lg bg-red-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm shadow-red-500/20 transition-all hover:bg-red-700 hover:shadow-md hover:shadow-red-500/25 active:scale-[0.98]">
-                <XCircle size={15} /> Decline
-              </button>
-              <button className="flex w-full items-center gap-2.5 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition-all hover:bg-slate-50 hover:border-slate-300 active:scale-[0.98]">
-                <ArrowUpRight size={15} /> Escalate
-              </button>
+              {/* received → Triage */}
+              {sub.status === 'received' && (
+                <button
+                  onClick={() => handleAction('triage')}
+                  disabled={!!actionLoading}
+                  className="flex w-full items-center gap-2.5 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm shadow-blue-500/20 transition-all hover:bg-blue-700 hover:shadow-md hover:shadow-blue-500/25 active:scale-[0.98] disabled:opacity-50"
+                >
+                  {actionLoading === 'triage' ? <Loader2 size={15} className="animate-spin" /> : <Sparkles size={15} />}
+                  Triage
+                </button>
+              )}
+
+              {/* underwriting → Quote */}
+              {sub.status === 'underwriting' && (
+                <button
+                  onClick={() => handleAction('quote')}
+                  disabled={!!actionLoading}
+                  className="flex w-full items-center gap-2.5 rounded-lg bg-green-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm shadow-green-500/20 transition-all hover:bg-green-700 hover:shadow-md hover:shadow-green-500/25 active:scale-[0.98] disabled:opacity-50"
+                >
+                  {actionLoading === 'quote' ? <Loader2 size={15} className="animate-spin" /> : <Play size={15} />}
+                  Quote
+                </button>
+              )}
+
+              {/* quoted → Bind (with confirmation) */}
+              {sub.status === 'quoted' && (
+                <button
+                  onClick={() => setBindConfirmOpen(true)}
+                  disabled={!!actionLoading}
+                  className="flex w-full items-center gap-2.5 rounded-lg bg-purple-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm shadow-purple-500/20 transition-all hover:bg-purple-700 hover:shadow-md hover:shadow-purple-500/25 active:scale-[0.98] disabled:opacity-50"
+                >
+                  {actionLoading === 'bind' ? <Loader2 size={15} className="animate-spin" /> : <CheckCircle size={15} />}
+                  Bind Policy
+                </button>
+              )}
+
+              {/* bound → View Policy */}
+              {sub.status === 'bound' && sub.policy_id && (
+                <Link
+                  to={`/policies/${sub.policy_id}`}
+                  className="flex w-full items-center gap-2.5 rounded-lg bg-purple-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm shadow-purple-500/20 transition-all hover:bg-purple-700 hover:shadow-md hover:shadow-purple-500/25 active:scale-[0.98]"
+                >
+                  <ExternalLink size={15} /> View Policy
+                </Link>
+              )}
+              {sub.status === 'bound' && !sub.policy_id && (
+                <p className="text-sm text-slate-400">Policy bound — no policy ID available yet.</p>
+              )}
+
+              {/* declined */}
+              {sub.status === 'declined' && (
+                <div className="flex items-center gap-2 rounded-lg bg-red-50 px-4 py-2.5">
+                  <XCircle size={15} className="text-red-500" />
+                  <span className="text-sm font-medium text-red-700">Declined</span>
+                </div>
+              )}
+
+              {/* Escalate available for received, underwriting, quoted */}
+              {['received', 'underwriting', 'quoted'].includes(sub.status) && (
+                <button
+                  onClick={() => handleAction('refer')}
+                  disabled={!!actionLoading}
+                  className="flex w-full items-center gap-2.5 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition-all hover:bg-slate-50 hover:border-slate-300 active:scale-[0.98] disabled:opacity-50"
+                >
+                  {actionLoading === 'refer' ? <Loader2 size={15} className="animate-spin" /> : <ArrowUpRight size={15} />}
+                  Escalate
+                </button>
+              )}
+
+              {/* Decline available for received, underwriting, quoted */}
+              {['received', 'underwriting', 'quoted'].includes(sub.status) && (
+                <button
+                  onClick={() => handleAction('decline')}
+                  disabled={!!actionLoading}
+                  className="flex w-full items-center gap-2.5 rounded-lg bg-red-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm shadow-red-500/20 transition-all hover:bg-red-700 hover:shadow-md hover:shadow-red-500/25 active:scale-[0.98] disabled:opacity-50"
+                >
+                  {actionLoading === 'decline' ? <Loader2 size={15} className="animate-spin" /> : <XCircle size={15} />}
+                  Decline
+                </button>
+              )}
             </div>
           </div>
+
+          {/* Bind confirmation dialog (#122) */}
+          <ConfirmDialog
+            open={bindConfirmOpen}
+            title="Confirm Bind"
+            message="Are you sure you want to bind this submission? This will create a policy."
+            confirmLabel="Confirm Bind"
+            cancelLabel="Cancel"
+            variant="warning"
+            onConfirm={() => {
+              setBindConfirmOpen(false);
+              handleAction('bind');
+            }}
+            onCancel={() => setBindConfirmOpen(false)}
+          />
 
           {/* Confidence summary */}
           {sub.agent_recommendation && (

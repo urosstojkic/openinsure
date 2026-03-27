@@ -25,7 +25,20 @@ function mapSubmission(s: any): Submission {
     requested_coverage: s.requested_coverage || rd.requested_coverage || 0,
     documents: s.documents || [],
     decision_history: s.decision_history || [],
+    quoted_premium: s.quoted_premium ?? undefined,
+    rating_breakdown: s.rating_breakdown ?? undefined,
+    recommendation: s.recommendation ?? undefined,
+    policy_id: s.policy_id ?? undefined,
+    triage_result: s.triage_result ?? undefined,
+    agent_recommendation: s.agent_recommendation ?? undefined,
   };
+}
+
+export interface PaginatedSubmissions {
+  items: Submission[];
+  total: number;
+  skip: number;
+  limit: number;
 }
 
 export async function getSubmissions(): Promise<Submission[]> {
@@ -37,6 +50,29 @@ export async function getSubmissions(): Promise<Submission[]> {
   } catch (error) {
     console.warn('[API] Falling back to demo data:', error);
     return mockSubmissions;
+  }
+}
+
+export async function getSubmissionsPaginated(skip: number, limit: number): Promise<PaginatedSubmissions> {
+  if (USE_MOCK) {
+    const page = mockSubmissions.slice(skip, skip + limit);
+    return { items: page, total: mockSubmissions.length, skip, limit };
+  }
+  try {
+    const { data } = await client.get('/submissions', { params: { skip, limit } });
+    if (Array.isArray(data)) {
+      return { items: data.map(mapSubmission), total: data.length, skip, limit };
+    }
+    return {
+      items: (data.items || []).map(mapSubmission),
+      total: data.total ?? data.items?.length ?? 0,
+      skip: data.skip ?? skip,
+      limit: data.limit ?? limit,
+    };
+  } catch (error) {
+    console.warn('[API] Falling back to demo data:', error);
+    const page = mockSubmissions.slice(skip, skip + limit);
+    return { items: page, total: mockSubmissions.length, skip, limit };
   }
 }
 
@@ -79,5 +115,23 @@ export interface EnrichmentResult {
 
 export async function enrichSubmission(submissionId: string): Promise<EnrichmentResult> {
   const { data } = await client.post<EnrichmentResult>(`/submissions/${submissionId}/enrich`);
+  return data;
+}
+
+// Bind submission (approve quote → create policy)
+export async function bindSubmission(id: string): Promise<Record<string, unknown>> {
+  const { data } = await client.post(`/submissions/${id}/bind`, null, { timeout: 180_000 });
+  return data;
+}
+
+// Decline submission
+export async function declineSubmission(id: string): Promise<Record<string, unknown>> {
+  const { data } = await client.post(`/submissions/${id}/decline`);
+  return data;
+}
+
+// Escalate / refer submission for manual review
+export async function referSubmission(id: string): Promise<Record<string, unknown>> {
+  const { data } = await client.post(`/submissions/${id}/refer`);
   return data;
 }
