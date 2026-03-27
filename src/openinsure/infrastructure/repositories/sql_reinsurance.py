@@ -16,7 +16,7 @@ from uuid import UUID, uuid4
 from openinsure.infrastructure.repository import BaseRepository, safe_pagination_clause
 
 if TYPE_CHECKING:
-    from openinsure.infrastructure.database import DatabaseAdapter
+    from openinsure.infrastructure.database import DatabaseAdapter, TransactionContext
 
 logger = logging.getLogger(__name__)
 
@@ -265,26 +265,28 @@ class SqlCessionRepository(BaseRepository):
     def __init__(self, db: DatabaseAdapter) -> None:
         self.db = db
 
-    async def create(self, entity: dict[str, Any]) -> dict[str, Any]:
+    async def create(self, entity: dict[str, Any], *, txn: TransactionContext | None = None) -> dict[str, Any]:
         now = datetime.now(UTC).isoformat()
         entity.setdefault("id", str(uuid4()))
         entity.setdefault("created_at", now)
-        await self.db.execute_query(
-            """INSERT INTO reinsurance_cessions
+        sql = """INSERT INTO reinsurance_cessions
                (id, treaty_id, policy_id, policy_number,
                 ceded_premium, ceded_limit, cession_date, created_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-            [
-                entity["id"],
-                entity["treaty_id"],
-                entity["policy_id"],
-                entity["policy_number"],
-                entity["ceded_premium"],
-                entity["ceded_limit"],
-                entity["cession_date"],
-                entity["created_at"],
-            ],
-        )
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)"""
+        params = [
+            entity["id"],
+            entity["treaty_id"],
+            entity["policy_id"],
+            entity["policy_number"],
+            entity["ceded_premium"],
+            entity["ceded_limit"],
+            entity["cession_date"],
+            entity["created_at"],
+        ]
+        if txn:
+            await txn.async_execute_query(sql, params)
+        else:
+            await self.db.execute_query(sql, params)
         return entity
 
     async def get_by_id(self, entity_id: UUID | str) -> dict[str, Any] | None:

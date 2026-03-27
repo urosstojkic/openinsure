@@ -234,11 +234,18 @@ async def create_billing_account_on_bind(
     total_premium: float,
     installments: int = 1,
     effective_date: str | None = None,
+    txn: object | None = None,
 ) -> dict[str, Any]:
     """Create a billing account and first invoice(s) when a policy is bound.
 
     If ``installments > 1``, generates an installment schedule with evenly
     spaced due dates across the policy term (default: quarterly).
+
+    Parameters
+    ----------
+    txn:
+        Optional :class:`TransactionContext` — when provided the billing
+        account INSERT is executed within the caller's transaction.
     """
     aid = str(uuid.uuid4())
     now = _now()
@@ -295,7 +302,7 @@ async def create_billing_account_on_bind(
     # AI recommendation via Foundry billing agent
     record["metadata"]["ai_recommendation"] = await _get_billing_ai_recommendation(record)
 
-    await _repo.create(record)
+    await _repo.create(record, txn=txn)
     logger.info(
         "billing.account_created_on_bind",
         account_id=aid,

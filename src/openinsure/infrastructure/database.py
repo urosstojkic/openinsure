@@ -55,10 +55,18 @@ def _detect_odbc_driver() -> str:
 
 
 class TransactionContext:
-    """Provides query execution methods within a single database transaction."""
+    """Provides query execution methods within a single database transaction.
 
-    def __init__(self, conn: pyodbc.Connection) -> None:
+    Both synchronous (for use inside an executor thread) and asynchronous
+    wrappers are provided.  The async variants offload work to the supplied
+    ``executor`` so they are safe to ``await`` from the event loop.
+    """
+
+    def __init__(self, conn: pyodbc.Connection, executor: ThreadPoolExecutor) -> None:
         self._conn = conn
+        self._executor = executor
+
+    # -- synchronous helpers (called inside executor thread) -----------------
 
     def execute_query(self, query: str, params: Sequence[Any] | None = None) -> int:
         """Execute a write query within the transaction. Synchronous — called inside executor."""
@@ -82,6 +90,23 @@ class TransactionContext:
         cursor.execute(query, params or [])
         columns = [desc[0] for desc in cursor.description]
         return [dict(zip(columns, row, strict=False)) for row in cursor.fetchall()]
+
+    # -- async wrappers (safe to call from the event loop) -------------------
+
+    async def async_execute_query(self, query: str, params: Sequence[Any] | None = None) -> int:
+        """Execute a write query within the transaction. Async-safe."""
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(self._executor, self.execute_query, query, params)
+
+    async def async_fetch_one(self, query: str, params: Sequence[Any] | None = None) -> dict[str, Any] | None:
+        """Fetch a single row within the transaction. Async-safe."""
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(self._executor, self.fetch_one, query, params)
+
+    async def async_fetch_all(self, query: str, params: Sequence[Any] | None = None) -> list[dict[str, Any]]:
+        """Fetch all rows within the transaction. Async-safe."""
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(self._executor, self.fetch_all, query, params)
 
 
 class DatabaseAdapter:
@@ -364,7 +389,7 @@ class DatabaseAdapter:
 
         def _begin() -> tuple[pyodbc.Connection, TransactionContext]:
             conn = self._acquire()
-            return conn, TransactionContext(conn)
+            return conn, TransactionContext(conn, self._executor)
 
         conn, txn = await self._run_in_executor(_begin)
 

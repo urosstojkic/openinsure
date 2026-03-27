@@ -11,7 +11,7 @@ from uuid import UUID, uuid4
 from openinsure.infrastructure.repository import BaseRepository, safe_pagination_clause
 
 if TYPE_CHECKING:
-    from openinsure.infrastructure.database import DatabaseAdapter
+    from openinsure.infrastructure.database import DatabaseAdapter, TransactionContext
 
 logger = logging.getLogger(__name__)
 
@@ -130,7 +130,7 @@ class SqlPolicyRepository(BaseRepository):
     def __init__(self, db: DatabaseAdapter) -> None:
         self.db = db
 
-    async def create(self, entity: dict[str, Any]) -> dict[str, Any]:
+    async def create(self, entity: dict[str, Any], *, txn: TransactionContext | None = None) -> dict[str, Any]:
         now = datetime.now(UTC).isoformat()
         entity.setdefault("id", str(uuid4()))
         entity.setdefault("policy_number", f"POL-{str(uuid4())[:8].upper()}")
@@ -144,14 +144,24 @@ class SqlPolicyRepository(BaseRepository):
             insured_id = str(uuid4())
             policyholder = entity.get("policyholder_name", "Unknown")
             try:
-                await self.db.execute_query(
-                    "INSERT INTO parties (id, name, party_type) VALUES (?, ?, ?)",
-                    [insured_id, policyholder, "organization"],
-                )
-                await self.db.execute_query(
-                    "INSERT INTO party_roles (party_id, role) VALUES (?, ?)",
-                    [insured_id, "insured"],
-                )
+                if txn:
+                    await txn.async_execute_query(
+                        "INSERT INTO parties (id, name, party_type) VALUES (?, ?, ?)",
+                        [insured_id, policyholder, "organization"],
+                    )
+                    await txn.async_execute_query(
+                        "INSERT INTO party_roles (party_id, role) VALUES (?, ?)",
+                        [insured_id, "insured"],
+                    )
+                else:
+                    await self.db.execute_query(
+                        "INSERT INTO parties (id, name, party_type) VALUES (?, ?, ?)",
+                        [insured_id, policyholder, "organization"],
+                    )
+                    await self.db.execute_query(
+                        "INSERT INTO party_roles (party_id, role) VALUES (?, ?)",
+                        [insured_id, "insured"],
+                    )
             except Exception:
                 logger.warning("Could not auto-create party for %s", policyholder)
             entity["insured_id"] = insured_id
@@ -160,50 +170,64 @@ class SqlPolicyRepository(BaseRepository):
         product_id = entity.get("product_id", "")
         if product_id and not _safe_uuid(product_id):
             try:
-                product_row = await self.db.fetch_one(
-                    "SELECT id FROM products WHERE product_code = ?",
-                    [product_id],
-                )
+                if txn:
+                    product_row = await txn.async_fetch_one(
+                        "SELECT id FROM products WHERE product_code = ?",
+                        [product_id],
+                    )
+                else:
+                    product_row = await self.db.fetch_one(
+                        "SELECT id FROM products WHERE product_code = ?",
+                        [product_id],
+                    )
                 if product_row:
                     entity["product_id"] = str(product_row["id"])
                 else:
                     logger.warning("Product code %s not found, creating placeholder", product_id)
                     new_pid = str(uuid4())
-                    await self.db.execute_query(
-                        "INSERT INTO products (id, product_code, product_name, line_of_business, status, effective_date) VALUES (?, ?, ?, ?, ?, ?)",
-                        [new_pid, product_id, product_id, "cyber", "active", "2025-01-01"],
-                    )
+                    if txn:
+                        await txn.async_execute_query(
+                            "INSERT INTO products (id, product_code, product_name, line_of_business, status, effective_date) VALUES (?, ?, ?, ?, ?, ?)",
+                            [new_pid, product_id, product_id, "cyber", "active", "2025-01-01"],
+                        )
+                    else:
+                        await self.db.execute_query(
+                            "INSERT INTO products (id, product_code, product_name, line_of_business, status, effective_date) VALUES (?, ?, ?, ?, ?, ?)",
+                            [new_pid, product_id, product_id, "cyber", "active", "2025-01-01"],
+                        )
                     entity["product_id"] = new_pid
             except Exception:
                 logger.warning("Could not resolve product_id %s", product_id)
 
         row = _policy_to_sql_row(entity)
-        await self.db.execute_query(
-            """INSERT INTO policies (id, policy_number, status, product_id, submission_id,
+        sql = """INSERT INTO policies (id, policy_number, status, product_id, submission_id,
                insured_id, effective_date, expiration_date, total_premium,
                written_premium, earned_premium, unearned_premium, bound_at,
                cancelled_at, cancel_reason, created_at, updated_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            [
-                row["id"],
-                row["policy_number"],
-                row["status"],
-                row["product_id"],
-                row["submission_id"],
-                row["insured_id"],
-                row["effective_date"],
-                row["expiration_date"],
-                row["total_premium"],
-                row["written_premium"],
-                row["earned_premium"],
-                row["unearned_premium"],
-                row["bound_at"],
-                row["cancelled_at"],
-                row["cancel_reason"],
-                row["created_at"],
-                row["updated_at"],
-            ],
-        )
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"""
+        params = [
+            row["id"],
+            row["policy_number"],
+            row["status"],
+            row["product_id"],
+            row["submission_id"],
+            row["insured_id"],
+            row["effective_date"],
+            row["expiration_date"],
+            row["total_premium"],
+            row["written_premium"],
+            row["earned_premium"],
+            row["unearned_premium"],
+            row["bound_at"],
+            row["cancelled_at"],
+            row["cancel_reason"],
+            row["created_at"],
+            row["updated_at"],
+        ]
+        if txn:
+            await txn.async_execute_query(sql, params)
+        else:
+            await self.db.execute_query(sql, params)
         try:
             from openinsure.services.event_publisher import publish_domain_event
 

@@ -15,7 +15,7 @@ from uuid import UUID, uuid4
 from openinsure.infrastructure.repository import BaseRepository, safe_pagination_clause
 
 if TYPE_CHECKING:
-    from openinsure.infrastructure.database import DatabaseAdapter
+    from openinsure.infrastructure.database import DatabaseAdapter, TransactionContext
 
 logger = logging.getLogger(__name__)
 
@@ -116,7 +116,7 @@ class SqlBillingRepository(BaseRepository):
             "updated_at": _str(row.get("updated_at")),
         }
 
-    async def create(self, entity: dict[str, Any]) -> dict[str, Any]:
+    async def create(self, entity: dict[str, Any], *, txn: TransactionContext | None = None) -> dict[str, Any]:
         now = datetime.now(UTC).isoformat()
         entity.setdefault("id", str(uuid4()))
         entity.setdefault("created_at", now)
@@ -125,21 +125,23 @@ class SqlBillingRepository(BaseRepository):
         entity.setdefault("invoices", [])
 
         billing_plan = _billing_plan_from_installments(entity.get("installments", 1))
-        await self.db.execute_query(
-            """INSERT INTO billing_accounts
+        sql = """INSERT INTO billing_accounts
                (id, policy_id, billing_plan, total_premium, balance_due,
                 created_at, updated_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?)""",
-            [
-                entity["id"],
-                entity.get("policy_id"),
-                billing_plan,
-                entity.get("total_premium", 0),
-                entity.get("balance_due", entity.get("total_premium", 0)),
-                entity["created_at"],
-                entity["updated_at"],
-            ],
-        )
+               VALUES (?, ?, ?, ?, ?, ?, ?)"""
+        params = [
+            entity["id"],
+            entity.get("policy_id"),
+            billing_plan,
+            entity.get("total_premium", 0),
+            entity.get("balance_due", entity.get("total_premium", 0)),
+            entity["created_at"],
+            entity["updated_at"],
+        ]
+        if txn:
+            await txn.async_execute_query(sql, params)
+        else:
+            await self.db.execute_query(sql, params)
         return entity
 
     async def get_by_id(self, entity_id: UUID | str) -> dict[str, Any] | None:

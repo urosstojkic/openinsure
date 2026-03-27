@@ -10,7 +10,7 @@ from uuid import UUID, uuid4
 from openinsure.infrastructure.repository import BaseRepository, safe_pagination_clause
 
 if TYPE_CHECKING:
-    from openinsure.infrastructure.database import DatabaseAdapter
+    from openinsure.infrastructure.database import DatabaseAdapter, TransactionContext
 
 # -- key mapping between API entity dicts and SQL columns -------------------
 
@@ -144,7 +144,7 @@ class SqlSubmissionRepository(BaseRepository):
     def __init__(self, db: DatabaseAdapter) -> None:
         self.db = db
 
-    async def create(self, entity: dict[str, Any]) -> dict[str, Any]:
+    async def create(self, entity: dict[str, Any], *, txn: TransactionContext | None = None) -> dict[str, Any]:
         entity.setdefault("id", str(uuid4()))
         entity.setdefault("submission_number", f"SUB-{datetime.now(UTC).strftime('%Y')}-{str(uuid4())[:4].upper()}")
         entity.setdefault("status", "received")
@@ -152,29 +152,31 @@ class SqlSubmissionRepository(BaseRepository):
         entity.setdefault("updated_at", datetime.now(UTC).isoformat())
 
         row = _to_sql_row(entity)
-        await self.db.execute_query(
-            """INSERT INTO submissions (id, submission_number, status, channel, line_of_business,
+        sql = """INSERT INTO submissions (id, submission_number, status, channel, line_of_business,
                applicant_id, requested_effective_date, requested_expiration_date,
                extracted_data, cyber_risk_data, triage_result, quoted_premium,
                created_at, updated_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            [
-                row["id"],
-                row["submission_number"],
-                row["status"],
-                row["channel"],
-                row["line_of_business"],
-                row["applicant_id"],
-                row["requested_effective_date"],
-                row["requested_expiration_date"],
-                row["extracted_data"],
-                row["cyber_risk_data"],
-                row["triage_result"],
-                row["quoted_premium"],
-                row["created_at"],
-                row["updated_at"],
-            ],
-        )
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"""
+        params = [
+            row["id"],
+            row["submission_number"],
+            row["status"],
+            row["channel"],
+            row["line_of_business"],
+            row["applicant_id"],
+            row["requested_effective_date"],
+            row["requested_expiration_date"],
+            row["extracted_data"],
+            row["cyber_risk_data"],
+            row["triage_result"],
+            row["quoted_premium"],
+            row["created_at"],
+            row["updated_at"],
+        ]
+        if txn:
+            await txn.async_execute_query(sql, params)
+        else:
+            await self.db.execute_query(sql, params)
         from openinsure.services.event_publisher import publish_domain_event
 
         await publish_domain_event(
@@ -223,7 +225,9 @@ class SqlSubmissionRepository(BaseRepository):
         rows = await self.db.fetch_all(query, params)
         return [_from_sql_row(r) for r in rows]
 
-    async def update(self, entity_id: UUID | str, updates: dict[str, Any]) -> dict[str, Any] | None:
+    async def update(
+        self, entity_id: UUID | str, updates: dict[str, Any], *, txn: TransactionContext | None = None
+    ) -> dict[str, Any] | None:
         from openinsure.domain.state_machine import (
             validate_submission_invariants,
             validate_submission_transition,
@@ -251,10 +255,11 @@ class SqlSubmissionRepository(BaseRepository):
         sets.append("updated_at = ?")
         params.append(datetime.now(UTC).isoformat())
         params.append(str(entity_id))
-        await self.db.execute_query(
-            f"UPDATE submissions SET {', '.join(sets)} WHERE id = ?",  # noqa: S608  # nosec B608 — parameterized query, sets built from validated keys
-            params,
-        )
+        sql = f"UPDATE submissions SET {', '.join(sets)} WHERE id = ?"  # noqa: S608  # nosec B608 — parameterized query, sets built from validated keys
+        if txn:
+            await txn.async_execute_query(sql, params)
+            return None
+        await self.db.execute_query(sql, params)
         return await self.get_by_id(entity_id)
 
     async def delete(self, entity_id: UUID | str) -> bool:
