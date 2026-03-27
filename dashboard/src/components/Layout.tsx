@@ -94,7 +94,21 @@ function getBreadcrumb(pathname: string): string {
     '/executive': 'Executive Dashboard',
     '/portal/broker': 'Broker Portal',
   };
-  return map[pathname] ?? pathname.split('/').filter(Boolean).pop() ?? 'Home';
+  if (map[pathname]) return map[pathname];
+  // Detail pages: show parent label
+  const detailPatterns: Record<string, string> = {
+    '/submissions/': 'Submissions',
+    '/policies/': 'Policies',
+    '/claims/': 'Claims',
+  };
+  for (const [prefix, label] of Object.entries(detailPatterns)) {
+    if (pathname.startsWith(prefix)) {
+      const id = pathname.slice(prefix.length);
+      if (id === 'new') return label;
+      return label;
+    }
+  }
+  return pathname.split('/').filter(Boolean).pop() ?? 'Home';
 }
 
 const NavSection: React.FC<{

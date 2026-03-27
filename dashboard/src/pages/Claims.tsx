@@ -57,16 +57,26 @@ const Claims: React.FC = () => {
     e.stopPropagation();
     setActionLoading(`${id}-${action}`);
     try {
-      const { data } = await client.post(`/claims/${id}/${action}`);
+      let data: Record<string, unknown> = {};
+      if (action === 'set-reserve') {
+        const resp = await client.post(`/claims/${id}/reserve`, { category: 'indemnity', amount: 25000 });
+        data = resp.data;
+      } else if (action === 'close') {
+        const resp = await client.post(`/claims/${id}/close`, { reason: 'Resolved', outcome: 'resolved' });
+        data = resp.data;
+      } else {
+        const resp = await client.post(`/claims/${id}/${action}`, null, { timeout: 180_000 });
+        data = resp.data;
+      }
       await refetch();
       if (action === 'set-reserve') {
-        const reserve = data?.reserve ?? data?.total_reserved;
-        addToast('success', reserve != null ? `Reserve set: ${money(reserve)}` : 'Reserve updated successfully!');
+        const reserve = data?.total_reserved;
+        addToast('success', reserve != null ? `Reserve set: ${money(Number(reserve))}` : 'Reserve updated successfully!');
       } else if (action === 'close') {
         addToast('success', 'Claim closed successfully!');
       } else if (action === 'process') {
-        const status = data?.status ?? data?.new_status ?? '';
-        addToast('success', status ? `Claim processed — status: ${status}` : 'Claim processed successfully!');
+        const outcome = data?.outcome ?? '';
+        addToast('success', outcome ? `Claim processed — outcome: ${outcome}` : 'Claim processed successfully!');
       } else {
         addToast('success', `${action} completed successfully!`);
       }
