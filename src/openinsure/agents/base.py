@@ -131,6 +131,8 @@ class InsuranceAgent(ABC):
                 result = foundry_result.get("response", {})
                 if isinstance(result, str):
                     result = {"output": result}
+                if not isinstance(result, dict):
+                    result = {"output": str(result)}
                 result["source"] = "foundry"
                 result["ai_mode"] = "foundry"
                 result["confidence"] = result.get("confidence", 0.8)

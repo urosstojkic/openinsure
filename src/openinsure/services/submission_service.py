@@ -1,7 +1,8 @@
 """Submission business logic service.
 
-Encapsulates triage, quoting, and binding logic extracted from API handlers.
-API handlers delegate to this service to keep endpoint code thin.
+Encapsulates triage, quoting, binding, and full-workflow logic extracted
+from API handlers.  API handlers delegate to this service to keep endpoint
+code thin (~10 lines each).
 """
 
 from __future__ import annotations
@@ -14,6 +15,7 @@ from typing import Any
 
 import structlog
 
+from openinsure.agents.foundry_client import validate_agent_response
 from openinsure.infrastructure.factory import (
     get_billing_repository,
     get_policy_repository,
@@ -23,6 +25,26 @@ from openinsure.rbac.authority import AuthorityDecision, AuthorityEngine
 from openinsure.services.rating import CyberRatingEngine, RatingInput
 
 logger = structlog.get_logger()
+
+
+def _safe_float(value: Any, default: float, *, label: str = "value") -> float:
+    """Safely coerce *value* to float, returning *default* on failure."""
+    if value is None:
+        return default
+    try:
+        result = float(value)
+        if result != result:  # NaN check
+            logger.warning("submission_service.nan_value", label=label)
+            return default
+        return result
+    except (TypeError, ValueError):
+        logger.warning(
+            "submission_service.bad_numeric_value",
+            label=label,
+            raw_value=str(value)[:200],
+        )
+        return default
+
 
 # LOB-appropriate minimum premiums when all else fails
 _LOB_MIN_PREMIUMS: dict[str, float] = {
@@ -104,8 +126,17 @@ class SubmissionService:
             )
             resp = result.get("response", {})
             if isinstance(resp, dict) and result.get("source") == "foundry":
+                is_valid, issues = validate_agent_response(resp, required_keys=["appetite_match", "risk_score"])
+                if not is_valid:
+                    logger.warning(
+                        "submission_service.triage_response_malformed",
+                        submission_id=submission_id,
+                        issues=issues,
+                    )
+
                 appetite = str(resp.get("appetite_match", "yes")).lower()
                 recommendation = "decline" if appetite in ("no", "decline") else "proceed_to_quote"
+                risk_score = _safe_float(resp.get("risk_score", 5), default=5.0, label="risk_score")
                 flags: list[str] = []
                 if resp.get("reasoning"):
                     flags.append(str(resp["reasoning"]))
@@ -120,7 +151,7 @@ class SubmissionService:
                 )
                 return {
                     "status": "underwriting",
-                    "risk_score": float(resp.get("risk_score", 5)),
+                    "risk_score": risk_score,
                     "recommendation": recommendation,
                     "flags": flags,
                     "triage_result": resp,
@@ -171,10 +202,18 @@ class SubmissionService:
                     f"Submission:\n{json.dumps(record, default=str)[:800]}",
                 )
                 resp = result.get("response", {})
-                if isinstance(resp, dict) and "recommended_premium" in resp:
-                    raw_premium = resp["recommended_premium"]
-                    if raw_premium is not None and float(raw_premium) > 0:
-                        premium = float(raw_premium)
+                if isinstance(resp, dict):
+                    is_valid, issues = validate_agent_response(resp, required_keys=["recommended_premium"])
+                    if not is_valid:
+                        logger.warning(
+                            "submission_service.premium_response_malformed",
+                            submission_id=submission_id,
+                            issues=issues,
+                        )
+                    raw_premium = resp.get("recommended_premium")
+                    premium_val = _safe_float(raw_premium, default=0.0, label="recommended_premium")
+                    if premium_val > 0:
+                        premium = premium_val
                         logger.info(
                             "premium.foundry_calculated",
                             submission_id=submission_id,
