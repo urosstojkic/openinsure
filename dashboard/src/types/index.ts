@@ -142,6 +142,13 @@ export interface Claim {
   assigned_to: string;
   description: string;
   lob: LOB;
+  claim_type?: string;
+  reported_by?: string;
+  fraud_score?: number | null;
+  cause_of_loss?: string;
+  reserves?: Array<Record<string, unknown>>;
+  payments?: Array<Record<string, unknown>>;
+  metadata?: Record<string, unknown>;
 }
 
 export interface AgentDecision {

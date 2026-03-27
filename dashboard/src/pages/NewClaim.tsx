@@ -6,43 +6,33 @@ import FormField from '../components/FormField';
 import { createClaim } from '../api/claims';
 import { getPolicies } from '../api/policies';
 
-const CAUSE_OPTIONS = [
+const CLAIM_TYPE_OPTIONS = [
   { value: 'data_breach', label: 'Data Breach' },
   { value: 'ransomware', label: 'Ransomware' },
-  { value: 'social_engineering', label: 'Social Engineering' },
-  { value: 'system_failure', label: 'System Failure' },
-  { value: 'unauthorized_access', label: 'Unauthorized Access' },
-  { value: 'denial_of_service', label: 'Denial of Service' },
+  { value: 'business_interruption', label: 'Business Interruption' },
+  { value: 'third_party_liability', label: 'Third-Party Liability' },
+  { value: 'regulatory_proceeding', label: 'Regulatory Proceeding' },
   { value: 'other', label: 'Other' },
 ];
 
-const SEVERITY_OPTIONS = [
-  { value: 'simple', label: 'Simple' },
-  { value: 'moderate', label: 'Moderate' },
-  { value: 'complex', label: 'Complex' },
-  { value: 'catastrophe', label: 'Catastrophe' },
-];
-
 interface FormData {
-  policyNumber: string;
+  policyId: string;
   lossDate: string;
-  causeOfLoss: string;
+  claimType: string;
   description: string;
-  severityEstimate: string;
-  claimantName: string;
-  claimantEmail: string;
-  claimantPhone: string;
+  reportedBy: string;
+  contactEmail: string;
+  contactPhone: string;
 }
 
 const initial: FormData = {
-  policyNumber: '',
+  policyId: '',
   lossDate: '',
-  causeOfLoss: '',
+  claimType: '',
   description: '',
-  severityEstimate: '',
-  claimantName: '',
-  claimantEmail: '',
-  claimantPhone: '',
+  reportedBy: '',
+  contactEmail: '',
+  contactPhone: '',
 };
 
 const NewClaim: React.FC = () => {
@@ -58,18 +48,18 @@ const NewClaim: React.FC = () => {
     setForm((prev) => ({ ...prev, [key]: value }));
 
   const policyOptions = policies.map((p) => ({
-    value: p.policy_number,
+    value: p.id,
     label: `${p.policy_number} — ${p.insured_name}`,
   }));
 
   const validate = (): boolean => {
     const e: Partial<Record<keyof FormData, string>> = {};
-    if (!form.policyNumber) e.policyNumber = 'Policy number is required';
+    if (!form.policyId) e.policyId = 'Policy is required';
     if (!form.lossDate) e.lossDate = 'Loss date is required';
-    if (!form.causeOfLoss) e.causeOfLoss = 'Cause of loss is required';
+    if (!form.claimType) e.claimType = 'Claim type is required';
     if (!form.description.trim()) e.description = 'Description is required';
     else if (form.description.trim().length < 20) e.description = 'Description must be at least 20 characters';
-    if (!form.claimantName.trim()) e.claimantName = 'Claimant name is required';
+    if (!form.reportedBy.trim()) e.reportedBy = 'Reported by is required';
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -81,22 +71,21 @@ const NewClaim: React.FC = () => {
     setToast(null);
     try {
       const payload = {
-        policy_number: form.policyNumber,
-        loss_date: form.lossDate,
-        cause_of_loss: form.causeOfLoss,
+        policy_id: form.policyId,
+        date_of_loss: form.lossDate,
+        claim_type: form.claimType,
         description: form.description,
-        severity_estimate: form.severityEstimate || undefined,
-        claimant: {
-          name: form.claimantName,
-          email: form.claimantEmail || undefined,
-          phone: form.claimantPhone || undefined,
-        },
+        reported_by: form.reportedBy,
+        contact_email: form.contactEmail || undefined,
+        contact_phone: form.contactPhone || undefined,
       };
-      await createClaim(payload);
-      setToast({ type: 'success', message: 'Claim filed successfully!' });
+      const result = await createClaim(payload);
+      const claimNum = result?.claim_number || '';
+      setToast({ type: 'success', message: claimNum ? `Claim ${claimNum} filed successfully!` : 'Claim filed successfully!' });
       setTimeout(() => navigate('/claims'), 800);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Failed to file claim';
+      const msg = (err as { response?: { data?: { detail?: string } }; message?: string })?.response?.data?.detail
+        ?? (err as { message?: string })?.message ?? 'Failed to file claim';
       setToast({ type: 'error', message: msg });
     } finally {
       setSubmitting(false);
@@ -132,23 +121,22 @@ const NewClaim: React.FC = () => {
         <section className="rounded-xl border border-slate-200/60 bg-white p-5 shadow-[var(--shadow-xs)]">
           <h2 className="mb-4 text-sm font-semibold text-slate-800">Claim Details</h2>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <FormField type="select" label="Policy Number" name="policyNumber" value={form.policyNumber} onChange={(v) => set('policyNumber', v)} options={policyOptions} placeholder="Select policy…" error={errors.policyNumber} required />
-            <FormField type="date" label="Loss Date" name="lossDate" value={form.lossDate} onChange={(v) => set('lossDate', v)} error={errors.lossDate} required />
-            <FormField type="select" label="Cause of Loss" name="causeOfLoss" value={form.causeOfLoss} onChange={(v) => set('causeOfLoss', v)} options={CAUSE_OPTIONS} placeholder="Select cause…" error={errors.causeOfLoss} required />
-            <FormField type="select" label="Severity Estimate" name="severityEstimate" value={form.severityEstimate} onChange={(v) => set('severityEstimate', v)} options={SEVERITY_OPTIONS} placeholder="Select severity…" />
+            <FormField type="select" label="Policy" name="policyId" value={form.policyId} onChange={(v) => set('policyId', v)} options={policyOptions} placeholder="Select policy…" error={errors.policyId} required />
+            <FormField type="date" label="Date of Loss" name="lossDate" value={form.lossDate} onChange={(v) => set('lossDate', v)} error={errors.lossDate} required />
+            <FormField type="select" label="Claim Type" name="claimType" value={form.claimType} onChange={(v) => set('claimType', v)} options={CLAIM_TYPE_OPTIONS} placeholder="Select type…" error={errors.claimType} required />
           </div>
           <div className="mt-4">
             <FormField type="textarea" label="Description" name="description" value={form.description} onChange={(v) => set('description', v)} placeholder="Describe the loss event in detail…" rows={4} minLength={20} error={errors.description} required />
           </div>
         </section>
 
-        {/* Claimant Information */}
+        {/* Reporter Information */}
         <section className="rounded-xl border border-slate-200/60 bg-white p-5 shadow-[var(--shadow-xs)]">
-          <h2 className="mb-4 text-sm font-semibold text-slate-800">Claimant Information</h2>
+          <h2 className="mb-4 text-sm font-semibold text-slate-800">Reporter Information</h2>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <FormField type="text" label="Claimant Name" name="claimantName" value={form.claimantName} onChange={(v) => set('claimantName', v)} error={errors.claimantName} required />
-            <FormField type="email" label="Claimant Email" name="claimantEmail" value={form.claimantEmail} onChange={(v) => set('claimantEmail', v)} />
-            <FormField type="tel" label="Claimant Phone" name="claimantPhone" value={form.claimantPhone} onChange={(v) => set('claimantPhone', v)} />
+            <FormField type="text" label="Reported By" name="reportedBy" value={form.reportedBy} onChange={(v) => set('reportedBy', v)} error={errors.reportedBy} required />
+            <FormField type="email" label="Contact Email" name="contactEmail" value={form.contactEmail} onChange={(v) => set('contactEmail', v)} />
+            <FormField type="tel" label="Contact Phone" name="contactPhone" value={form.contactPhone} onChange={(v) => set('contactPhone', v)} />
           </div>
         </section>
 

@@ -7,7 +7,7 @@ import StatusBadge from '../components/StatusBadge';
 import { TableSkeleton } from '../components/Skeleton';
 import { ToastContainer } from '../components/Toast';
 import { useToast } from '../components/useToast';
-import { getClaims } from '../api/claims';
+import { getClaimsPaginated, type PaginatedClaims } from '../api/claims';
 import client from '../api/client';
 import type { Claim, ClaimStatus, ClaimSeverity } from '../types';
 
@@ -33,12 +33,22 @@ const money = (n: number) =>
 
 const Claims: React.FC = () => {
   const navigate = useNavigate();
-  const { data: claims = [], isLoading, refetch } = useQuery({ queryKey: ['claims'], queryFn: getClaims });
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [severityFilter, setSeverityFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  const PAGE_SIZE = 25;
+  const skip = (currentPage - 1) * PAGE_SIZE;
+
+  const { data: paginatedData, isLoading, refetch } = useQuery<PaginatedClaims>({
+    queryKey: ['claims', skip, PAGE_SIZE],
+    queryFn: () => getClaimsPaginated(skip, PAGE_SIZE),
+  });
+
+  const claims = paginatedData?.items ?? [];
+  const totalItems = paginatedData?.total ?? 0;
 
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const { toasts, addToast, dismissToast } = useToast();
@@ -85,9 +95,9 @@ const Claims: React.FC = () => {
     return list;
   }, [claims, statusFilter, severityFilter, searchQuery]);
 
-  const PAGE_SIZE = 25;
-  const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
-  const paginated = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+  const PAGE_SIZE_DISPLAY = PAGE_SIZE;
+  const totalPages = Math.ceil(totalItems / PAGE_SIZE_DISPLAY);
+  const paginated = filtered;
   const pageIds = paginated.map((r) => r.id);
   const allPageSelected = pageIds.length > 0 && pageIds.every((id) => selectedIds.has(id));
 
@@ -248,7 +258,7 @@ const Claims: React.FC = () => {
             <option key={s} value={s}>{s}</option>
           ))}
         </select>
-        <span className="text-xs text-slate-400">{filtered.length} claims</span>
+        <span className="text-xs text-slate-400">{totalItems} claims{filtered.length !== claims.length ? ` (${filtered.length} shown)` : ''}</span>
         {selectedIds.size > 0 && (
           <div className="ml-auto flex items-center gap-2 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-1.5">
             <span className="text-sm font-medium text-indigo-700">Selected ({selectedIds.size})</span>
@@ -269,7 +279,7 @@ const Claims: React.FC = () => {
       {totalPages > 1 && (
         <div className="flex items-center justify-between rounded-xl border border-slate-200/60 bg-white px-4 py-3 shadow-[var(--shadow-xs)]">
           <span className="text-xs text-slate-500">
-            Showing {(currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, filtered.length)} of {filtered.length}
+            Showing {skip + 1}–{Math.min(skip + PAGE_SIZE_DISPLAY, totalItems)} of {totalItems}
           </span>
           <div className="flex items-center gap-2">
             <button
