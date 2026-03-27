@@ -270,6 +270,12 @@ def get_document_intelligence():
 
 @lru_cache
 def get_renewal_repository() -> BaseRepository:
+    settings = get_settings()
+    if settings.storage_mode == "azure" and settings.sql_connection_string:
+        from openinsure.infrastructure.repositories.sql_renewals import SqlRenewalRepository
+
+        db = get_database_adapter()
+        return SqlRenewalRepository(db)  # type: ignore[arg-type]
     from openinsure.infrastructure.repositories.renewals import InMemoryRenewalRepository
 
     return InMemoryRenewalRepository()
@@ -277,6 +283,12 @@ def get_renewal_repository() -> BaseRepository:
 
 @lru_cache
 def get_mga_authority_repository() -> BaseRepository:
+    settings = get_settings()
+    if settings.storage_mode == "azure" and settings.sql_connection_string:
+        from openinsure.infrastructure.repositories.sql_mga import SqlMGAAuthorityRepository
+
+        db = get_database_adapter()
+        return SqlMGAAuthorityRepository(db)  # type: ignore[arg-type]
     from openinsure.infrastructure.repositories.mga import InMemoryMGAAuthorityRepository
 
     return InMemoryMGAAuthorityRepository()
@@ -284,6 +296,12 @@ def get_mga_authority_repository() -> BaseRepository:
 
 @lru_cache
 def get_mga_bordereau_repository() -> BaseRepository:
+    settings = get_settings()
+    if settings.storage_mode == "azure" and settings.sql_connection_string:
+        from openinsure.infrastructure.repositories.sql_mga import SqlMGABordereauRepository
+
+        db = get_database_adapter()
+        return SqlMGABordereauRepository(db)  # type: ignore[arg-type]
     from openinsure.infrastructure.repositories.mga import InMemoryMGABordereauRepository
 
     return InMemoryMGABordereauRepository()
