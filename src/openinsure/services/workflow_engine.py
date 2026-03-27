@@ -27,12 +27,14 @@ class WorkflowStep:
         prompt_template: str,
         required: bool = True,
         condition: str | None = None,
+        depends_on: list[str] | None = None,
     ):
         self.name = name
         self.agent = agent
         self.prompt_template = prompt_template
         self.required = required
         self.condition = condition  # e.g., "intake.appetite_match == 'yes'"
+        self.depends_on: list[str] = depends_on or []
 
 
 class WorkflowDefinition:
@@ -78,6 +80,7 @@ NEW_BUSINESS_WORKFLOW = WorkflowDefinition(
                 '"priority": "high/medium/low", "notes": "...", "confidence": 0.0-1.0}}\n\n'
                 "Submission: {submission_data}"
             ),
+            depends_on=[],
         ),
         WorkflowStep(
             name="enrichment",
@@ -90,6 +93,7 @@ NEW_BUSINESS_WORKFLOW = WorkflowDefinition(
                 "Submission: {submission_data}\nOrchestration: {orchestration_result}"
             ),
             required=False,
+            depends_on=["orchestration"],
         ),
         WorkflowStep(
             name="intake",
@@ -102,6 +106,7 @@ NEW_BUSINESS_WORKFLOW = WorkflowDefinition(
                 '"priority": "high/medium/low", "confidence": 0.0-1.0}}\n\n'
                 "Submission: {submission_data}\nOrchestration: {orchestration_result}"
             ),
+            depends_on=["orchestration"],
         ),
         WorkflowStep(
             name="underwriting",
@@ -114,6 +119,7 @@ NEW_BUSINESS_WORKFLOW = WorkflowDefinition(
                 "Submission: {submission_data}\nTriage: {intake_result}"
             ),
             condition="intake.appetite_match == 'yes'",
+            depends_on=["intake"],
         ),
         WorkflowStep(
             name="policy_review",
@@ -127,6 +133,7 @@ NEW_BUSINESS_WORKFLOW = WorkflowDefinition(
                 '"notes": "...", "confidence": 0.0-1.0}}\n\n'
                 "Submission: {submission_data}\nUnderwriting: {underwriting_result}"
             ),
+            depends_on=["underwriting"],
         ),
         WorkflowStep(
             name="compliance",
@@ -137,6 +144,7 @@ NEW_BUSINESS_WORKFLOW = WorkflowDefinition(
                 "Triage: {intake_result}\nUnderwriting: {underwriting_result}\n"
                 "Policy Review: {policy_review_result}"
             ),
+            depends_on=["intake", "underwriting", "policy_review"],
         ),
     ],
 )
@@ -154,6 +162,7 @@ CLAIMS_WORKFLOW = WorkflowDefinition(
                 '"fraud_flag": false, "notes": "...", "confidence": 0.0-1.0}}\n\n'
                 "Claim: {claim_data}"
             ),
+            depends_on=[],
         ),
         WorkflowStep(
             name="assessment",
@@ -165,6 +174,7 @@ CLAIMS_WORKFLOW = WorkflowDefinition(
                 '"initial_reserve": N, "fraud_score": 0.0-1.0, "confidence": 0.0-1.0}}\n\n'
                 "Claim: {claim_data}\nOrchestration: {orchestration_result}"
             ),
+            depends_on=["orchestration"],
         ),
         WorkflowStep(
             name="compliance",
@@ -173,6 +183,7 @@ CLAIMS_WORKFLOW = WorkflowDefinition(
                 "Audit this claims assessment for EU AI Act compliance.\n"
                 "Orchestration: {orchestration_result}\nAssessment: {assessment_result}"
             ),
+            depends_on=["orchestration", "assessment"],
         ),
     ],
 )
@@ -189,11 +200,13 @@ RENEWAL_WORKFLOW = WorkflowDefinition(
                 '"recommendation": "renew/non_renew", "confidence": 0.0-1.0}}\n\n'
                 "Policy: {policy_data}"
             ),
+            depends_on=[],
         ),
         WorkflowStep(
             name="compliance",
             agent="openinsure-compliance",
             prompt_template="Audit renewal assessment.\nAssessment: {assessment_result}",
+            depends_on=["assessment"],
         ),
     ],
 )
@@ -229,7 +242,7 @@ async def execute_workflow(
     entity_type: str,
     initial_data: dict[str, Any],
 ) -> WorkflowExecution:
-    """Execute a multi-agent workflow end-to-end."""
+    """Execute a multi-agent workflow, running independent steps concurrently."""
     definition = WORKFLOWS.get(workflow_name)
     if not definition:
         raise ValueError(f"Unknown workflow: {workflow_name}")
@@ -244,31 +257,90 @@ async def execute_workflow(
         {"workflow_id": execution.id, "entity_id": entity_id},
     )
 
-    for step in definition.steps:
-        # Check condition
-        if step.condition and not _evaluate_condition(step.condition, execution.context):
-            execution.steps_completed.append(
-                {
+    completed_steps: set[str] = set()
+    skipped_steps: set[str] = set()
+    failed_required: bool = False
+
+    while not failed_required:
+        # Find steps whose dependencies are all satisfied
+        ready: list[WorkflowStep] = []
+        for step in definition.steps:
+            if step.name in completed_steps or step.name in skipped_steps:
+                continue
+            deps_met = all(d in completed_steps or d in skipped_steps for d in step.depends_on)
+            if deps_met:
+                ready.append(step)
+
+        if not ready:
+            break
+
+        # Execute ready steps concurrently via asyncio.gather
+        async def _run_step(step: WorkflowStep) -> tuple[WorkflowStep, dict[str, Any] | None, str]:
+            """Execute a single workflow step, returning (step, result_or_None, prompt)."""
+            # Check condition
+            if step.condition and not _evaluate_condition(step.condition, execution.context):
+                return step, None, ""
+
+            from openinsure.agents.prompts import build_prompt_for_step
+
+            prompt = await build_prompt_for_step(step.name, execution.context, entity_id, entity_type)
+
+            try:
+                result = await asyncio.wait_for(foundry.invoke(step.agent, prompt), timeout=30)
+                return step, result, prompt
+            except TimeoutError:
+                logger.warning(
+                    "workflow.step_timeout",
+                    workflow=workflow_name,
+                    step=step.name,
+                    timeout=30,
+                )
+                return step, {"_error": f"Step '{step.name}' timed out after 30s", "_timeout": True}, prompt
+            except Exception as e:
+                logger.exception(
+                    "workflow.step_failed",
+                    workflow=workflow_name,
+                    step=step.name,
+                    error=str(e),
+                )
+                return step, {"_error": str(e)[:200]}, prompt
+
+        results = await asyncio.gather(*[_run_step(s) for s in ready])
+
+        for step, result, prompt in results:
+            if result is None:
+                # Condition not met — skip
+                execution.steps_completed.append(
+                    {
+                        "name": step.name,
+                        "status": "skipped",
+                        "reason": f"Condition not met: {step.condition}",
+                    }
+                )
+                skipped_steps.add(step.name)
+                continue
+
+            if "_error" in result:
+                step_record = {
                     "name": step.name,
-                    "status": "skipped",
-                    "reason": f"Condition not met: {step.condition}",
+                    "agent": step.agent,
+                    "status": "failed",
+                    "error": result["_error"],
+                    "timestamp": datetime.now(UTC).isoformat(),
                 }
-            )
-            continue
+                execution.steps_completed.append(step_record)
+                if step.required:
+                    execution.status = "failed"
+                    execution.error = f"Required step '{step.name}' failed: {result['_error']}"
+                    failed_required = True
+                    break
+                skipped_steps.add(step.name)
+                continue
 
-        # Build structured prompt via prompt builders (#67)
-        from openinsure.agents.prompts import build_prompt_for_step
-
-        prompt = await build_prompt_for_step(step.name, execution.context, entity_id, entity_type)
-
-        # Execute via Foundry
-        try:
-            result = await asyncio.wait_for(foundry.invoke(step.agent, prompt), timeout=30)
             resp = result.get("response", {})
             confidence = resp.get("confidence", 0.8) if isinstance(resp, dict) else 0.8
-
-            # Confidence gating: flag low-confidence responses for human review
             needs_human_review = confidence < 0.5
+
             if needs_human_review:
                 logger.warning(
                     "workflow.low_confidence_flagged",
@@ -278,7 +350,7 @@ async def execute_workflow(
                     entity_id=entity_id,
                 )
 
-            step_record: dict[str, Any] = {
+            step_record = {
                 "name": step.name,
                 "agent": step.agent,
                 "status": "completed",
@@ -292,7 +364,6 @@ async def execute_workflow(
             execution.steps_completed.append(step_record)
             execution.context[f"{step.name}_result"] = resp
 
-            # Escalate workflow when confidence is below threshold
             if needs_human_review and step.required:
                 execution.status = "escalated"
                 execution.error = (
@@ -308,6 +379,7 @@ async def execute_workflow(
                         "reason": "low_confidence",
                     },
                 )
+                failed_required = True
                 break
 
             # Record decision for each completed step
@@ -351,44 +423,7 @@ async def execute_workflow(
                     "source": result.get("source"),
                 },
             )
-        except TimeoutError:
-            logger.warning(
-                "workflow.step_timeout",
-                workflow=workflow_name,
-                step=step.name,
-                timeout=30,
-            )
-            step_record = {
-                "name": step.name,
-                "agent": step.agent,
-                "status": "failed",
-                "error": f"Step '{step.name}' timed out after 30s",
-                "timestamp": datetime.now(UTC).isoformat(),
-            }
-            execution.steps_completed.append(step_record)
-            if step.required:
-                execution.status = "failed"
-                execution.error = f"Required step '{step.name}' timed out after 30s"
-                break
-        except Exception as e:
-            logger.exception(
-                "workflow.step_failed",
-                workflow=workflow_name,
-                step=step.name,
-                error=str(e),
-            )
-            step_record = {
-                "name": step.name,
-                "agent": step.agent,
-                "status": "failed",
-                "error": str(e)[:200],
-                "timestamp": datetime.now(UTC).isoformat(),
-            }
-            execution.steps_completed.append(step_record)
-            if step.required:
-                execution.status = "failed"
-                execution.error = f"Required step '{step.name}' failed: {e}"
-                break
+            completed_steps.add(step.name)
 
     if execution.status == "running":
         execution.status = "completed"
