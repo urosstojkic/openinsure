@@ -53,7 +53,8 @@ Full routing rules including issue triage and @copilot assignment: `.squad/routi
 3. `python -m pytest tests/ -x -q --ignore=tests/e2e/test_full_lifecycle.py`
 4. `cd dashboard && npm run build`
 5. `python scripts/smoke_test.py {backend_url}` — 15 checks must pass
-6. Deploy: `pwsh scripts/deploy.ps1` (auto-versioning, sequential builds)
+6. `python scripts/foundry_smoke_test.py {backend_url}` — must confirm Foundry agents respond (not local fallback)
+7. Deploy: `pwsh scripts/deploy.ps1` (auto-versioning, sequential builds)
 
 Quality compromises MUST be documented as GitHub issues with `quality` label.
 
@@ -82,6 +83,8 @@ After completing a significant feature block (new process, major fix, architectu
 
 - Never launch generic unnamed agents — always route through Squad
 - Never deploy without smoke test passing
+- Never deploy without running `scripts/foundry_smoke_test.py` to verify Foundry agents respond
+- Never assume code changes are deployed — always verify the running container image matches the commit
 - Never use mock data in production (`VITE_USE_MOCK` must be `false`)
 - Never use `Start-Job` for Azure CLI (breaks auth — use sequential commands)
 - Never merge on red CI. "Tests passed locally" is NOT sufficient.
