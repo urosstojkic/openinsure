@@ -811,11 +811,19 @@ class SubmissionService:
     ) -> dict[str, Any]:
         """Bind a submission: authority check, policy creation, billing, cessions, events.
 
+        Uses the Submission aggregate root to validate the transition and
+        emit a ``SubmissionBound`` event.  Downstream handlers
+        (``PolicyCreationHandler``, ``BillingHandler``,
+        ``ReinsuranceHandler``) each operate on their own aggregate
+        boundary, following DDD aggregate separation.
+
         Returns a dict with either:
         - ``escalated=True`` plus escalation details, OR
         - bind details (policy_id, policy_number, premium, authority, bound_at).
         """
         from openinsure.agents.foundry_client import get_foundry_client
+        from openinsure.domain.aggregates.submission import SubmissionAggregate
+        from openinsure.services.bind_handlers import dispatch_bind_events
         from openinsure.services.event_publisher import publish_domain_event
 
         now = _now()
@@ -843,7 +851,11 @@ class SubmissionService:
             }
         auth_result = auth_info["auth_result"]
 
-        # Create the actual policy record
+        # ── Aggregate root: validate transition and emit SubmissionBound ──
+        aggregate = SubmissionAggregate(record)
+        aggregate.bind(policy_id=policy_id, policy_number=policy_number, premium=premium)
+
+        # Build policy data
         policy_repo = get_policy_repository()
         policy_data = _build_policy_data(record, premium, policy_id=policy_id, policy_number=policy_number)
 
@@ -885,8 +897,9 @@ class SubmissionService:
                 reasoning=str(pr_resp.get("notes", "")) if isinstance(pr_resp, dict) else "",
             )
 
-        # ── Core transaction: policy + billing + submission status ──────
-        # All-or-nothing — if any step fails the entire bind is rolled back.
+        # ── Dispatch aggregate events via handlers ─────────────────────
+        # PolicyCreationHandler + BillingHandler run inside the core
+        # transaction.  ReinsuranceHandler is best-effort outside it.
         from openinsure.api.billing import create_billing_account_on_bind
         from openinsure.infrastructure.factory import get_database_adapter
 
@@ -894,29 +907,36 @@ class SubmissionService:
         installments = {"full_pay": 1, "quarterly": 4, "monthly": 12}.get(billing_plan, 1)
         applicant = record.get("applicant_name", "") or record.get("insured_name", "Unknown")
 
+        bind_events = aggregate.clear_events()
+
         db = get_database_adapter()
         if db:
             async with db.transaction() as txn:
-                await policy_repo.create(policy_data, txn=txn)
-                await create_billing_account_on_bind(
-                    policy_id=policy_id,
-                    policyholder_name=applicant,
-                    total_premium=premium,
-                    installments=installments,
-                    effective_date=policy_data.get("effective_date"),
-                    txn=txn,
-                )
+                handler_ctx = {
+                    "policy_repo": policy_repo,
+                    "policy_data": policy_data,
+                    "billing_create_fn": create_billing_account_on_bind,
+                    "policy_id": policy_id,
+                    "policyholder_name": applicant,
+                    "total_premium": premium,
+                    "installments": installments,
+                    "effective_date": policy_data.get("effective_date"),
+                    "txn": txn,
+                }
+                await dispatch_bind_events(bind_events, handler_ctx)
                 await self._repo.update(submission_id, {"status": "bound", "updated_at": now}, txn=txn)
         else:
-            # InMemory fallback — no transaction needed
-            await policy_repo.create(policy_data)
-            await create_billing_account_on_bind(
-                policy_id=policy_id,
-                policyholder_name=applicant,
-                total_premium=premium,
-                installments=installments,
-                effective_date=policy_data.get("effective_date"),
-            )
+            handler_ctx = {
+                "policy_repo": policy_repo,
+                "policy_data": policy_data,
+                "billing_create_fn": create_billing_account_on_bind,
+                "policy_id": policy_id,
+                "policyholder_name": applicant,
+                "total_premium": premium,
+                "installments": installments,
+                "effective_date": policy_data.get("effective_date"),
+            }
+            await dispatch_bind_events(bind_events, handler_ctx)
             await self._repo.update(submission_id, {"status": "bound", "updated_at": now})
 
         # Auto-generate declaration page via Foundry document agent (non-critical)
@@ -943,7 +963,9 @@ class SubmissionService:
             except Exception:
                 logger.warning("submissions.bind_document_generation_failed", policy_id=policy_id, exc_info=True)
 
-        # Auto-calculate cessions (separate transaction — failure doesn't roll back core)
+        # Auto-calculate cessions via ReinsuranceHandler (best-effort, already
+        # dispatched above when using handlers; call _auto_cession as fallback
+        # for the non-handler code path in process())
         await _auto_cession(policy_id, policy_number, policy_data)
 
         # Publish domain events (non-critical — outside transaction)

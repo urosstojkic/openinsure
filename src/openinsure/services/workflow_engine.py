@@ -211,7 +211,10 @@ RENEWAL_WORKFLOW = WorkflowDefinition(
     ],
 )
 
-# Registry
+# Registry — hardcoded definitions kept for backward compatibility and
+# as the authoritative fallback when the data-driven registry is
+# unavailable.  The ``execute_workflow`` function now queries the
+# ``WorkflowRegistry`` first, falling back here.
 WORKFLOWS: dict[str, WorkflowDefinition] = {
     "new_business": NEW_BUSINESS_WORKFLOW,
     "claims_assessment": CLAIMS_WORKFLOW,
@@ -241,9 +244,29 @@ async def execute_workflow(
     entity_id: str,
     entity_type: str,
     initial_data: dict[str, Any],
+    *,
+    product_id: str | None = None,
 ) -> WorkflowExecution:
-    """Execute a multi-agent workflow, running independent steps concurrently."""
-    definition = WORKFLOWS.get(workflow_name)
+    """Execute a multi-agent workflow, running independent steps concurrently.
+
+    When a *product_id* is provided the data-driven workflow registry is
+    consulted first, allowing per-product workflow customisation.  Falls
+    back to the hardcoded ``WORKFLOWS`` dict if the registry has no match.
+    """
+    definition: WorkflowDefinition | None = None
+
+    # 1. Try data-driven registry when a product_id is specified
+    if product_id:
+        try:
+            from openinsure.services.workflow_registry import get_workflow_for_product
+
+            definition = await get_workflow_for_product(product_id, workflow_name)
+        except (ValueError, Exception):
+            logger.debug("workflow.registry_lookup_failed", workflow=workflow_name, exc_info=True)
+
+    # 2. Hardcoded fallback (always used when no product_id)
+    if definition is None:
+        definition = WORKFLOWS.get(workflow_name)
     if not definition:
         raise ValueError(f"Unknown workflow: {workflow_name}")
 
