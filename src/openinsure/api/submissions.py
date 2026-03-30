@@ -18,6 +18,7 @@ from pydantic import BaseModel, Field
 from openinsure.infrastructure.factory import get_blob_storage, get_submission_repository
 from openinsure.rate_limit import limiter
 from openinsure.rbac.auth import CurrentUser, get_current_user
+from openinsure.services.party_resolution import get_party_resolution_service
 
 router = APIRouter()
 _logger = structlog.get_logger(__name__)
@@ -225,10 +226,21 @@ async def create_submission(body: SubmissionCreate) -> SubmissionResponse:
     now = _now()
     # Merge cyber_risk_data into risk_data (both accepted)
     merged_risk = {**body.risk_data, **body.cyber_risk_data}
+
+    # Resolve applicant to a party record (deduplication)
+    party_svc = get_party_resolution_service()
+    applicant_data: dict[str, Any] = {"name": body.applicant_name}
+    if body.applicant_email:
+        applicant_data["contacts"] = [
+            {"contact_type": "primary", "name": body.applicant_name, "email": body.applicant_email}
+        ]
+    party_id = await party_svc.resolve_or_create(applicant_data)
+
     record: dict[str, Any] = {
         "id": sid,
         "applicant_name": body.applicant_name,
         "applicant_email": body.applicant_email,
+        "applicant_id": party_id,
         "status": body.status or SubmissionStatus.RECEIVED,
         "channel": body.channel,
         "line_of_business": body.line_of_business,

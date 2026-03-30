@@ -56,7 +56,13 @@ class SyncResult:
         }
 
 
-def _product_to_knowledge_document(product: dict[str, Any]) -> dict[str, Any]:
+def _product_to_knowledge_document(
+    product: dict[str, Any],
+    *,
+    relational_coverages: list[dict[str, Any]] | None = None,
+    relational_factors: list[dict[str, Any]] | None = None,
+    relational_rules: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
     """Convert a SQL product record into a structured knowledge document.
 
     The document is formatted so that Foundry agents can parse it to:
@@ -64,11 +70,21 @@ def _product_to_knowledge_document(product: dict[str, Any]) -> dict[str, Any]:
     - Retrieve coverage definitions during underwriting
     - Look up rating factors during premium calculation
     - Enforce authority limits during binding decisions
+
+    **v106 (#164):** When *relational_coverages*, *relational_factors*, or
+    *relational_rules* are provided (from the normalised tables), they take
+    precedence over the JSON blob fields.  This gives properly typed,
+    indexed data instead of parsed JSON.
     """
     code = product.get("code", product.get("product_code", ""))
     name = product.get("name", product.get("product_name", ""))
     lob = product.get("line_of_business", product.get("product_line", ""))
     status = product.get("status", "draft")
+
+    # Prefer relational data when available, fall back to JSON blob
+    coverages = relational_coverages if relational_coverages else product.get("coverages", [])
+    rating_factors = relational_factors if relational_factors else product.get("rating_factors", [])
+    appetite_rules = relational_rules if relational_rules else product.get("appetite_rules", [])
 
     # Build a rich text representation for keyword search
     coverages = product.get("coverages", [])
@@ -233,11 +249,38 @@ class ProductKnowledgeSyncService:
         """Sync a single product to Cosmos DB and AI Search.
 
         Returns a dict with sync status for each destination.
+
+        **v106 (#164):** loads relational data from ``ProductRelationsRepository``
+        when available, building richer knowledge documents from properly
+        typed, indexed columns instead of parsing JSON blobs.
         """
         self._init_clients()
         code = product.get("code", product.get("product_code", str(product.get("id", ""))))
         result = SyncResult(str(product.get("id", "")), code)
-        doc = _product_to_knowledge_document(product)
+
+        # Load relational data when available (Phase 3c, #164)
+        rel_coverages: list[dict[str, Any]] | None = None
+        rel_factors: list[dict[str, Any]] | None = None
+        rel_rules: list[dict[str, Any]] | None = None
+        try:
+            from openinsure.infrastructure.factory import get_product_relations_repository
+
+            relations = get_product_relations_repository()
+            if relations is not None:
+                product_id = str(product.get("id", ""))
+                if product_id:
+                    rel_coverages = await relations.get_coverages(product_id) or None
+                    rel_factors = await relations.get_rating_factors(product_id) or None
+                    rel_rules = await relations.get_appetite_rules(product_id) or None
+        except Exception:
+            logger.debug("product_sync.relational_load_failed", product_code=code, exc_info=True)
+
+        doc = _product_to_knowledge_document(
+            product,
+            relational_coverages=rel_coverages,
+            relational_factors=rel_factors,
+            relational_rules=rel_rules,
+        )
 
         # 1. Cosmos DB — source of truth for knowledge
         if self._cosmos is not None:

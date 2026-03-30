@@ -108,11 +108,11 @@ After completing a significant feature block (new process, major fix, architectu
 
 | Metric | Value |
 |--------|-------|
-| Tests | 627 collected (unit, pytest CI green) |
-| API endpoints | 153 across 28 modules |
+| Tests | 750 collected (unit, pytest CI green) |
+| API endpoints | 172 across 31 modules |
 | Dashboard pages | 25 (React 18 + TypeScript + Tailwind) |
 | Foundry agents | 10 deployed on Azure AI Foundry (GPT-5.2 + AI Search tools) |
-| MCP tools | 29 tools + 5 resources |
+| MCP tools | 32 tools + 5 resources |
 | Knowledge | Cosmos DB (13 docs) + AI Search (50 docs) |
 | Model | GPT-5.2 |
 | Azure SQL data | 1,640+ submissions, 575+ policies, 140+ claims |
@@ -125,8 +125,12 @@ After completing a significant feature block (new process, major fix, architectu
 - **Prompts refactored** — `agents/prompts/` package (13 modules) replaces monolithic `prompts.py`
 - **Rating cascade** — 3-tier fallback: Foundry → CyberRatingEngine → LOB minimum
 - **Product sync pipeline** — SQL → Cosmos DB → AI Search on every product mutation
+- **Product relational migration** — JSON blobs → normalised tables with dual-write (v106, #164)
 - **Authority limits centralized** — `domain/limits.py` replaces 30+ hardcoded values
 - **All 16 tech-debt issues (#92–#107) resolved**
+- **Data model hardening** — 9 migrations (006–014): referential integrity, performance indexes, soft deletes, audit trail, concurrency control, business constraints, unique constraints, party dedup indexes, GDPR tables
+- **New services** — `AuditService`, `GDPRService`, `PartyResolutionService`
+- **Database** — 40 tables across 15 migrations (up from 26/3)
 
 ### Foundry Agents (Azure AI Foundry Agent Service — GPT-5.2)
 
@@ -209,7 +213,7 @@ src/openinsure/
 +-- knowledge/       # Knowledge graph schemas & query builders
 +-- mcp/             # MCP Server (32 tools, 5 resources, stdio + SSE)
 +-- rbac/            # Roles, authority matrix, authentication
-+-- services/        # Business logic (rating, lifecycle, claims, workflow engine, learning loop, comparable accounts, product sync)
++-- services/        # Business logic (rating, lifecycle, claims, workflow engine, learning loop, comparable accounts, product sync, audit, GDPR, party resolution)
 +-- main.py          # FastAPI app entry point
 ```
 

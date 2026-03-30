@@ -7,12 +7,29 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 from uuid import UUID, uuid4
 
-from openinsure.infrastructure.repository import BaseRepository, safe_pagination_clause
+import structlog
+
+from openinsure.infrastructure.repositories.sql_product_relations import (
+    ProductRelationsRepository,
+)
+from openinsure.infrastructure.repository import (
+    BaseRepository,
+    IntegrityConstraintError,
+    safe_pagination_clause,
+)
 
 if TYPE_CHECKING:
     from openinsure.infrastructure.database import DatabaseAdapter
 
+logger = structlog.get_logger()
+
 # -- JSON field names that are stored as NVARCHAR(MAX) in the products table --
+# DEPRECATED (issue #164): These JSON columns are being migrated to normalised
+# relational tables (product_coverages, rating_factor_tables,
+# product_appetite_rules, etc.).  During the transition period, writes go to
+# both JSON and relational tables (dual-write).  Reads prefer relational data
+# and fall back to JSON.  Do NOT drop these columns until all consumers have
+# been migrated and the migration period ends.
 _JSON_FIELDS: set[str] = {
     "coverages",
     "rating_factors",
@@ -44,6 +61,7 @@ _SKIP_IN_SQL: set[str] = {
     "documents",
     "effective_date",
     "expiration_date",
+    "row_version",
 }
 
 
@@ -109,6 +127,8 @@ def _from_sql_row(row: dict[str, Any]) -> dict[str, Any]:
     version_raw = row.get("version", 1)
     version_str = str(version_raw) if version_raw is not None else "1"
 
+    rv = row.get("row_version")
+
     return {
         "id": _str(row.get("id")),
         "code": _str(row.get("code") or row.get("product_code")),
@@ -135,14 +155,21 @@ def _from_sql_row(row: dict[str, Any]) -> dict[str, Any]:
         "created_by": _str(row.get("created_by")) or None,
         "created_at": created,
         "updated_at": updated,
+        "row_version": rv.hex() if isinstance(rv, (bytes, bytearray)) else None,
     }
 
 
 class SqlProductRepository(BaseRepository):
-    """Azure SQL implementation of the product repository."""
+    """Azure SQL implementation of the product repository.
+
+    On create/update, dual-writes to the normalised relational tables
+    via :class:`ProductRelationsRepository` so data is available in both
+    the JSON columns and the new relational tables.
+    """
 
     def __init__(self, db: DatabaseAdapter) -> None:
         self.db = db
+        self._relations = ProductRelationsRepository(db)
 
     async def create(self, entity: dict[str, Any]) -> dict[str, Any]:
         entity.setdefault("id", str(uuid4()))
@@ -183,10 +210,20 @@ class SqlProductRepository(BaseRepository):
                 row["updated_at"],
             ],
         )
+        # Dual-write: sync normalised relational tables
+        await self._relations.sync_from_product(str(row["id"]), entity)
         return _from_sql_row(row)
 
-    async def get_by_id(self, entity_id: UUID | str) -> dict[str, Any] | None:
-        row = await self.db.fetch_one("SELECT * FROM products WHERE id = ?", [str(entity_id)])
+    @property
+    def relations(self) -> ProductRelationsRepository:
+        """Expose the relational sub-repository for direct queries."""
+        return self._relations
+
+    async def get_by_id(self, entity_id: UUID | str, *, include_deleted: bool = False) -> dict[str, Any] | None:
+        sql = "SELECT * FROM products WHERE id = ?"
+        if not include_deleted:
+            sql += " AND deleted_at IS NULL"
+        row = await self.db.fetch_one(sql, [str(entity_id)])
         return _from_sql_row(row) if row else None
 
     async def list_all(
@@ -197,7 +234,7 @@ class SqlProductRepository(BaseRepository):
     ) -> list[dict[str, Any]]:
         query = "SELECT * FROM products"
         params: list[Any] = []
-        where_clauses: list[str] = []
+        where_clauses: list[str] = ["deleted_at IS NULL"]
         if filters:
             if "status" in filters:
                 where_clauses.append("status = ?")
@@ -211,15 +248,16 @@ class SqlProductRepository(BaseRepository):
             if "code" in filters:
                 where_clauses.append("code = ?")
                 params.append(filters["code"])
-        if where_clauses:
-            query += " WHERE " + " AND ".join(where_clauses)
+        query += " WHERE " + " AND ".join(where_clauses)
         pag_clause, pag_params = safe_pagination_clause("created_at DESC", skip, limit)
         query += pag_clause
         params.extend(pag_params)
         rows = await self.db.fetch_all(query, params)
         return [_from_sql_row(r) for r in rows]
 
-    async def update(self, entity_id: UUID | str, updates: dict[str, Any]) -> dict[str, Any] | None:
+    async def update(
+        self, entity_id: UUID | str, updates: dict[str, Any], *, expected_version: str | None = None
+    ) -> dict[str, Any] | None:
         sets: list[str] = []
         params: list[Any] = []
         seen_cols: set[str] = set()
@@ -243,21 +281,48 @@ class SqlProductRepository(BaseRepository):
         sets.append("updated_at = ?")
         params.append(datetime.now(UTC).isoformat())
         params.append(str(entity_id))
+        where = "WHERE id = ?"
+        if expected_version:
+            where += " AND row_version = CONVERT(BINARY(8), ?, 1)"
+            params.append(f"0x{expected_version}")
 
-        await self.db.execute_query(
-            f"UPDATE products SET {', '.join(sets)} WHERE id = ?",  # noqa: S608  # nosec B608 — parameterized
+        rowcount = await self.db.execute_query(
+            f"UPDATE products SET {', '.join(sets)} {where}",  # noqa: S608  # nosec B608 — parameterized
             params,
         )
-        return await self.get_by_id(entity_id)
+        if expected_version and rowcount == 0:
+            from fastapi import HTTPException
+
+            raise HTTPException(status_code=409, detail="Record modified by another user")
+        # Dual-write: sync normalised relational tables with merged data
+        result = await self.get_by_id(entity_id)
+        if result:
+            await self._relations.sync_from_product(str(entity_id), result)
+        return result
 
     async def delete(self, entity_id: UUID | str) -> bool:
-        result = await self.db.execute_query("DELETE FROM products WHERE id = ?", [str(entity_id)])
+        try:
+            result = await self.db.execute_query(
+                "UPDATE products SET deleted_at = GETUTCDATE() WHERE id = ? AND deleted_at IS NULL",
+                [str(entity_id)],
+            )
+            return result > 0
+        except Exception as exc:
+            if "REFERENCE" in str(exc).upper() or "547" in str(exc):
+                raise IntegrityConstraintError from exc
+            raise
+
+    async def restore(self, entity_id: UUID | str) -> bool:
+        result = await self.db.execute_query(
+            "UPDATE products SET deleted_at = NULL WHERE id = ? AND deleted_at IS NOT NULL",
+            [str(entity_id)],
+        )
         return result > 0
 
     async def count(self, filters: dict[str, Any] | None = None) -> int:
         query = "SELECT COUNT(*) as cnt FROM products"
         params: list[Any] = []
-        where_clauses: list[str] = []
+        where_clauses: list[str] = ["deleted_at IS NULL"]
         if filters:
             if "status" in filters:
                 where_clauses.append("status = ?")
@@ -271,7 +336,6 @@ class SqlProductRepository(BaseRepository):
             if "code" in filters:
                 where_clauses.append("code = ?")
                 params.append(filters["code"])
-        if where_clauses:
-            query += " WHERE " + " AND ".join(where_clauses)
+        query += " WHERE " + " AND ".join(where_clauses)
         result = await self.db.fetch_one(query, params)
         return result.get("cnt", 0) if result else 0

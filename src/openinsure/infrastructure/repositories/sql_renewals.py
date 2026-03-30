@@ -8,7 +8,11 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 from uuid import UUID, uuid4
 
-from openinsure.infrastructure.repository import BaseRepository, safe_pagination_clause
+from openinsure.infrastructure.repository import (
+    BaseRepository,
+    IntegrityConstraintError,
+    safe_pagination_clause,
+)
 
 if TYPE_CHECKING:
     from openinsure.infrastructure.database import DatabaseAdapter
@@ -130,11 +134,11 @@ class SqlRenewalRepository(BaseRepository):
             logger.warning("Failed to publish renewal.created event for %s", entity["id"])
         return entity
 
-    async def get_by_id(self, entity_id: UUID | str) -> dict[str, Any] | None:
-        row = await self.db.fetch_one(
-            "SELECT * FROM renewal_records WHERE id = ?",
-            [str(entity_id)],
-        )
+    async def get_by_id(self, entity_id: UUID | str, *, include_deleted: bool = False) -> dict[str, Any] | None:
+        sql = "SELECT * FROM renewal_records WHERE id = ?"
+        if not include_deleted:
+            sql += " AND deleted_at IS NULL"
+        row = await self.db.fetch_one(sql, [str(entity_id)])
         return _renewal_from_sql_row(row) if row else None
 
     async def list_all(
@@ -145,7 +149,7 @@ class SqlRenewalRepository(BaseRepository):
     ) -> list[dict[str, Any]]:
         query = "SELECT * FROM renewal_records"
         params: list[Any] = []
-        where_clauses: list[str] = []
+        where_clauses: list[str] = ["deleted_at IS NULL"]
         if filters:
             if "status" in filters:
                 where_clauses.append("status = ?")
@@ -153,8 +157,7 @@ class SqlRenewalRepository(BaseRepository):
             if "original_policy_id" in filters:
                 where_clauses.append("original_policy_id = ?")
                 params.append(filters["original_policy_id"])
-        if where_clauses:
-            query += " WHERE " + " AND ".join(where_clauses)
+        query += " WHERE " + " AND ".join(where_clauses)
         pag_clause, pag_params = safe_pagination_clause("created_at DESC", skip, limit)
         query += pag_clause
         params.extend(pag_params)
@@ -185,8 +188,20 @@ class SqlRenewalRepository(BaseRepository):
         return await self.get_by_id(entity_id)
 
     async def delete(self, entity_id: UUID | str) -> bool:
+        try:
+            result = await self.db.execute_query(
+                "UPDATE renewal_records SET deleted_at = GETUTCDATE() WHERE id = ? AND deleted_at IS NULL",
+                [str(entity_id)],
+            )
+            return result > 0
+        except Exception as exc:
+            if "REFERENCE" in str(exc).upper() or "547" in str(exc):
+                raise IntegrityConstraintError from exc
+            raise
+
+    async def restore(self, entity_id: UUID | str) -> bool:
         result = await self.db.execute_query(
-            "DELETE FROM renewal_records WHERE id = ?",
+            "UPDATE renewal_records SET deleted_at = NULL WHERE id = ? AND deleted_at IS NOT NULL",
             [str(entity_id)],
         )
         return result > 0
@@ -194,7 +209,7 @@ class SqlRenewalRepository(BaseRepository):
     async def count(self, filters: dict[str, Any] | None = None) -> int:
         query = "SELECT COUNT(*) as cnt FROM renewal_records"
         params: list[Any] = []
-        where_clauses: list[str] = []
+        where_clauses: list[str] = ["deleted_at IS NULL"]
         if filters:
             if "status" in filters:
                 where_clauses.append("status = ?")
@@ -202,7 +217,6 @@ class SqlRenewalRepository(BaseRepository):
             if "original_policy_id" in filters:
                 where_clauses.append("original_policy_id = ?")
                 params.append(filters["original_policy_id"])
-        if where_clauses:
-            query += " WHERE " + " AND ".join(where_clauses)
+        query += " WHERE " + " AND ".join(where_clauses)
         result = await self.db.fetch_one(query, params)
         return result.get("cnt", 0) if result else 0

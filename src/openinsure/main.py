@@ -1,9 +1,11 @@
 """OpenInsure — AI-Native Insurance Platform API."""
 
+import re
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from uuid import uuid4
 
+import pyodbc
 import structlog
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -14,6 +16,7 @@ from slowapi.errors import RateLimitExceeded
 from openinsure.api.errors import make_error
 from openinsure.api.router import api_router
 from openinsure.config import get_settings
+from openinsure.infrastructure.repository import IntegrityConstraintError
 from openinsure.logging import redact_pii_processor
 from openinsure.rate_limit import limiter
 
@@ -148,6 +151,102 @@ def create_app() -> FastAPI:
     from slowapi.middleware import SlowAPIMiddleware
 
     app.add_middleware(SlowAPIMiddleware)
+
+    # -- Constraint-violation handlers (issues #162, #163) -------------------
+
+    # Map constraint names to user-friendly messages
+    constraint_messages: dict[str, str] = {
+        # CHECK constraints (issue #162 → 422)
+        "CK_policies_dates": "Effective date must be on or before expiration date",
+        "CK_treaties_dates": "Effective date must be on or before expiration date",
+        "CK_policies_premium": "Total premium must not be negative",
+        "CK_reserves_amount": "Reserve amount must not be negative",
+        "CK_payments_amount": "Payment amount must not be negative",
+        "CK_invoices_amount": "Invoice amount must not be negative",
+        "CK_submissions_premium": "Quoted premium must not be negative",
+        "CK_products_version": "Product version must be at least 1",
+        # UNIQUE constraints (issue #163 → 409)
+        "UQ_policies_active_insured_product": "Active policy already exists for this insured and product",
+        "UQ_billing_policy": "A billing account already exists for this policy",
+        "UQ_renewal_active": "An active renewal already exists for this policy",
+    }
+
+    def _parse_constraint_name(error_msg: str) -> str | None:
+        """Extract constraint name from a pyodbc IntegrityError message."""
+        match = re.search(r"constraint ['\"]?(\w+)['\"]?", error_msg, re.IGNORECASE)
+        if match:
+            return match.group(1)
+        # Unique index violations use different wording
+        match = re.search(r"index ['\"]?(\w+)['\"]?", error_msg, re.IGNORECASE)
+        return match.group(1) if match else None
+
+    @app.exception_handler(pyodbc.IntegrityError)
+    async def _integrity_error_handler(request: Request, exc: pyodbc.IntegrityError) -> JSONResponse:
+        request_id = str(uuid4())
+        error_msg = str(exc)
+        constraint = _parse_constraint_name(error_msg)
+        friendly = constraint_messages.get(constraint or "", "")
+
+        logger.warning(
+            "constraint_violation",
+            path=request.url.path,
+            constraint=constraint,
+            request_id=request_id,
+        )
+
+        # CHECK constraint violations → 422; UNIQUE violations → 409
+        is_unique = constraint and constraint.startswith("UQ_")
+        is_check = constraint and constraint.startswith("CK_")
+
+        if is_unique:
+            return JSONResponse(
+                status_code=409,
+                content=make_error(
+                    error=friendly or "Duplicate record violates uniqueness constraint",
+                    code="CONFLICT",
+                    request_id=request_id,
+                    reason=constraint,
+                ),
+            )
+        if is_check:
+            return JSONResponse(
+                status_code=422,
+                content=make_error(
+                    error=friendly or "Value violates a business validation rule",
+                    code="VALIDATION_ERROR",
+                    request_id=request_id,
+                    reason=constraint,
+                ),
+            )
+        # Fallback for other integrity errors (FK violations, etc.)
+        return JSONResponse(
+            status_code=422,
+            content=make_error(
+                error=friendly or "Data integrity constraint violated",
+                code="INTEGRITY_ERROR",
+                request_id=request_id,
+                reason=constraint,
+            ),
+        )
+
+    @app.exception_handler(IntegrityConstraintError)
+    async def _fk_restrict_handler(request: Request, exc: IntegrityConstraintError) -> JSONResponse:
+        request_id = str(uuid4())
+        logger.warning(
+            "delete_blocked_by_fk",
+            path=request.url.path,
+            detail=str(exc),
+            request_id=request_id,
+        )
+        return JSONResponse(
+            status_code=409,
+            content=make_error(
+                error=str(exc),
+                code="CONFLICT",
+                request_id=request_id,
+                reason="FK_RESTRICT",
+            ),
+        )
 
     @app.exception_handler(Exception)
     async def _global_exception_handler(request: Request, exc: Exception) -> JSONResponse:

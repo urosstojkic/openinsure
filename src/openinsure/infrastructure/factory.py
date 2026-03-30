@@ -305,3 +305,26 @@ def get_mga_bordereau_repository() -> BaseRepository:
     from openinsure.infrastructure.repositories.mga import InMemoryMGABordereauRepository
 
     return InMemoryMGABordereauRepository()
+
+
+@lru_cache
+def get_product_relations_repository():
+    """Return a ProductRelationsRepository when SQL is configured, else ``None``."""
+    settings = get_settings()
+    if settings.storage_mode == "azure" and settings.sql_connection_string:
+        from openinsure.infrastructure.repositories.sql_product_relations import (
+            ProductRelationsRepository,
+        )
+
+        db = get_database_adapter()
+        return ProductRelationsRepository(db)  # type: ignore[arg-type]
+    return None
+
+
+@lru_cache
+def get_audit_service():
+    """Return a shared AuditService instance."""
+    from openinsure.services.audit_service import AuditService
+
+    db = get_database_adapter()
+    return AuditService(db)

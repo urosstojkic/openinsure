@@ -8,7 +8,11 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 from uuid import UUID, uuid4
 
-from openinsure.infrastructure.repository import BaseRepository, safe_pagination_clause
+from openinsure.infrastructure.repository import (
+    BaseRepository,
+    IntegrityConstraintError,
+    safe_pagination_clause,
+)
 
 if TYPE_CHECKING:
     from openinsure.infrastructure.database import DatabaseAdapter
@@ -37,6 +41,7 @@ _CLAIM_SKIP_IN_SQL: set[str] = {
     "lob",
     "reported_date",
     "policy_number",
+    "row_version",
 }
 
 
@@ -119,6 +124,7 @@ def _claim_from_sql_row(row: dict[str, Any]) -> dict[str, Any]:
     total_paid = float(row["total_paid"]) if row.get("total_paid") else 0.0
     total_incurred = total_reserved + total_paid
     loss_date = _str(row.get("loss_date"))
+    rv = row.get("row_version")
 
     return {
         "id": _str(row.get("id")),
@@ -147,6 +153,7 @@ def _claim_from_sql_row(row: dict[str, Any]) -> dict[str, Any]:
         "metadata": {},
         "created_at": _str(row.get("created_at")),
         "updated_at": _str(row.get("updated_at")),
+        "row_version": rv.hex() if isinstance(rv, (bytes, bytearray)) else None,
     }
 
 
@@ -233,8 +240,11 @@ class SqlClaimRepository(BaseRepository):
         ") cp ON cp.claim_id = c.id"
     )
 
-    async def get_by_id(self, entity_id: UUID | str) -> dict[str, Any] | None:
-        row = await self.db.fetch_one(self._BASE_QUERY + " WHERE c.id = ?", [str(entity_id)])
+    async def get_by_id(self, entity_id: UUID | str, *, include_deleted: bool = False) -> dict[str, Any] | None:
+        sql = self._BASE_QUERY + " WHERE c.id = ?"
+        if not include_deleted:
+            sql += " AND c.deleted_at IS NULL"
+        row = await self.db.fetch_one(sql, [str(entity_id)])
         return _claim_from_sql_row(row) if row else None
 
     async def list_all(
@@ -245,7 +255,7 @@ class SqlClaimRepository(BaseRepository):
     ) -> list[dict[str, Any]]:
         query = self._BASE_QUERY
         params: list[Any] = []
-        where_clauses: list[str] = []
+        where_clauses: list[str] = ["c.deleted_at IS NULL"]
         if filters:
             if "status" in filters:
                 where_clauses.append("c.status = ?")
@@ -256,15 +266,16 @@ class SqlClaimRepository(BaseRepository):
             if "policy_id" in filters:
                 where_clauses.append("c.policy_id = ?")
                 params.append(filters["policy_id"])
-        if where_clauses:
-            query += " WHERE " + " AND ".join(where_clauses)
+        query += " WHERE " + " AND ".join(where_clauses)
         pag_clause, pag_params = safe_pagination_clause("c.created_at DESC", skip, limit)
         query += pag_clause
         params.extend(pag_params)
         rows = await self.db.fetch_all(query, params)
         return [_claim_from_sql_row(r) for r in rows]
 
-    async def update(self, entity_id: UUID | str, updates: dict[str, Any]) -> dict[str, Any] | None:
+    async def update(
+        self, entity_id: UUID | str, updates: dict[str, Any], *, expected_version: str | None = None
+    ) -> dict[str, Any] | None:
         from openinsure.domain.state_machine import (
             validate_claim_invariants,
             validate_claim_transition,
@@ -290,20 +301,43 @@ class SqlClaimRepository(BaseRepository):
         sets.append("updated_at = ?")
         params.append(datetime.now(UTC).isoformat())
         params.append(str(entity_id))
-        await self.db.execute_query(
-            f"UPDATE claims SET {', '.join(sets)} WHERE id = ?",  # noqa: S608  # nosec B608 — parameterized query, sets built from validated keys
+        where = "WHERE id = ?"
+        if expected_version:
+            where += " AND row_version = CONVERT(BINARY(8), ?, 1)"
+            params.append(f"0x{expected_version}")
+        rowcount = await self.db.execute_query(
+            f"UPDATE claims SET {', '.join(sets)} {where}",  # noqa: S608  # nosec B608 — parameterized query, sets built from validated keys
             params,
         )
+        if expected_version and rowcount == 0:
+            from fastapi import HTTPException
+
+            raise HTTPException(status_code=409, detail="Record modified by another user")
         return await self.get_by_id(entity_id)
 
     async def delete(self, entity_id: UUID | str) -> bool:
-        result = await self.db.execute_query("DELETE FROM claims WHERE id = ?", [str(entity_id)])
+        try:
+            result = await self.db.execute_query(
+                "UPDATE claims SET deleted_at = GETUTCDATE() WHERE id = ? AND deleted_at IS NULL",
+                [str(entity_id)],
+            )
+            return result > 0
+        except Exception as exc:
+            if "REFERENCE" in str(exc).upper() or "547" in str(exc):
+                raise IntegrityConstraintError from exc
+            raise
+
+    async def restore(self, entity_id: UUID | str) -> bool:
+        result = await self.db.execute_query(
+            "UPDATE claims SET deleted_at = NULL WHERE id = ? AND deleted_at IS NOT NULL",
+            [str(entity_id)],
+        )
         return result > 0
 
     async def count(self, filters: dict[str, Any] | None = None) -> int:
         query = "SELECT COUNT(*) as cnt FROM claims"
         params: list[Any] = []
-        where_clauses: list[str] = []
+        where_clauses: list[str] = ["deleted_at IS NULL"]
         if filters:
             if "status" in filters:
                 where_clauses.append("status = ?")
@@ -314,7 +348,6 @@ class SqlClaimRepository(BaseRepository):
             if "policy_id" in filters:
                 where_clauses.append("policy_id = ?")
                 params.append(filters["policy_id"])
-        if where_clauses:
-            query += " WHERE " + " AND ".join(where_clauses)
+        query += " WHERE " + " AND ".join(where_clauses)
         result = await self.db.fetch_one(query, params)
         return result.get("cnt", 0) if result else 0

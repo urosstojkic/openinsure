@@ -12,7 +12,11 @@ import json
 from typing import TYPE_CHECKING, Any
 from uuid import UUID  # noqa: TC003
 
-from openinsure.infrastructure.repository import BaseRepository, safe_pagination_clause
+from openinsure.infrastructure.repository import (
+    BaseRepository,
+    IntegrityConstraintError,
+    safe_pagination_clause,
+)
 
 if TYPE_CHECKING:
     from openinsure.infrastructure.database import DatabaseAdapter
@@ -48,8 +52,13 @@ class SqlComplianceRepository(BaseRepository):
         return existing
 
     async def delete(self, entity_id: UUID | str) -> bool:
-        result = await self.db.execute_query("DELETE FROM decision_records WHERE id = ?", [str(entity_id)])
-        return bool(result)
+        try:
+            result = await self.db.execute_query("DELETE FROM decision_records WHERE id = ?", [str(entity_id)])
+            return bool(result)
+        except Exception as exc:
+            if "REFERENCE" in str(exc).upper() or "547" in str(exc):
+                raise IntegrityConstraintError from exc
+            raise
 
     async def count(self, filters: dict[str, Any] | None = None) -> int:
         return await self.count_decisions(filters=filters)

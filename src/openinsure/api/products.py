@@ -214,6 +214,23 @@ class ProductResponse(BaseModel):
     updated_at: str
 
 
+class ProductSummary(BaseModel):
+    """Lightweight product summary for list endpoints (no full relations)."""
+
+    id: str
+    name: str
+    product_line: ProductLine
+    description: str
+    version: str
+    status: ProductStatus
+    coverage_count: int = 0
+    factor_count: int = 0
+    appetite_rule_count: int = 0
+    effective_date: str | None = None
+    created_at: str
+    updated_at: str
+
+
 class ProductList(BaseModel):
     """Paginated list of products."""
 
@@ -392,7 +409,13 @@ async def list_products(
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
 ) -> ProductList:
-    """List products with optional filtering and pagination."""
+    """List products with optional filtering and pagination.
+
+    **v106 (#164):** the list endpoint does NOT load full relational data
+    for every product — it only returns core fields with summary counts
+    (``coverage_count``, ``factor_count``, ``appetite_rule_count``).  Use
+    ``GET /{product_id}`` for the full product with relations.
+    """
     filters: dict[str, Any] = {}
     if status is not None:
         filters["status"] = status
@@ -411,8 +434,45 @@ async def list_products(
 
 @router.get("/{product_id}", response_model=ProductResponse)
 async def get_product(product_id: str) -> ProductResponse:
-    """Retrieve a single product by ID."""
-    return ProductResponse(**_ensure_extended_fields(await _get_product(product_id)))
+    """Retrieve a single product by ID.
+
+    **v106 (#164):** enriches the response from normalised relational
+    tables when available.  Falls back to JSON blob data for backward
+    compatibility.
+    """
+    record = _ensure_extended_fields(await _get_product(product_id))
+
+    # Enrich from relational tables when SQL is configured
+    try:
+        from openinsure.infrastructure.factory import get_product_relations_repository
+
+        relations = get_product_relations_repository()
+        if relations is not None:
+            rel_coverages = await relations.get_coverages(product_id)
+            if rel_coverages:
+                record["coverages"] = rel_coverages
+
+            rel_factors = await relations.get_rating_factor_tables(product_id)
+            if rel_factors:
+                record["rating_factor_tables"] = rel_factors
+
+            rel_rules = await relations.get_appetite_rules(product_id)
+            if rel_rules:
+                record["appetite_rules"] = rel_rules
+
+            rel_authority = await relations.get_authority_limits(product_id)
+            if rel_authority:
+                record["authority_limits"] = rel_authority
+
+            rel_territories = await relations.get_territories(product_id)
+            if rel_territories:
+                record["territories"] = [
+                    t.get("territory_code", t) if isinstance(t, dict) else str(t) for t in rel_territories
+                ]
+    except Exception:
+        logger.debug("product.relational_enrich_failed", product_id=product_id, exc_info=True)
+
+    return ProductResponse(**record)
 
 
 @router.put("/{product_id}", response_model=ProductResponse)
@@ -618,9 +678,27 @@ async def calculate_rate(product_id: str, body: RateRequest) -> RateResponse:
 
 @router.get("/{product_id}/coverages", response_model=CoverageListResponse)
 async def list_coverages(product_id: str) -> CoverageListResponse:
-    """List available coverages for a product."""
+    """List available coverages for a product.
+
+    **v106 (#164):** prefers relational ``product_coverages`` table,
+    falls back to JSON blob.
+    """
     record = await _get_product(product_id)
+
+    # Try relational table first
+    coverages = record["coverages"]
+    try:
+        from openinsure.infrastructure.factory import get_product_relations_repository
+
+        relations = get_product_relations_repository()
+        if relations is not None:
+            rel_coverages = await relations.get_coverages(product_id)
+            if rel_coverages:
+                coverages = rel_coverages
+    except Exception:
+        logger.debug("product.coverages_relational_failed", product_id=product_id, exc_info=True)
+
     return CoverageListResponse(
         product_id=product_id,
-        coverages=[CoverageDefinition(**c) for c in record["coverages"]],
+        coverages=[CoverageDefinition(**c) for c in coverages],
     )

@@ -13,7 +13,11 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 from uuid import UUID, uuid4
 
-from openinsure.infrastructure.repository import BaseRepository, safe_pagination_clause
+from openinsure.infrastructure.repository import (
+    BaseRepository,
+    IntegrityConstraintError,
+    safe_pagination_clause,
+)
 
 if TYPE_CHECKING:
     from openinsure.infrastructure.database import DatabaseAdapter, TransactionContext
@@ -185,8 +189,11 @@ class SqlReinsuranceRepository(BaseRepository):
         )
         return entity
 
-    async def get_by_id(self, entity_id: UUID | str) -> dict[str, Any] | None:
-        row = await self.db.fetch_one("SELECT * FROM reinsurance_treaties WHERE id = ?", [str(entity_id)])
+    async def get_by_id(self, entity_id: UUID | str, *, include_deleted: bool = False) -> dict[str, Any] | None:
+        sql = "SELECT * FROM reinsurance_treaties WHERE id = ?"
+        if not include_deleted:
+            sql += " AND deleted_at IS NULL"
+        row = await self.db.fetch_one(sql, [str(entity_id)])
         return _treaty_from_sql_row(row) if row else None
 
     async def list_all(
@@ -197,14 +204,13 @@ class SqlReinsuranceRepository(BaseRepository):
     ) -> list[dict[str, Any]]:
         query = "SELECT * FROM reinsurance_treaties"
         params: list[Any] = []
-        where: list[str] = []
+        where: list[str] = ["deleted_at IS NULL"]
         if filters:
             for key in ("status", "treaty_type", "reinsurer_name"):
                 if key in filters:
                     where.append(f"{key} = ?")
                     params.append(filters[key])
-        if where:
-            query += " WHERE " + " AND ".join(where)
+        query += " WHERE " + " AND ".join(where)
         pag_clause, pag_params = safe_pagination_clause("created_at DESC", skip, limit)
         query += pag_clause
         params.extend(pag_params)
@@ -236,20 +242,34 @@ class SqlReinsuranceRepository(BaseRepository):
         return await self.get_by_id(entity_id)
 
     async def delete(self, entity_id: UUID | str) -> bool:
-        result = await self.db.execute_query("DELETE FROM reinsurance_treaties WHERE id = ?", [str(entity_id)])
+        try:
+            result = await self.db.execute_query(
+                "UPDATE reinsurance_treaties SET deleted_at = GETUTCDATE() WHERE id = ? AND deleted_at IS NULL",
+                [str(entity_id)],
+            )
+            return result > 0
+        except Exception as exc:
+            if "REFERENCE" in str(exc).upper() or "547" in str(exc):
+                raise IntegrityConstraintError from exc
+            raise
+
+    async def restore(self, entity_id: UUID | str) -> bool:
+        result = await self.db.execute_query(
+            "UPDATE reinsurance_treaties SET deleted_at = NULL WHERE id = ? AND deleted_at IS NOT NULL",
+            [str(entity_id)],
+        )
         return result > 0
 
     async def count(self, filters: dict[str, Any] | None = None) -> int:
         query = "SELECT COUNT(*) as cnt FROM reinsurance_treaties"
         params: list[Any] = []
-        where: list[str] = []
+        where: list[str] = ["deleted_at IS NULL"]
         if filters:
             for key in ("status", "treaty_type", "reinsurer_name"):
                 if key in filters:
                     where.append(f"{key} = ?")
                     params.append(filters[key])
-        if where:
-            query += " WHERE " + " AND ".join(where)
+        query += " WHERE " + " AND ".join(where)
         result = await self.db.fetch_one(query, params)
         return result.get("cnt", 0) if result else 0
 
@@ -289,8 +309,11 @@ class SqlCessionRepository(BaseRepository):
             await self.db.execute_query(sql, params)
         return entity
 
-    async def get_by_id(self, entity_id: UUID | str) -> dict[str, Any] | None:
-        row = await self.db.fetch_one("SELECT * FROM reinsurance_cessions WHERE id = ?", [str(entity_id)])
+    async def get_by_id(self, entity_id: UUID | str, *, include_deleted: bool = False) -> dict[str, Any] | None:
+        sql = "SELECT * FROM reinsurance_cessions WHERE id = ?"
+        if not include_deleted:
+            sql += " AND deleted_at IS NULL"
+        row = await self.db.fetch_one(sql, [str(entity_id)])
         return _cession_from_sql_row(row) if row else None
 
     async def list_all(
@@ -301,14 +324,13 @@ class SqlCessionRepository(BaseRepository):
     ) -> list[dict[str, Any]]:
         query = "SELECT * FROM reinsurance_cessions"
         params: list[Any] = []
-        where: list[str] = []
+        where: list[str] = ["deleted_at IS NULL"]
         if filters:
             for key in ("treaty_id", "policy_id"):
                 if key in filters:
                     where.append(f"{key} = ?")
                     params.append(filters[key])
-        if where:
-            query += " WHERE " + " AND ".join(where)
+        query += " WHERE " + " AND ".join(where)
         pag_clause, pag_params = safe_pagination_clause("created_at DESC", skip, limit)
         query += pag_clause
         params.extend(pag_params)
@@ -320,20 +342,34 @@ class SqlCessionRepository(BaseRepository):
         return await self.get_by_id(entity_id)
 
     async def delete(self, entity_id: UUID | str) -> bool:
-        result = await self.db.execute_query("DELETE FROM reinsurance_cessions WHERE id = ?", [str(entity_id)])
+        try:
+            result = await self.db.execute_query(
+                "UPDATE reinsurance_cessions SET deleted_at = GETUTCDATE() WHERE id = ? AND deleted_at IS NULL",
+                [str(entity_id)],
+            )
+            return result > 0
+        except Exception as exc:
+            if "REFERENCE" in str(exc).upper() or "547" in str(exc):
+                raise IntegrityConstraintError from exc
+            raise
+
+    async def restore(self, entity_id: UUID | str) -> bool:
+        result = await self.db.execute_query(
+            "UPDATE reinsurance_cessions SET deleted_at = NULL WHERE id = ? AND deleted_at IS NOT NULL",
+            [str(entity_id)],
+        )
         return result > 0
 
     async def count(self, filters: dict[str, Any] | None = None) -> int:
         query = "SELECT COUNT(*) as cnt FROM reinsurance_cessions"
         params: list[Any] = []
-        where: list[str] = []
+        where: list[str] = ["deleted_at IS NULL"]
         if filters:
             for key in ("treaty_id", "policy_id"):
                 if key in filters:
                     where.append(f"{key} = ?")
                     params.append(filters[key])
-        if where:
-            query += " WHERE " + " AND ".join(where)
+        query += " WHERE " + " AND ".join(where)
         result = await self.db.fetch_one(query, params)
         return result.get("cnt", 0) if result else 0
 
@@ -371,8 +407,11 @@ class SqlRecoveryRepository(BaseRepository):
         )
         return entity
 
-    async def get_by_id(self, entity_id: UUID | str) -> dict[str, Any] | None:
-        row = await self.db.fetch_one("SELECT * FROM reinsurance_recoveries WHERE id = ?", [str(entity_id)])
+    async def get_by_id(self, entity_id: UUID | str, *, include_deleted: bool = False) -> dict[str, Any] | None:
+        sql = "SELECT * FROM reinsurance_recoveries WHERE id = ?"
+        if not include_deleted:
+            sql += " AND deleted_at IS NULL"
+        row = await self.db.fetch_one(sql, [str(entity_id)])
         return _recovery_from_sql_row(row) if row else None
 
     async def list_all(
@@ -383,14 +422,13 @@ class SqlRecoveryRepository(BaseRepository):
     ) -> list[dict[str, Any]]:
         query = "SELECT * FROM reinsurance_recoveries"
         params: list[Any] = []
-        where: list[str] = []
+        where: list[str] = ["deleted_at IS NULL"]
         if filters:
             for key in ("treaty_id", "claim_id", "status"):
                 if key in filters:
                     where.append(f"{key} = ?")
                     params.append(filters[key])
-        if where:
-            query += " WHERE " + " AND ".join(where)
+        query += " WHERE " + " AND ".join(where)
         pag_clause, pag_params = safe_pagination_clause("created_at DESC", skip, limit)
         query += pag_clause
         params.extend(pag_params)
@@ -415,19 +453,33 @@ class SqlRecoveryRepository(BaseRepository):
         return await self.get_by_id(entity_id)
 
     async def delete(self, entity_id: UUID | str) -> bool:
-        result = await self.db.execute_query("DELETE FROM reinsurance_recoveries WHERE id = ?", [str(entity_id)])
+        try:
+            result = await self.db.execute_query(
+                "UPDATE reinsurance_recoveries SET deleted_at = GETUTCDATE() WHERE id = ? AND deleted_at IS NULL",
+                [str(entity_id)],
+            )
+            return result > 0
+        except Exception as exc:
+            if "REFERENCE" in str(exc).upper() or "547" in str(exc):
+                raise IntegrityConstraintError from exc
+            raise
+
+    async def restore(self, entity_id: UUID | str) -> bool:
+        result = await self.db.execute_query(
+            "UPDATE reinsurance_recoveries SET deleted_at = NULL WHERE id = ? AND deleted_at IS NOT NULL",
+            [str(entity_id)],
+        )
         return result > 0
 
     async def count(self, filters: dict[str, Any] | None = None) -> int:
         query = "SELECT COUNT(*) as cnt FROM reinsurance_recoveries"
         params: list[Any] = []
-        where: list[str] = []
+        where: list[str] = ["deleted_at IS NULL"]
         if filters:
             for key in ("treaty_id", "claim_id", "status"):
                 if key in filters:
                     where.append(f"{key} = ?")
                     params.append(filters[key])
-        if where:
-            query += " WHERE " + " AND ".join(where)
+        query += " WHERE " + " AND ".join(where)
         result = await self.db.fetch_one(query, params)
         return result.get("cnt", 0) if result else 0

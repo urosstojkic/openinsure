@@ -21,6 +21,13 @@ def safe_pagination_clause(order_by: str, skip: int, limit: int) -> tuple[str, l
     return f" ORDER BY {order_by} OFFSET ? ROWS FETCH NEXT ? ROWS ONLY", [skip, limit]
 
 
+class IntegrityConstraintError(Exception):
+    """Raised when a delete is blocked by a foreign-key RESTRICT constraint."""
+
+    def __init__(self, message: str = "Cannot delete: entity has dependent records") -> None:
+        super().__init__(message)
+
+
 class BaseRepository(ABC):
     """Abstract base class for entity repositories."""
 
@@ -58,3 +65,11 @@ class BaseRepository(ABC):
     async def count(self, filters: dict[str, Any] | None = None) -> int:
         """Return the number of entities matching *filters*."""
         ...
+
+    async def restore(self, entity_id: UUID | str) -> bool:
+        """Restore a soft-deleted entity.  Return ``True`` if it existed.
+
+        Default implementation raises NotImplementedError; SQL repositories
+        override this to clear the ``deleted_at`` column.
+        """
+        raise NotImplementedError("restore() is only supported by SQL repositories")

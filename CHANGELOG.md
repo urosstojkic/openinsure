@@ -5,6 +5,82 @@ All notable changes to OpenInsure will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## v107 — Data Model Hardening Complete (2026-03-31)
+
+### Summary
+Final documentation and verification pass after completing the full data model hardening block:
+9 new SQL migrations (006–015), 10 GitHub issues (#156–#165), 9 new tables, bringing total from 26 to 40.
+
+### Database — New Tables
+- **`change_log`** — Data-level audit trail; immutable append-only event log recording every INSERT/UPDATE/DELETE with actor, entity, field-level diffs (migration 009, #161)
+- **`consent_records`** — GDPR Art. 7 consent tracking with purpose, evidence, grant/revoke timestamps (migration 014, #165)
+- **`retention_policies`** — GDPR data retention schedules per entity type with configurable periods (migration 014, #165)
+- **9 product relational tables** — `product_coverages`, `coverage_deductibles`, `product_rating_factors`, `rating_factor_tables`, `product_appetite_rules`, `product_authority_limits`, `product_territories`, `product_forms`, `product_pricing` (migration 015, #164)
+
+### Database — Schema Hardening
+- **Referential integrity** — 17 foreign key constraints with RESTRICT/CASCADE semantics (migration 006, #156)
+- **Performance indexes** — 17 NONCLUSTERED indexes for query-path and analytics (migration 007, #158)
+- **Soft deletes** — `deleted_at DATETIME2` column on 10 core tables; queries filter by default (migration 008, #160)
+- **Concurrency control** — `ROWVERSION` columns on 5 high-contention tables for optimistic locking (migration 010, #159)
+- **Business constraints** — 7 CHECK constraints (date ordering, non-negative financials) (migration 011, #162)
+- **Unique constraints** — 3 composite unique indexes (active policies, billing per policy, active renewals) (migration 012, #163)
+- **Party indexes** — 4 indexes on parties (tax_id, name, registration_number) for deduplication (migration 013, #157)
+
+### New Services
+- **`AuditService`** — change_log querying, entity history reconstruction
+- **`GDPRService`** — consent management, right to erasure (anonymization), data portability export
+- **`PartyResolutionService`** — party deduplication and matching using tax_id, name, registration_number
+
+### New API Module
+- **`/api/v1/gdpr`** (6 endpoints) — consent grant/revoke/list, right to erasure, data portability, retention policy management
+
+### Metrics
+- 750 tests passing (up from 665)
+- 172 API endpoints across 31 modules (up from 153/28)
+- 40 database tables across 15 migrations (up from 26/3)
+
+### Agents
+- Backend (#156, #157, #158, #159, #160, #161, #162, #163, #164, #165)
+- Security (#165)
+- Scribe (documentation refresh)
+
+---
+
+## v106 — Product Data: JSON → Relational Migration (#164) (2026-03-30)
+
+### Added
+- **`ProductRelationsRepository`** — normalised relational tables for product sub-entities
+  (`product_coverages`, `rating_factor_tables`, `product_appetite_rules`, `product_authority_limits`,
+  `product_territories`, `product_forms`, `product_pricing`) with dual-write sync from JSON blobs.
+- **`RatingEngine`** — product-aware rating engine that loads factors from `rating_factor_tables` SQL
+  table. Falls back to hardcoded `INDUSTRY_RISK_FACTORS` / `REVENUE_BANDS` dicts when no relational
+  data exists (backward compat).
+- **`check_appetite()`** — evaluates product appetite rules from relational DB against submission risk
+  data during triage fallback. Supports operators: `>=`, `<=`, `between`, `in`, `not_in`, `eq`, `neq`.
+- **`get_product_relations_repository()`** factory function for DI.
+- **`ProductSummary`** response model for lightweight list endpoint.
+- **Relational enrichment** on `GET /products/{id}` — assembles response from normalised tables,
+  falls back to JSON columns.
+
+### Changed
+- **Rating engine** (`CyberRatingEngine`) now accepts optional DB-loaded factors via `set_db_factors()`.
+  Industry and revenue band lookups prefer relational data when available.
+- **Triage service** (`SubmissionService.run_triage`) checks relational appetite rules before legacy
+  in-memory knowledge store rules.
+- **Knowledge sync** (`ProductKnowledgeSyncService.sync_product`) loads relational coverages, factors,
+  and rules when available, building richer knowledge documents from typed columns instead of JSON parsing.
+- **Product coverages endpoint** (`GET /products/{id}/coverages`) prefers relational table data.
+- **Product list endpoint** (`GET /products`) remains lightweight — does NOT load relations per product.
+
+### Deprecated
+- JSON blob columns on `products` table (`coverages`, `rating_factors`, `appetite_rules`,
+  `authority_limits`, `territories`, `forms`, `metadata`) — marked deprecated in code comments.
+  Will be removed after migration period when all consumers read from relational tables.
+
+### Metrics
+- 665 unit tests passing
+- 0 regressions from JSON → relational migration
+
 ## v105 — Service Layer Extraction for Submissions (#137) (2026-03-27)
 
 ### Refactored
@@ -48,6 +124,77 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 627 unit tests passing
 - Live lifecycle test (Create → Triage → Quote → Bind) verified on v104 deployment
 
+---
+
+## v103 — GDPR Compliance: Consent & Data Retention (#165) (2026-03-29)
+
+### Added
+- **`consent_records` table** — tracks GDPR Art. 7 consent with purpose, evidence, grant/revoke timestamps
+- **`retention_policies` table** — configurable data retention schedules per entity type (7 years financial, 10 years claims)
+- **`GDPRService`** — consent management, right to erasure (anonymization), data portability export
+- **GDPR API** (`/api/v1/gdpr`) — 6 endpoints: consent grant, consent revoke, consent list, right to erasure, data portability, retention policies
+
+### Migration
+- `014_gdpr.sql` — creates tables with seed retention policies for all entity types
+
+### Agents
+- Backend (#165), Security (#165)
+
+---
+
+## v102 — Unique Constraints & Party Deduplication (#163, #157) (2026-03-29)
+
+### Added
+- **3 composite unique indexes** — prevent duplicate active policies per submission, duplicate billing per policy, duplicate active renewals (migration 012, #163)
+- **4 party indexes** — tax_id, name, registration_number, and party_type for deduplication queries (migration 013, #157)
+- **`PartyResolutionService`** — party matching and deduplication using indexed columns
+
+### Agents
+- Backend (#157, #163)
+
+---
+
+## v101 — Business Constraints & Concurrency Control (#162, #159) (2026-03-28)
+
+### Added
+- **7 CHECK constraints** — effective_date < expiration_date, non-negative premiums/reserves/payments, claim date ≤ report date (migration 011, #162)
+- **ROWVERSION columns** on 5 high-contention tables — submissions, policies, claims, billing_accounts, reinsurance_treaties for optimistic locking (migration 010, #159)
+
+### Agents
+- Backend (#159, #162)
+
+---
+
+## v100 — Data-Level Audit Trail (#161) (2026-03-28)
+
+### Added
+- **`change_log` table** — immutable append-only audit trail recording every data mutation with actor, entity type, entity ID, action (INSERT/UPDATE/DELETE), field-level before/after values, and correlation IDs
+- **`AuditService`** — queries change_log for entity history, actor activity, and compliance reporting
+- **2 indexes** on change_log (entity lookup, actor + timestamp) for efficient audit queries
+
+### Migration
+- `009_audit_trail.sql` — creates change_log table with indexes
+
+### Agents
+- Backend (#161)
+
+---
+
+## v99 — Soft Deletes (#160) (2026-03-28)
+
+### Added
+- **`deleted_at DATETIME2` column** on 10 core tables — parties, products, submissions, policies, claims, billing_accounts, reinsurance_treaties, renewal_records, mga_authorities, mga_bordereaux
+- Repository queries now filter `WHERE deleted_at IS NULL` by default; admin queries can include soft-deleted records
+- Supports GDPR right-to-erasure workflow (anonymize then soft-delete)
+
+### Migration
+- `008_soft_deletes.sql` — adds deleted_at to all core tables (idempotent)
+
+### Agents
+- Backend (#160)
+
+---
+
 ## v98 — Foundry Agents Live + Portal E2E Fixes (2026-03-27)
 
 ### Fixed
@@ -60,6 +207,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - 12 GitHub issues filed from UX review (#119-#130): pagination, confirmation dialogs, toast feedback, status-aware buttons, mobile responsive fixes
+
+---
+
+## v97 — Referential Integrity & Performance Indexes (#156, #158) (2026-03-27)
+
+### Added
+- **17 foreign key constraints** with ON DELETE RESTRICT (integrity) and CASCADE (child records) semantics across all entity relationships (migration 006, #156)
+- **17 NONCLUSTERED indexes** on high-traffic query paths: submission status, policy dates, claim status, billing lookups, reinsurance treaty queries, knowledge search (migration 007, #158)
+
+### Architecture
+- Database now enforces referential integrity at the SQL level (previously application-only)
+- Query performance improved for dashboard aggregations and list endpoints
+
+### Migration
+- `006_referential_integrity.sql` — 17 FK constraints
+- `007_performance_indexes.sql` — 17 indexes
+
+### Agents
+- Backend (#156, #158)
+
+---
 
 ## v96 — Bug Fixes: Auth Enforcement, Product Creation, Claims Validation, Compliance UI (2026-03-27)
 
