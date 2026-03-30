@@ -308,6 +308,24 @@ async def sync_products_to_knowledge() -> dict[str, Any]:
         return {"error": "Internal server error"}
 
 
+@router.post("/run-migrations")
+async def run_migrations() -> dict[str, Any]:
+    """Manually trigger pending database migrations."""
+    try:
+        from openinsure.infrastructure.auto_migrate import apply_pending_migrations
+
+        applied = await apply_pending_migrations()
+        return {"status": "ok", "applied": applied, "count": len(applied)}
+    except Exception as exc:
+        import traceback
+
+        return {
+            "status": "error",
+            "error": str(exc),
+            "traceback": traceback.format_exc(),
+        }
+
+
 @router.post("/sync-knowledge", response_model=SyncKnowledgeResponse)
 async def sync_knowledge_to_search() -> dict[str, Any]:
     """Sync knowledge from Cosmos DB to Azure AI Search.

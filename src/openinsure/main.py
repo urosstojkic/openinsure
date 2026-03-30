@@ -73,10 +73,15 @@ def create_app() -> FastAPI:
                 applied = await apply_pending_migrations()
                 if applied:
                     logger.info("openinsure.migrations", applied=applied)
+                    print(f"[MIGRATIONS] Applied: {applied}", flush=True)
                 else:
                     logger.info("openinsure.migrations", status="up-to-date")
+                    print("[MIGRATIONS] All up-to-date", flush=True)
             except Exception as exc:
                 logger.warning("openinsure.migrations.failed", error=str(exc))
+                import traceback
+                print(f"[MIGRATIONS] FAILED: {exc}", flush=True)
+                traceback.print_exc()
 
         # Seed sample data only in debug / local-dev mode with in-memory storage
         if settings.debug and settings.storage_mode == "memory":

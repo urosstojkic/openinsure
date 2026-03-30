@@ -99,24 +99,27 @@ def _apply_sync(db: Any) -> list[str]:
                     missing = True
                     break
 
-            # Check ALTER TABLE ADD column targets
+            # Check ALTER TABLE ADD column targets (exclude CONSTRAINT additions)
             if not missing:
                 alter_cols = re.findall(
-                    r"(?i)ALTER\s+TABLE\s+(\w+)\s+ADD\s+(\w+)",
+                    r"(?i)ALTER\s+TABLE\s+(\w+)\s+ADD\s+(?!CONSTRAINT\b)(\w+)",
                     sql_text,
                 )
                 for tbl, col in alter_cols:
                     cursor.execute(
-                        "SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = ?",
-                        [tbl],
+                        "SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS "
+                        "WHERE TABLE_NAME = ? AND COLUMN_NAME = ?",
+                        [tbl, col],
                     )
-                    tbl_row = cursor.fetchone()
-                    if tbl_row and tbl_row[0] > 0:
+                    col_row = cursor.fetchone()
+                    if not col_row or col_row[0] == 0:
+                        # Verify table exists first
                         cursor.execute(
-                            "SELECT COL_LENGTH(?, ?)", [tbl, col]
+                            "SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = ?",
+                            [tbl],
                         )
-                        col_row = cursor.fetchone()
-                        if col_row is None or col_row[0] is None:
+                        tbl_row = cursor.fetchone()
+                        if tbl_row and tbl_row[0] > 0:
                             missing = True
                             break
             cursor.close()
@@ -162,13 +165,24 @@ def _apply_sync(db: Any) -> list[str]:
                     continue
                 logger.exception("Migration %s batch failed: %s", name, err_msg)
                 raise
+            except pyodbc.IntegrityError as e:
+                err_msg = str(e)
+                if "duplicate key" in err_msg:
+                    logger.warning(
+                        "Migration %s: duplicate key (data issue), skipping batch: %s",
+                        name, err_msg[:200],
+                    )
+                    continue
+                logger.exception("Migration %s integrity error: %s", name, err_msg)
+                raise
         cursor.close()
 
-        # Record
+        # Record (use IF NOT EXISTS to handle re-runs gracefully)
         cursor = conn.cursor()
         cursor.execute(
+            "IF NOT EXISTS (SELECT 1 FROM _migration_history WHERE migration_name = ?) "
             "INSERT INTO _migration_history (migration_name) VALUES (?)",
-            [name],
+            [name, name],
         )
         cursor.close()
 
