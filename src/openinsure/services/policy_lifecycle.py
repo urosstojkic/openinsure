@@ -29,6 +29,7 @@ from openinsure.domain.policy import (
 )
 from openinsure.domain.state_machine import validate_policy_transition
 from openinsure.domain.submission import Submission
+from openinsure.services.policy_transaction_service import record_transaction
 
 logger = structlog.get_logger()
 
@@ -201,7 +202,7 @@ class PolicyLifecycleService:
     via ``validate_policy_transition`` from ``domain.state_machine``.
     """
 
-    def bind_policy(self, request: BindRequest) -> PolicyLifecycleResult:
+    async def bind_policy(self, request: BindRequest) -> PolicyLifecycleResult:
         """Create a new policy from a submission and bind it."""
         policy_number = _generate_policy_number()
 
@@ -226,6 +227,17 @@ class PolicyLifecycleService:
             bound_at=datetime.now(UTC),
         )
 
+        # Record new_business transaction
+        await record_transaction(
+            policy_id=str(policy.id),
+            transaction_type="new_business",
+            effective_date=request.effective_date,
+            expiration_date=request.expiration_date,
+            premium_change=float(request.total_premium),
+            description=f"New business: {policy_number}",
+            coverages_snapshot=[c.model_dump(mode="json") for c in request.coverages],
+        )
+
         event = PolicyBound.create(
             policy_id=policy.id,
             payload={
@@ -247,7 +259,7 @@ class PolicyLifecycleService:
             message=f"Policy {policy_number} bound successfully",
         )
 
-    def endorse_policy(
+    async def endorse_policy(
         self,
         policy: Policy,
         request: EndorsementRequest,
@@ -279,6 +291,16 @@ class PolicyLifecycleService:
         policy.unearned_premium = policy.total_premium - policy.earned_premium
         policy.updated_at = datetime.now(UTC)
 
+        # Record endorsement transaction with coverage snapshot
+        await record_transaction(
+            policy_id=str(policy.id),
+            transaction_type="endorsement",
+            effective_date=request.effective_date,
+            premium_change=float(request.premium_change),
+            description=request.description,
+            coverages_snapshot=[c.model_dump(mode="json") for c in policy.coverages],
+        )
+
         event = PolicyEndorsed.create(
             policy_id=policy.id,
             payload={
@@ -301,7 +323,7 @@ class PolicyLifecycleService:
             message=f"Endorsement {endorsement_number} applied to {policy.policy_number}",
         )
 
-    def renew_policy(self, policy: Policy) -> PolicyLifecycleResult:
+    async def renew_policy(self, policy: Policy) -> PolicyLifecycleResult:
         """Generate a renewal policy from an existing policy."""
         if policy.status not in (PolicyStatus.active, PolicyStatus.expired):
             msg = f"Cannot renew policy in {policy.status} status"
@@ -330,6 +352,17 @@ class PolicyLifecycleService:
             bound_at=datetime.now(UTC),
         )
 
+        # Record renewal transaction
+        await record_transaction(
+            policy_id=str(renewal.id),
+            transaction_type="renewal",
+            effective_date=new_effective,
+            expiration_date=new_expiration,
+            premium_change=float(renewal.total_premium),
+            description=f"Renewal of {policy.policy_number}",
+            coverages_snapshot=[c.model_dump(mode="json") for c in policy.coverages],
+        )
+
         event = PolicyRenewed.create(
             policy_id=renewal.id,
             payload={
@@ -351,7 +384,7 @@ class PolicyLifecycleService:
             message=f"Renewal {renewal_number} generated from {policy.policy_number}",
         )
 
-    def cancel_policy(
+    async def cancel_policy(
         self,
         policy: Policy,
         request: CancellationRequest,
@@ -369,6 +402,15 @@ class PolicyLifecycleService:
         policy.cancelled_at = datetime.now(UTC)
         policy.cancel_reason = request.reason
         policy.updated_at = datetime.now(UTC)
+
+        # Record cancellation transaction
+        await record_transaction(
+            policy_id=str(policy.id),
+            transaction_type="cancellation",
+            effective_date=request.effective_date,
+            premium_change=-float(unearned),
+            description=request.reason,
+        )
 
         event = PolicyCancelled.create(
             policy_id=policy.id,
@@ -392,7 +434,7 @@ class PolicyLifecycleService:
             message=f"Policy {policy.policy_number} cancelled — unearned premium: ${unearned:,.2f}",
         )
 
-    def reinstate_policy(self, policy: Policy) -> PolicyLifecycleResult:
+    async def reinstate_policy(self, policy: Policy) -> PolicyLifecycleResult:
         """Reinstate a previously cancelled policy."""
         validate_policy_transition(policy.status.value, "reinstated")
 
@@ -403,6 +445,15 @@ class PolicyLifecycleService:
         fraction = earned_premium_fraction(policy.effective_date, policy.expiration_date, date.today())
         policy.earned_premium = (policy.total_premium * fraction).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
         policy.unearned_premium = policy.total_premium - policy.earned_premium
+
+        # Record reinstatement transaction
+        await record_transaction(
+            policy_id=str(policy.id),
+            transaction_type="reinstatement",
+            effective_date=date.today(),
+            premium_change=float(policy.unearned_premium),
+            description=f"Reinstatement of {policy.policy_number}",
+        )
 
         logger.info(
             "policy.reinstated",
