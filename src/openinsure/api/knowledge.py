@@ -122,6 +122,47 @@ class KnowledgeSyncStatus(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Input validation models (replaces raw dict[str, Any] parameters)
+# ---------------------------------------------------------------------------
+
+
+class GuidelineUpdateBody(BaseModel):
+    """Validated body for updating underwriting guidelines."""
+
+    model_config = {"extra": "allow"}
+
+    title: str = Field(default="", max_length=500)
+    content: str = Field(default="", max_length=10000)
+    lob: str = Field(default="", max_length=100)
+    effective_date: str = Field(default="", max_length=30)
+    notes: str = Field(default="", max_length=5000)
+
+
+class PrecedentUpdateBody(BaseModel):
+    """Validated body for updating claims precedents."""
+
+    model_config = {"extra": "allow"}
+
+    title: str = Field(default="", max_length=500)
+    description: str = Field(default="", max_length=10000)
+    claim_type: str = Field(default="", max_length=100)
+    outcome: str = Field(default="", max_length=500)
+    reasoning: str = Field(default="", max_length=10000)
+
+
+class ComplianceRuleUpdateBody(BaseModel):
+    """Validated body for updating compliance rules."""
+
+    model_config = {"extra": "allow"}
+
+    title: str = Field(default="", max_length=500)
+    description: str = Field(default="", max_length=10000)
+    framework: str = Field(default="", max_length=100)
+    rule_id: str = Field(default="", max_length=100)
+    requirements: str = Field(default="", max_length=10000)
+
+
+# ---------------------------------------------------------------------------
 # Static product data (retained for /products endpoint fallback)
 # ---------------------------------------------------------------------------
 
@@ -288,14 +329,15 @@ async def get_coverage_options(lob: str) -> CoverageOptionsResponse:
 
 
 @router.put("/guidelines/{lob}", response_model=GuidelineResponse)
-async def update_guidelines(lob: str, body: dict[str, Any]) -> GuidelineResponse:
+async def update_guidelines(lob: str, body: GuidelineUpdateBody) -> GuidelineResponse:
     """Update underwriting guidelines for a line of business (Product Manager role).
 
     Writes to Cosmos DB first (source of truth), then updates the in-memory cache.
     """
+    body_dict = body.model_dump(exclude_none=True)
     # Always update in-memory for immediate reflection
     mem = _mem_store()
-    updated = mem.update_guidelines(lob, body)
+    updated = mem.update_guidelines(lob, body_dict)
 
     # Persist to Cosmos DB
     try:
@@ -379,8 +421,9 @@ async def list_claims_precedents() -> ClaimsPrecedentResponse:
 
 
 @router.put("/claims-precedents/{claim_type}", response_model=ClaimsPrecedentResponse)
-async def update_claims_precedent(claim_type: str, body: dict[str, Any]) -> ClaimsPrecedentResponse:
+async def update_claims_precedent(claim_type: str, body: PrecedentUpdateBody) -> ClaimsPrecedentResponse:
     """Update claims precedents for a claim type. Writes to Cosmos DB."""
+    body_dict = body.model_dump(exclude_none=True)
     try:
         store = _cosmos_or_none()
         if store:
@@ -388,8 +431,8 @@ async def update_claims_precedent(claim_type: str, body: dict[str, Any]) -> Clai
                 "id": f"claims-precedent-{claim_type}",
                 "entityType": "claims_precedent",
                 "claim_type": claim_type,
-                "content": str(body),
-                **body,
+                "content": str(body_dict),
+                **body_dict,
             }
             store.upsert_document(doc)
             _log.info("knowledge.claims_precedent_written_to_cosmos", claim_type=claim_type)
@@ -397,7 +440,7 @@ async def update_claims_precedent(claim_type: str, body: dict[str, Any]) -> Clai
     except Exception:
         _log.warning("knowledge.cosmos_write_failed", resource="claims_precedent", exc_info=True)
 
-    return ClaimsPrecedentResponse(claim_type=claim_type, precedents=[body], total=1)
+    return ClaimsPrecedentResponse(claim_type=claim_type, precedents=[body_dict], total=1)
 
 
 @router.get("/compliance-rules/{framework}", response_model=ComplianceRulesResponse)
@@ -437,8 +480,9 @@ async def list_compliance_rules() -> ComplianceRulesResponse:
 
 
 @router.put("/compliance-rules/{framework}", response_model=ComplianceRulesResponse)
-async def update_compliance_rule(framework: str, body: dict[str, Any]) -> ComplianceRulesResponse:
+async def update_compliance_rule(framework: str, body: ComplianceRuleUpdateBody) -> ComplianceRulesResponse:
     """Update compliance rules for a framework. Writes to Cosmos DB."""
+    body_dict = body.model_dump(exclude_none=True)
     try:
         store = _cosmos_or_none()
         if store:
@@ -446,8 +490,8 @@ async def update_compliance_rule(framework: str, body: dict[str, Any]) -> Compli
                 "id": f"compliance-rule-{framework}",
                 "entityType": "compliance_rule",
                 "framework": framework,
-                "content": str(body),
-                **body,
+                "content": str(body_dict),
+                **body_dict,
             }
             store.upsert_document(doc)
             _log.info("knowledge.compliance_rule_written_to_cosmos", framework=framework)
@@ -455,7 +499,7 @@ async def update_compliance_rule(framework: str, body: dict[str, Any]) -> Compli
     except Exception:
         _log.warning("knowledge.cosmos_write_failed", resource="compliance_rule", exc_info=True)
 
-    return ComplianceRulesResponse(framework=framework, rules=[body], total=1)
+    return ComplianceRulesResponse(framework=framework, rules=[body_dict], total=1)
 
 
 # ---------------------------------------------------------------------------

@@ -1,5 +1,7 @@
 """Document upload/download API endpoints."""
 
+import re
+
 import structlog
 from fastapi import APIRouter, File, HTTPException, Query, UploadFile
 
@@ -7,6 +9,35 @@ from openinsure.infrastructure.factory import get_blob_storage
 
 router = APIRouter()
 logger = structlog.get_logger()
+
+# Allowed characters in blob paths: alphanumeric, dash, underscore, dot, forward-slash
+_SAFE_BLOB_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._/ -]{0,1023}$")
+
+
+def _sanitize_blob_name(blob_name: str) -> str:
+    """Validate and sanitize a blob name to prevent path traversal.
+
+    Rejects paths containing ``..``, absolute paths, backslashes,
+    and any characters outside the safe set.
+
+    Raises:
+        HTTPException: If the blob_name is invalid.
+    """
+    if not blob_name or not blob_name.strip():
+        raise HTTPException(400, "blob_name cannot be empty")
+    # Reject path traversal sequences
+    if ".." in blob_name:
+        raise HTTPException(400, "Path traversal not allowed: blob_name must not contain '..'")
+    # Reject absolute paths (Unix or Windows)
+    if blob_name.startswith(("/", "\\")) or (len(blob_name) >= 2 and blob_name[1] == ":"):
+        raise HTTPException(400, "Absolute paths not allowed in blob_name")
+    # Reject backslashes
+    if "\\" in blob_name:
+        raise HTTPException(400, "Backslashes not allowed in blob_name")
+    # Validate against safe pattern
+    if not _SAFE_BLOB_RE.match(blob_name):
+        raise HTTPException(400, "blob_name contains invalid characters")
+    return blob_name
 
 
 @router.post("/upload")
@@ -104,6 +135,7 @@ async def list_documents(
 @router.get("/download/{blob_name:path}")
 async def get_document_url(blob_name: str) -> dict[str, str]:
     """Get a time-limited download URL for a document."""
+    blob_name = _sanitize_blob_name(blob_name)
     storage = get_blob_storage()
     if not storage:
         raise HTTPException(404, "Document storage not configured")
