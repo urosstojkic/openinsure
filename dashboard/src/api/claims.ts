@@ -137,8 +137,9 @@ export interface SubrogationRecord {
 
 export async function getSubrogation(claimId: string): Promise<SubrogationRecord[]> {
   try {
-    const { data } = await client.get<SubrogationRecord[]>(`/claims/${claimId}/subrogation`);
-    return data;
+    const { data } = await client.get(`/claims/${claimId}/subrogation`);
+    const items = Array.isArray(data) ? data : (data?.items ?? []);
+    return items;
   } catch {
     return [];
   }
