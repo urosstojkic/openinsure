@@ -77,6 +77,7 @@ export async function getCommissions(): Promise<CommissionSummary> {
 }
 
 export async function getReconciliation(): Promise<ReconciliationItem[]> {
-  const { data } = await client.get<ReconciliationItem[]>('/finance/reconciliation');
-  return data;
+  const { data } = await client.get('/finance/reconciliation');
+  const items = Array.isArray(data) ? data : (data?.items ?? []);
+  return items;
 }

@@ -284,6 +284,7 @@ const Claims: React.FC = () => {
         columns={columns}
         data={paginated}
         keyExtractor={(r) => r.id}
+        onRowClick={(row) => navigate(`/claims/${row.id}`)}
       />
 
       {totalPages > 1 && (

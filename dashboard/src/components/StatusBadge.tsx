@@ -25,7 +25,7 @@ interface Props {
 }
 
 const StatusBadge: React.FC<Props> = ({ label, variant, className = '', size = 'md', showDot = true }) => {
-  const s = styles[variant];
+  const s = styles[variant] ?? styles.gray;
   return (
     <span
       className={`inline-flex items-center gap-1.5 rounded-full font-medium ${s.badge} ${
