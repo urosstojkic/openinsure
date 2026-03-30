@@ -7,6 +7,15 @@ import json
 from typing import Any
 
 from openinsure.agents.prompts._knowledge import _get_knowledge_context_for_lob
+from openinsure.agents.prompts.versioning import get_prompt_version, get_system_preamble
+
+# Current prompt version — updated when YAML templates change
+PROMPT_VERSION = get_prompt_version("triage")
+
+_INLINE_PREAMBLE = (
+    "SYSTEM: You are the OpenInsure Submission Triage Agent for cyber insurance.\n"
+    "You assess whether submissions match the carrier's appetite and risk profile."
+)
 
 
 def build_triage_prompt(
@@ -16,13 +25,11 @@ def build_triage_prompt(
     dynamic_knowledge: str = "",
     comparable_context: str = "",
     learning_context: str = "",
+    prompt_version: str | None = None,  # noqa: ARG001
 ) -> str:
-    """Build a structured prompt for the submission triage agent."""
     lob = submission.get("line_of_business", "cyber")
-    prompt = (
-        "SYSTEM: You are the OpenInsure Submission Triage Agent for cyber insurance.\n"
-        "You assess whether submissions match the carrier's appetite and risk profile.\n\n"
-    )
+    preamble = get_system_preamble("triage", inline_fallback=_INLINE_PREAMBLE)
+    prompt = preamble + "\n\n"
 
     # Historical accuracy (Feature 1)
     if learning_context:

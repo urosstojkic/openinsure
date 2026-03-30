@@ -9,8 +9,17 @@ from typing import Any
 import structlog
 
 from openinsure.agents.prompts._knowledge import _get_knowledge_context_for_lob
+from openinsure.agents.prompts.versioning import get_prompt_version, get_system_preamble
 
 logger = structlog.get_logger()
+
+# Current prompt version — updated when YAML templates change
+PROMPT_VERSION = get_prompt_version("underwriting")
+
+_INLINE_PREAMBLE = (
+    "SYSTEM: You are the OpenInsure Underwriting Agent for cyber insurance.\n"
+    "You assess risk and calculate premium pricing."
+)
 
 
 def build_underwriting_prompt(
@@ -22,13 +31,11 @@ def build_underwriting_prompt(
     dynamic_knowledge: str = "",
     comparable_context: str = "",
     learning_context: str = "",
+    prompt_version: str | None = None,  # noqa: ARG001
 ) -> str:
-    """Build a structured prompt for the underwriting / pricing agent."""
     lob = submission.get("line_of_business", "cyber")
-    prompt = (
-        "SYSTEM: You are the OpenInsure Underwriting Agent for cyber insurance.\n"
-        "You assess risk and calculate premium pricing.\n\n"
-    )
+    preamble = get_system_preamble("underwriting", inline_fallback=_INLINE_PREAMBLE)
+    prompt = preamble + "\n\n"
 
     # Historical accuracy (Feature 1)
     if learning_context:
