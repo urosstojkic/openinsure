@@ -338,6 +338,19 @@ const ClaimDetail: React.FC = () => {
     <div className="space-y-6">
       <ToastContainer toasts={toasts} onDismiss={dismissToast} />
 
+      {/* AI processing overlay (#152) */}
+      {actionLoading === 'process' && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm">
+          <div className="flex flex-col items-center gap-4 rounded-2xl border border-slate-200/60 bg-white px-10 py-8 shadow-xl animate-pulse">
+            <Loader2 size={36} className="animate-spin text-indigo-600" />
+            <div className="text-center">
+              <p className="text-base font-semibold text-slate-900">AI agent processing…</p>
+              <p className="mt-1 text-sm text-slate-500">This may take up to 30 seconds</p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Confirmation Dialogs */}
       <ConfirmDialog
         open={closeConfirmOpen}

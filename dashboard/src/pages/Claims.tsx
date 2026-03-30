@@ -151,14 +151,14 @@ const Claims: React.FC = () => {
       ),
     },
     { key: 'number', header: 'Claim Number',render: (r) => <span className="font-mono text-xs">{r.claim_number}</span>, sortable: true, sortValue: (r) => r.claim_number },
-    { key: 'policy', header: 'Policy', render: (r) => <span className="font-mono text-xs">{r.policy_number || '—'}</span> },
-    { key: 'lob', header: 'Type', render: (r) => <span className="text-sm text-slate-600">{r.lob?.replace(/_/g, ' ') || '—'}</span> },
+    { key: 'policy', header: 'Policy', render: (r) => <span className="font-mono text-xs">{r.policy_number || '—'}</span>, className: 'hidden md:table-cell' },
+    { key: 'lob', header: 'Type', render: (r) => <span className="text-sm text-slate-600">{r.lob?.replace(/_/g, ' ') || '—'}</span>, className: 'hidden md:table-cell' },
     { key: 'status', header: 'Status', render: (r) => <StatusBadge label={r.status} variant={statusVariant[r.status] || 'gray'} /> },
-    { key: 'loss_date', header: 'Loss Date', render: (r) => r.loss_date ? new Date(r.loss_date).toLocaleDateString() : '—', sortable: true, sortValue: (r) => r.loss_date },
-    { key: 'severity', header: 'Severity', render: (r) => <StatusBadge label={r.severity} variant={severityVariant[r.severity] || 'gray'} /> },
+    { key: 'loss_date', header: 'Loss Date', render: (r) => r.loss_date ? new Date(r.loss_date).toLocaleDateString() : '—', sortable: true, sortValue: (r) => r.loss_date, className: 'hidden lg:table-cell' },
+    { key: 'severity', header: 'Severity', render: (r) => <StatusBadge label={r.severity} variant={severityVariant[r.severity] || 'gray'} />, className: 'hidden lg:table-cell' },
     { key: 'reserved', header: 'Reserved', render: (r) => <span className={r.total_reserved > 0 ? 'font-medium text-slate-900' : 'text-slate-400'}>{money(r.total_reserved)}</span>, sortable: true, sortValue: (r) => r.total_reserved },
-    { key: 'incurred', header: 'Total Incurred', render: (r) => money(r.total_incurred), sortable: true, sortValue: (r) => r.total_incurred },
-    { key: 'assigned', header: 'Assigned To', render: (r) => r.assigned_to || <span className="text-slate-300">Unassigned</span> },
+    { key: 'incurred', header: 'Total Incurred', render: (r) => money(r.total_incurred), sortable: true, sortValue: (r) => r.total_incurred, className: 'hidden lg:table-cell' },
+    { key: 'assigned', header: 'Assigned To', render: (r) => r.assigned_to || <span className="text-slate-300">Unassigned</span>, className: 'hidden lg:table-cell' },
     { key: 'actions', header: 'Actions', render: (r) => {
       const loading = actionLoading?.startsWith(r.id);
       return (
