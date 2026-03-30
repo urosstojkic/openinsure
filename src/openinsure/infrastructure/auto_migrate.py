@@ -107,8 +107,7 @@ def _apply_sync(db: Any) -> list[str]:
                 )
                 for tbl, col in alter_cols:
                     cursor.execute(
-                        "SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS "
-                        "WHERE TABLE_NAME = ? AND COLUMN_NAME = ?",
+                        "SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = ? AND COLUMN_NAME = ?",
                         [tbl, col],
                     )
                     col_row = cursor.fetchone()
@@ -170,7 +169,8 @@ def _apply_sync(db: Any) -> list[str]:
                 if "duplicate key" in err_msg:
                     logger.warning(
                         "Migration %s: duplicate key (data issue), skipping batch: %s",
-                        name, err_msg[:200],
+                        name,
+                        err_msg[:200],
                     )
                     continue
                 logger.exception("Migration %s integrity error: %s", name, err_msg)

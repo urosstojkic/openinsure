@@ -3,6 +3,15 @@
 -- Migration: 002_carrier_modules_schema.sql
 -- Target: Azure SQL Database (openinsure-db)
 -- Purpose: Add SQL tables for carrier-only modules: reinsurance, actuarial
+--
+-- DOWN MIGRATION (manual rollback):
+--   DROP TABLE IF EXISTS rate_adequacy;
+--   DROP TABLE IF EXISTS loss_triangles;
+--   DROP TABLE IF EXISTS actuarial_reserves;
+--   DROP TABLE IF EXISTS reinsurance_recoveries;
+--   DROP TABLE IF EXISTS reinsurance_cessions;
+--   DROP TABLE IF EXISTS reinsurance_treaties;
+--   DELETE FROM _migration_history WHERE migration_name = '002_carrier_modules_schema.sql';
 -- ============================================================================
 
 BEGIN TRANSACTION;

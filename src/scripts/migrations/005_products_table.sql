@@ -4,6 +4,13 @@
 --
 -- The original products table (001_initial_schema) lacks these columns, so we
 -- ALTER it rather than re-create it.
+--
+-- DOWN MIGRATION (manual rollback):
+--   -- Remove seeded products and added columns (order matters):
+--   DELETE FROM products WHERE code IN ('cyber-smb', 'cyber-enterprise', 'pi-professional', 'do-directors');
+--   ALTER TABLE products DROP COLUMN IF EXISTS code, coverages, rating_factors,
+--     appetite_rules, authority_limits, territories, forms, product_metadata;
+--   DELETE FROM _migration_history WHERE migration_name = '005_products_table.sql';
 
 -- Add new JSON / metadata columns if they don't already exist
 IF COL_LENGTH('products', 'code') IS NULL

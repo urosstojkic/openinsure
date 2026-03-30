@@ -2,6 +2,23 @@
 -- OpenInsure Initial Schema Migration
 -- Migration: 001_initial_schema.sql
 -- Target: Azure SQL Database (openinsure-db)
+--
+-- DOWN MIGRATION (manual rollback):
+--   DROP TABLE IF EXISTS billing_transactions;
+--   DROP TABLE IF EXISTS invoices;
+--   DROP TABLE IF EXISTS billing_accounts;
+--   DROP TABLE IF EXISTS payments;
+--   DROP TABLE IF EXISTS reserves;
+--   DROP TABLE IF EXISTS claims;
+--   DROP TABLE IF EXISTS endorsements;
+--   DROP TABLE IF EXISTS coverages;
+--   DROP TABLE IF EXISTS policies;
+--   DROP TABLE IF EXISTS products;
+--   DROP TABLE IF EXISTS submissions;
+--   DROP TABLE IF EXISTS addresses;
+--   DROP TABLE IF EXISTS contacts;
+--   DROP TABLE IF EXISTS parties;
+--   DELETE FROM _migration_history WHERE migration_name = '001_initial_schema.sql';
 -- ============================================================================
 
 BEGIN TRANSACTION;

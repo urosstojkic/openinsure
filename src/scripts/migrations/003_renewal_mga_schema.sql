@@ -3,6 +3,12 @@
 -- Migration: 003_renewal_mga_schema.sql
 -- Target: Azure SQL Database (openinsure-db)
 -- Purpose: Add SQL tables for renewal tracking and MGA oversight
+--
+-- DOWN MIGRATION (manual rollback):
+--   DROP TABLE IF EXISTS mga_bordereaux;
+--   DROP TABLE IF EXISTS mga_authorities;
+--   DROP TABLE IF EXISTS renewal_records;
+--   DELETE FROM _migration_history WHERE migration_name = '003_renewal_mga_schema.sql';
 -- ============================================================================
 
 BEGIN TRANSACTION;

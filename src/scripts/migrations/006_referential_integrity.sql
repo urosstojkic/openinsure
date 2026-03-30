@@ -4,6 +4,12 @@
 --
 -- SQL Server uses ON DELETE NO ACTION as the equivalent of RESTRICT.
 -- Both prevent parent deletion when children exist; NO ACTION is the T-SQL syntax.
+--
+-- DOWN MIGRATION (manual rollback):
+--   -- This migration drops and recreates FK constraints with ON DELETE actions.
+--   -- Rollback requires re-creating the original FKs without ON DELETE clauses.
+--   -- Review the original constraint definitions in 001_initial_schema.sql.
+--   DELETE FROM _migration_history WHERE migration_name = '006_referential_integrity.sql';
 
 DECLARE @fk NVARCHAR(200);
 
