@@ -62,11 +62,11 @@ graph TB
     end
 
     subgraph "Domain Services"
-        K[21 Business Services<br/>Rating, Claims, Renewal, Compliance...]
+        K[25 Business Services<br/>Rating, Claims, Renewal, Compliance, GDPR, Audit...]
     end
 
     subgraph "Data Layer"
-        L[(Azure SQL<br/>26 tables — OLTP)]
+        L[(Azure SQL<br/>40 tables — OLTP)]
         M[(Cosmos DB NoSQL<br/>Knowledge graph)]
         N[Azure Blob Storage<br/>Documents]
         O[Azure AI Search<br/>Knowledge index]
@@ -96,7 +96,7 @@ graph TB
 |---|---|---|
 | **Backend** | Python 3.12, FastAPI, Pydantic v2 | Async/await throughout, OpenAPI auto-generated, strict typing |
 | **Frontend** | React 19, TypeScript 5.9, Tailwind CSS 4, Vite 7 | 25 dashboard pages, Recharts, React Query, react-router-dom |
-| **Database (OLTP)** | Azure SQL Database | 26 tables across 3 migrations, Entra-only auth, TDE encryption |
+| **Database (OLTP)** | Azure SQL Database | 40 tables across 15 migrations, Entra-only auth, TDE encryption |
 | **Database (Knowledge)** | Azure Cosmos DB (NoSQL API) | Knowledge graph documents, serverless (dev), session consistency |
 | **AI Platform** | Azure AI Foundry, GPT-5.2 | 10 prompt agents, AI Search tools, function calling, memory |
 | **Search** | Azure AI Search | Knowledge RAG — guidelines, rating factors, compliance rules, precedents |
@@ -687,6 +687,79 @@ erDiagram
     PRODUCT ||--o{ PRODUCT_COVERAGE : "defines"
     PRODUCT ||--o{ RATING_FACTOR_TABLE : "rated_by"
     PRODUCT ||--o{ PRODUCT_APPETITE_RULE : "constrained_by"
+
+    COVERAGE_DEDUCTIBLE {
+        uuid id PK
+        uuid coverage_id FK
+        string deductible_name
+        decimal deductible_amount
+        int sort_order
+    }
+
+    PRODUCT_AUTHORITY_LIMIT {
+        uuid id PK
+        uuid product_id FK
+        string role
+        decimal max_premium
+        decimal max_aggregate
+    }
+
+    PRODUCT_TERRITORY {
+        uuid id PK
+        uuid product_id FK
+        string territory_code
+        string territory_name
+        bit is_admitted
+    }
+
+    PRODUCT_FORM {
+        uuid id PK
+        uuid product_id FK
+        string form_number
+        string form_name
+        bit is_required
+    }
+
+    PRODUCT_PRICING {
+        uuid id PK
+        uuid product_id FK
+        decimal min_premium
+        decimal max_premium
+        decimal base_rate
+    }
+
+    CHANGE_LOG {
+        bigint id PK
+        string entity_type
+        uuid entity_id
+        string action "INSERT | UPDATE | DELETE"
+        string actor
+        nvarchar changes_json
+        datetime2 created_at
+    }
+
+    CONSENT_RECORD {
+        uuid id PK
+        uuid party_id FK
+        string purpose
+        datetime2 granted_at
+        datetime2 revoked_at
+        string evidence
+    }
+
+    RETENTION_POLICY {
+        int id PK
+        string entity_type UK
+        int retention_days
+        string action "anonymize | delete | archive"
+    }
+
+    PRODUCT_COVERAGE ||--o{ COVERAGE_DEDUCTIBLE : "offers"
+    PRODUCT ||--o{ PRODUCT_AUTHORITY_LIMIT : "authorized_by"
+    PRODUCT ||--o{ PRODUCT_TERRITORY : "sold_in"
+    PRODUCT ||--o{ PRODUCT_FORM : "requires"
+    PRODUCT ||--o{ PRODUCT_PRICING : "priced_at"
+    PARTY ||--o{ CONSENT_RECORD : "consents"
 ```
 
 ### State Machines
@@ -767,12 +840,12 @@ stateDiagram-v2
     written_off --> [*]
 ```
 
-### Database Schema (33 Tables)
+### Database Schema (40 Tables)
 
 | Module | Tables | Purpose |
 |---|---|---|
 | **Parties** | `parties`, `party_roles`, `party_addresses`, `party_contacts` | Insured, brokers, claimants, agents |
-| **Products** | `products`, `product_coverages`, `rating_factor_tables`, `product_appetite_rules`, `product_authority_limits`, `product_territories`, `product_forms`, `product_pricing` | LOB definitions, coverages, rating factors, appetite rules (normalised since v106) |
+| **Products** | `products`, `product_coverages`, `coverage_deductibles`, `product_rating_factors`, `rating_factor_tables`, `product_appetite_rules`, `product_authority_limits`, `product_territories`, `product_forms`, `product_pricing` | LOB definitions; 9 normalised relational tables since v106 (coverages, deductibles, rating factors, appetite rules, authority limits, territories, forms, pricing) |
 | **Submissions** | `submissions`, `submission_documents` | Applications, extracted data, triage results |
 | **Policies** | `policies`, `policy_coverages`, `policy_endorsements` | Active coverage, terms, mid-term changes |
 | **Claims** | `claims`, `claim_reserves`, `claim_payments` | Loss records, reserves, settlements |
@@ -781,7 +854,7 @@ stateDiagram-v2
 | **Actuarial** | `actuarial_triangles`, `actuarial_reserves`, `loss_development_analysis` | Loss triangles, IBNR, reserve adequacy |
 | **Renewals** | `renewal_records` | Renewal terms, rate changes |
 | **MGA** | `mga_contracts`, `mga_performance` | Delegated authority, performance tracking |
-| **Compliance** | `decision_records`, `audit_events` | AI decision audit trail, EU AI Act records |
+| **Compliance** | `decision_records`, `audit_events`, `change_log`, `consent_records`, `retention_policies` | AI decision audit trail, EU AI Act records, data-level change log, GDPR consent tracking, data retention policies |
 
 ---
 
@@ -789,7 +862,7 @@ stateDiagram-v2
 
 ### Overview
 
-- **152 REST API endpoints** across **24 modules**
+- **172 REST API endpoints** across **31 modules**
 - All endpoints under `/api/v1/` with OpenAPI documentation at `/docs`
 - Pydantic v2 request/response validation on every endpoint
 - Consistent error format with correlation IDs
@@ -831,6 +904,10 @@ stateDiagram-v2
 | **Health** | 3 | Root, health check, readiness probe |
 | **Events** | 1 | Recent domain events |
 | **Underwriter** | 1 | Queue (pending review items) |
+| **GDPR** | 6 | Consent grant/revoke/list, right to erasure, data portability, retention policies |
+| **Audit** | 2 | Change log queries, entity audit history |
+| **Parties** | 3 | Party CRUD, party search for deduplication |
+| **Regulatory** | 7 | Filing creation, status tracking, state compliance |
 
 ### Example: Submission Lifecycle
 
@@ -967,6 +1044,28 @@ The `BiasMonitor` applies the **4/5ths rule** (80% rule from EEOC Uniform Guidel
 - **Correlation IDs** link related events across the workflow
 - **Full indexing** for efficient audit queries
 - **Retention**: Configurable (EU AI Act requires records for the lifetime of the AI system)
+
+### Data-Level Change Log
+
+- **`change_log` table** — immutable append-only log of every INSERT/UPDATE/DELETE on core entities
+- **Field-level diffs** — before/after values stored as JSON for compliance reconstruction
+- **Actor attribution** — links every mutation to a user, agent, or system process
+- **Indexed** — entity_type + entity_id lookup; actor + timestamp for activity audits
+
+### GDPR Compliance
+
+- **`consent_records` table** — tracks Art. 7 consent per party with purpose, evidence, grant/revoke timestamps
+- **`retention_policies` table** — configurable retention periods per entity type (7 years financial, 10 years claims)
+- **Right to erasure** (Art. 17) — anonymizes PII fields across parties, submissions, policies, claims; records action in change_log
+- **Data portability** (Art. 20) — exports all party data as structured JSON
+- **`GDPRService`** — orchestrates consent management, anonymization, and portability
+- **6 API endpoints** under `/api/v1/gdpr` — consent grant, revoke, list; erasure; portability; retention policies
+
+### Soft Deletes
+
+- **`deleted_at DATETIME2`** column on 10 core tables (parties, products, submissions, policies, claims, billing_accounts, reinsurance_treaties, renewal_records, mga_authorities, mga_bordereaux)
+- Repository queries filter `WHERE deleted_at IS NULL` by default
+- Supports GDPR right-to-erasure workflow: anonymize PII → set deleted_at → retain for audit
 
 ### Infrastructure Security
 
@@ -1359,14 +1458,14 @@ These are representative metrics from a running deployment with 3+ years of seed
 
 | Metric | Value |
 |---|---|
-| **REST API Endpoints** | 152 across 24 modules |
+| **REST API Endpoints** | 172 across 31 modules |
 | **MCP Tools** | 32 + 5 resources |
 | **RBAC Roles** | 26 (20 MGA, 26 Carrier) |
-| **Database Tables** | 26 across 3 migrations |
+| **Database Tables** | 40 across 15 migrations |
 | **Domain Entities** | 13 with state machines |
-| **Business Services** | 21 |
+| **Business Services** | 25 |
 | **Infrastructure Adapters** | 13 |
-| **Test Suite** | 553 tests across 50 files |
+| **Test Suite** | 750 tests |
 | **Bicep IaC Modules** | 9 |
 | **Dashboard Pages** | 25 |
 | **Knowledge Categories** | 7 (guidelines, rating factors, coverages, precedents, compliance, industry, jurisdiction) |

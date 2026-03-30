@@ -32,6 +32,7 @@
 | 15 | [Actuarial Workbench](#15-actuarial-workbench) | ✅ Working |
 | 16 | [Broker Portal](#16-broker-portal) | ✅ Working |
 | 17 | [Product Management](#17-product-management) | ✅ Working |
+| 18 | [GDPR & Data Privacy](#18-gdpr--data-privacy) | ✅ Working |
 
 ---
 
@@ -1145,6 +1146,65 @@ Product API (SQL) ──dual-write──▸ Relational Tables ──sync──�
 - Sync is fire-and-forget; product API responses are not delayed by downstream sync
 
 **Status**: ✅ Working — 6 products in SQL (normalised to 7 relational tables since v106), full CRUD API, rating engine with DB factor loading, versioning, publish workflow, knowledge sync pipeline.
+
+---
+
+## 18. GDPR & Data Privacy
+
+**What it does**: OpenInsure provides built-in GDPR compliance capabilities including consent tracking (Art. 7), right to erasure (Art. 17), and data portability (Art. 20). A dedicated `GDPRService` and API module handle all privacy operations with full audit trail integration.
+
+### Data Model
+
+| Table | Purpose |
+|-------|---------|
+| `consent_records` | Tracks consent per party with purpose, evidence, grant/revoke timestamps |
+| `retention_policies` | Configurable data retention schedules per entity type |
+| `change_log` | Immutable audit trail — every data mutation is logged with actor and field-level diffs |
+
+Soft deletes (`deleted_at` column) on all 10 core tables ensure data is never physically removed — supporting compliance audits while honoring erasure requests via anonymization.
+
+### API Endpoints (6)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/api/v1/gdpr/parties/{party_id}/consent` | Grant consent for a specific purpose |
+| `DELETE` | `/api/v1/gdpr/parties/{party_id}/consent/{purpose}` | Revoke consent |
+| `GET` | `/api/v1/gdpr/parties/{party_id}/consent` | List all consent records for a party |
+| `POST` | `/api/v1/gdpr/parties/{party_id}/erasure` | Right to erasure — anonymizes PII across all linked records |
+| `GET` | `/api/v1/gdpr/parties/{party_id}/portability` | Data portability — exports all party data as structured JSON |
+| `GET` | `/api/v1/gdpr/retention-policies` | List configured retention policies per entity type |
+
+### Consent Workflow
+
+```text
+Party grants consent → consent_records INSERT (purpose, evidence, timestamp)
+Party revokes consent → consent_records UPDATE (revoked_at set)
+Erasure request → GDPRService.erase_party_data():
+  1. Anonymize PII in parties, submissions, policies, claims
+  2. Set deleted_at on party record
+  3. Log all changes to change_log
+  4. Return erasure confirmation with affected record counts
+```
+
+### Retention Policies
+
+Default retention schedules (seeded via migration 014):
+
+| Entity Type | Retention Period | Action |
+|-------------|-----------------|--------|
+| Financial records | 7 years | Archive |
+| Claims records | 10 years | Archive |
+| Consent records | 3 years after revocation | Delete |
+| Audit logs | 10 years | Archive |
+
+### Key Implementation Details
+
+- **`GDPRService`** (`services/gdpr_service.py`) — orchestrates consent management, anonymization, and data export
+- **Anonymization** replaces PII with hashed placeholders; does not delete records (preserves referential integrity)
+- **All erasure actions** are recorded in `change_log` for compliance verification
+- **Soft deletes** ensure anonymized records remain queryable for aggregate analytics and audit
+
+**Status**: ✅ Working — 6 GDPR API endpoints, consent tracking, right to erasure with anonymization, data portability export, configurable retention policies.
 
 ---
 

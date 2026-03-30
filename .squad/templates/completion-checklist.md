@@ -10,7 +10,7 @@ Before marking work as done, verify:
 
 ## Testing
 - [ ] Unit tests added for new code
-- [ ] All existing tests pass (636+)
+- [ ] All existing tests pass (750+)
 - [ ] Foundry smoke test passes (if agent-related)
 - [ ] Integration test against live backend (if API changes)
 
