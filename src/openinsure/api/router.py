@@ -6,6 +6,7 @@ from openinsure.api.actuarial import router as actuarial_router
 from openinsure.api.admin import router as admin_router
 from openinsure.api.agent_traces import router as agent_traces_router
 from openinsure.api.analytics import router as analytics_router
+from openinsure.api.audit import router as audit_router
 from openinsure.api.billing import router as billing_router
 from openinsure.api.broker import router as broker_router
 from openinsure.api.claims import router as claims_router
@@ -15,10 +16,12 @@ from openinsure.api.documents import router as documents_router
 from openinsure.api.escalations import router as escalations_router
 from openinsure.api.events import router as events_router
 from openinsure.api.finance import router as finance_router
+from openinsure.api.gdpr import router as gdpr_router
 from openinsure.api.health import router as health_router
 from openinsure.api.knowledge import router as knowledge_router
 from openinsure.api.metrics import router as metrics_router
 from openinsure.api.mga_oversight import router as mga_router
+from openinsure.api.parties import router as parties_router
 from openinsure.api.policies import router as policies_router
 from openinsure.api.products import router as products_router
 from openinsure.api.regulatory import router as regulatory_router
@@ -60,5 +63,8 @@ api_v1_router.include_router(analytics_router, prefix="/analytics", tags=["analy
 api_v1_router.include_router(agent_traces_router, prefix="/agent-traces", tags=["agent-traces"])
 api_v1_router.include_router(demo_router, prefix="/demo", tags=["demo"])
 api_v1_router.include_router(admin_router, prefix="/admin", tags=["admin"])
+api_v1_router.include_router(audit_router, prefix="/audit", tags=["audit"])
+api_v1_router.include_router(parties_router, prefix="/parties", tags=["parties"])
+api_v1_router.include_router(gdpr_router, prefix="/gdpr", tags=["gdpr"])
 
 api_router.include_router(api_v1_router)
