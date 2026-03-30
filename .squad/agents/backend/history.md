@@ -12,6 +12,16 @@
 - WorkflowEngine delegates multi-agent orchestration through Foundry agents
 - EscalationService holds items exceeding authority for human approval (returns 202 Accepted)
 
+## Product JSON → Relational Migration (2026-03-30, #164)
+
+- **Dual-write pattern**: `SqlProductRepository.create()`/`.update()` calls `ProductRelationsRepository.sync_from_product()` to keep JSON + relational in sync
+- **Consumer fallback**: all consumers (rating, triage, knowledge sync, API) prefer relational data and fall back to JSON blob when relational rows don't exist
+- **RatingEngine class**: product-aware wrapper around CyberRatingEngine; loads industry/revenue_band factors from `rating_factor_tables` SQL table, caches per product_id
+- **Appetite check**: `ProductRelationsRepository.check_appetite()` evaluates relational rules with typed operators (>=, <=, between, in, not_in, eq, neq)
+- **Knowledge sync enrichment**: `_product_to_knowledge_document()` now accepts optional relational data params, producing richer knowledge docs from typed columns
+- **List endpoint stays lightweight**: GET /products does NOT load relations per product (N+1 avoidance)
+- **JSON columns marked DEPRECATED** but NOT dropped — migration period allows rollback
+
 ## Escalation Thresholds & Authority Matrix (2026-03-22)
 
 ### Authority limits (from `rbac/authority.py` DEFAULT_AUTHORITY_CONFIG)
