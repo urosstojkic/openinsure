@@ -364,3 +364,92 @@ async def get_system_inventory() -> SystemInventoryResponse:
         total=len(systems),
         generated_at=_now(),
     )
+
+
+# ---------------------------------------------------------------------------
+# Decision Outcome Tracking (#179)
+# ---------------------------------------------------------------------------
+
+
+class DecisionOutcomeResponse(BaseModel):
+    """A single decision outcome measurement."""
+
+    id: str
+    decision_id: str
+    outcome_type: str
+    outcome_value: float | None = None
+    accuracy_score: float | None = None
+    measured_at: str
+    notes: str | None = None
+
+
+class DecisionOutcomesListResponse(BaseModel):
+    """List of outcomes for a decision."""
+
+    decision_id: str
+    items: list[DecisionOutcomeResponse] = Field(default_factory=list)
+    count: int = 0
+
+
+class AccuracyAgentEntry(BaseModel):
+    """Per-agent accuracy breakdown."""
+
+    agent_id: str
+    outcome_type: str
+    outcome_count: int
+    avg_accuracy: float | None = None
+    min_accuracy: float | None = None
+    max_accuracy: float | None = None
+
+
+class AccuracyOverall(BaseModel):
+    """Overall accuracy summary."""
+
+    total_outcomes: int = 0
+    avg_accuracy: float | None = None
+    decisions_measured: int = 0
+
+
+class AccuracyReportResponse(BaseModel):
+    """Aggregate accuracy report across all agents and outcome types."""
+
+    generated_at: str
+    overall: AccuracyOverall
+    by_agent: list[AccuracyAgentEntry] = Field(default_factory=list)
+
+
+@router.get("/decision-outcomes", response_model=DecisionOutcomesListResponse)
+async def get_decision_outcomes(
+    decision_id: str = Query(..., description="UUID of the decision record"),
+) -> DecisionOutcomesListResponse:
+    """Get all recorded outcomes for a specific AI decision.
+
+    Tracks whether the decision was accurate based on real-world results
+    (claims filed, renewals retained, etc.).
+    """
+    from openinsure.services.outcome_tracker import get_outcomes_for_decision
+
+    outcomes = await get_outcomes_for_decision(decision_id)
+    return DecisionOutcomesListResponse(
+        decision_id=decision_id,
+        items=[DecisionOutcomeResponse(**o) for o in outcomes],
+        count=len(outcomes),
+    )
+
+
+@router.get("/accuracy-report", response_model=AccuracyReportResponse)
+async def get_accuracy_report() -> AccuracyReportResponse:
+    """Aggregate accuracy report across all agents and outcome types.
+
+    Shows per-agent accuracy metrics and overall platform decision quality.
+    This is the AI-native competitive advantage — no legacy platform can
+    answer 'were our AI decisions correct?'
+    """
+    from openinsure.services.outcome_tracker import get_accuracy_report as _get_report
+
+    report = await _get_report()
+    return AccuracyReportResponse(
+        generated_at=report["generated_at"],
+        overall=AccuracyOverall(**report["overall"]),
+        by_agent=[AccuracyAgentEntry(**entry) for entry in report["by_agent"]],
+    )
