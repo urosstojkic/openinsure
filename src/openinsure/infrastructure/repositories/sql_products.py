@@ -95,6 +95,9 @@ def _to_sql_row(entity: dict[str, Any]) -> dict[str, Any]:
         "created_by": entity.get("created_by"),
         "created_at": entity.get("created_at"),
         "updated_at": entity.get("updated_at"),
+        "currency": entity.get("currency", "USD"),
+        "parent_product_id": entity.get("parent_product_id"),
+        "is_template": 1 if entity.get("is_template") else 0,
     }
 
 
@@ -156,6 +159,9 @@ def _from_sql_row(row: dict[str, Any]) -> dict[str, Any]:
         "created_at": created,
         "updated_at": updated,
         "row_version": rv.hex() if isinstance(rv, (bytes, bytearray)) else None,
+        "currency": _str(row.get("currency")) or "USD",
+        "parent_product_id": _str(row.get("parent_product_id")) or None,
+        "is_template": bool(row.get("is_template", False)),
     }
 
 
@@ -184,8 +190,9 @@ class SqlProductRepository(BaseRepository):
                (id, product_code, code, product_name, line_of_business, description,
                 status, version, coverages, rating_factors, appetite_rules,
                 authority_limits, territories, forms, metadata,
-                published_at, effective_date, expiration_date, created_by, created_at, updated_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                published_at, effective_date, expiration_date, created_by,
+                created_at, updated_at, currency, parent_product_id, is_template)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             [
                 row["id"],
                 row["product_code"],
@@ -208,6 +215,9 @@ class SqlProductRepository(BaseRepository):
                 row["created_by"],
                 row["created_at"],
                 row["updated_at"],
+                row["currency"],
+                row["parent_product_id"],
+                row["is_template"],
             ],
         )
         # Dual-write: sync normalised relational tables
@@ -339,3 +349,107 @@ class SqlProductRepository(BaseRepository):
         query += " WHERE " + " AND ".join(where_clauses)
         result = await self.db.fetch_one(query, params)
         return result.get("cnt", 0) if result else 0
+
+    # ------------------------------------------------------------------
+    # Product Template Inheritance (#177)
+    # ------------------------------------------------------------------
+
+    async def get_effective_product(self, entity_id: UUID | str) -> dict[str, Any] | None:
+        """Resolve product inheritance: load child, load parent, merge.
+
+        Child overrides parent for non-NULL scalar fields.
+        Coverages, rating factors, and appetite rules are ADDITIVE from
+        the parent unless the child defines the same coverage_code /
+        factor_name / field_name.
+        """
+        child = await self.get_by_id(entity_id)
+        if child is None:
+            return None
+
+        parent_id = child.get("parent_product_id")
+        if not parent_id:
+            return child
+
+        # Prevent circular inheritance (max depth 10)
+        visited: set[str] = {str(entity_id)}
+        merged = dict(child)
+        current_parent_id = parent_id
+
+        while current_parent_id and len(visited) < 10:
+            if str(current_parent_id) in visited:
+                logger.warning("product.circular_inheritance", product_id=str(entity_id))
+                break
+            visited.add(str(current_parent_id))
+
+            parent = await self.get_by_id(current_parent_id)
+            if parent is None:
+                break
+
+            # Merge scalar fields: child overrides parent for non-None values
+            for key in (
+                "description", "line_of_business", "min_premium", "max_premium",
+                "effective_date", "expiration_date", "currency",
+            ):
+                if merged.get(key) is None or merged[key] == "":
+                    parent_val = parent.get(key)
+                    if parent_val is not None and parent_val != "":
+                        merged[key] = parent_val
+
+            # Additive merge for list-of-dict fields keyed by a unique code
+            merged["coverages"] = self._merge_list_by_key(
+                parent.get("coverages", []),
+                merged.get("coverages", []),
+                key_field="name",
+            )
+            merged["rating_factors"] = self._merge_list_by_key(
+                parent.get("rating_factors", []),
+                merged.get("rating_factors", []),
+                key_field="factor_name",
+            )
+            merged["appetite_rules"] = self._merge_list_by_key(
+                parent.get("appetite_rules", []),
+                merged.get("appetite_rules", []),
+                key_field="field",
+            )
+
+            # Merge simple lists (territories, forms) additively
+            parent_territories = parent.get("territories", [])
+            child_territories = merged.get("territories", [])
+            if parent_territories:
+                all_terr = list({t for t in parent_territories + child_territories if t})
+                merged["territories"] = all_terr
+
+            current_parent_id = parent.get("parent_product_id")
+
+        return merged
+
+    @staticmethod
+    def _merge_list_by_key(
+        parent_items: list[dict[str, Any]],
+        child_items: list[dict[str, Any]],
+        key_field: str,
+    ) -> list[dict[str, Any]]:
+        """Merge two lists of dicts: child overrides parent by key_field.
+
+        Items from the parent that don't conflict with a child item
+        (by ``key_field``) are added. Child items always take precedence.
+        """
+        if not parent_items:
+            return child_items
+        if not child_items:
+            return list(parent_items)
+
+        child_keys: set[str] = set()
+        for item in child_items:
+            if isinstance(item, dict):
+                k = item.get(key_field, "")
+                if k:
+                    child_keys.add(str(k).lower())
+
+        result = list(child_items)
+        for item in parent_items:
+            if isinstance(item, dict):
+                k = item.get(key_field, "")
+                if k and str(k).lower() not in child_keys:
+                    result.append(item)
+        return result

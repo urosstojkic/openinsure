@@ -115,6 +115,12 @@ class Submission(DomainEntity):
     # Quoting
     quoted_premium: Money | None = None
 
+    # Multi-currency support (#174)
+    currency: str = Field(default="USD", max_length=3)
+
+    # Rating factor version tracking (#181)
+    rated_with_snapshot_id: str | None = None
+
     # Status transition timestamps
     received_at: datetime | None = None
     triaging_at: datetime | None = None

@@ -371,6 +371,101 @@ class ProductRelationsRepository:
             )
             return {}
 
+    async def get_rating_factors_as_of(
+        self, product_id: str, as_of_date: str
+    ) -> dict[str, dict[str, float]]:
+        """Return rating factors effective at a specific date.
+
+        Filters ``rating_factor_tables`` to rows where:
+        - effective_date <= as_of_date (or effective_date IS NULL)
+        - expiration_date > as_of_date (or expiration_date IS NULL)
+
+        Used for historical rating / regulatory audit.
+        """
+        try:
+            rows = await self.db.fetch_all(
+                """SELECT factor_category, factor_key, factor_value
+                   FROM rating_factor_tables
+                   WHERE product_id = ?
+                     AND (effective_date IS NULL OR effective_date <= ?)
+                     AND (expiration_date IS NULL OR expiration_date > ?)
+                   ORDER BY factor_category, sort_order""",
+                [product_id, as_of_date, as_of_date],
+            )
+            result: dict[str, dict[str, float]] = {}
+            for r in rows:
+                cat = str(r.get("factor_category", ""))
+                if cat not in result:
+                    result[cat] = {}
+                result[cat][str(r.get("factor_key", ""))] = float(r.get("factor_value", 1.0))
+            return result
+        except Exception:
+            logger.debug(
+                "product_relations.get_factors_as_of_fallback",
+                product_id=product_id,
+                as_of_date=as_of_date,
+                exc_info=True,
+            )
+            return {}
+
+    async def version_rating_factor(
+        self,
+        product_id: str,
+        factor_category: str,
+        factor_key: str,
+        new_multiplier: float,
+        description: str | None = None,
+    ) -> dict[str, Any] | None:
+        """Insert a new version of a rating factor and expire the old one.
+
+        Instead of UPDATE, this implements version history:
+        1. SET expiration_date on the current active row
+        2. INSERT a new row with the new multiplier and today's effective_date
+        """
+        from datetime import UTC, datetime
+
+        today = datetime.now(UTC).strftime("%Y-%m-%d")
+
+        # Expire the current active version
+        await self.db.execute_query(
+            """UPDATE rating_factor_tables
+               SET expiration_date = ?
+               WHERE product_id = ?
+                 AND factor_category = ?
+                 AND factor_key = ?
+                 AND (expiration_date IS NULL OR expiration_date > ?)""",
+            [today, product_id, factor_category, factor_key, today],
+        )
+
+        # Insert new version
+        from uuid import uuid4
+
+        new_id = str(uuid4())
+        await self.db.execute_query(
+            """INSERT INTO rating_factor_tables
+               (id, product_id, factor_category, factor_key, multiplier,
+                description, effective_date, sort_order)
+               VALUES (?, ?, ?, ?, ?, ?, ?, 0)""",
+            [
+                new_id,
+                product_id,
+                factor_category,
+                factor_key,
+                new_multiplier,
+                description,
+                today,
+            ],
+        )
+
+        return {
+            "id": new_id,
+            "product_id": product_id,
+            "factor_category": factor_category,
+            "factor_key": factor_key,
+            "multiplier": new_multiplier,
+            "effective_date": today,
+        }
+
     # ------------------------------------------------------------------
     # Evaluate appetite rules against risk data
     # ------------------------------------------------------------------

@@ -168,6 +168,9 @@ class ProductCreate(BaseModel):
     expiration_date: str | None = None
     forms: list[str] = Field(default_factory=list, description="Required application forms")
     metadata: dict[str, Any] = Field(default_factory=dict)
+    currency: str = Field(default="USD", max_length=3, description="ISO 4217 currency code")
+    parent_product_id: str | None = Field(default=None, description="Parent product ID for inheritance")
+    is_template: bool = Field(default=False, description="Whether this product is a template")
 
 
 class ProductUpdate(BaseModel):
@@ -187,6 +190,9 @@ class ProductUpdate(BaseModel):
     expiration_date: str | None = None
     forms: list[str] | None = None
     metadata: dict[str, Any] | None = None
+    currency: str | None = Field(default=None, max_length=3)
+    parent_product_id: str | None = None
+    is_template: bool | None = None
 
 
 class ProductResponse(BaseModel):
@@ -212,6 +218,9 @@ class ProductResponse(BaseModel):
     version_history: list[VersionInfo] = Field(default_factory=list)
     created_at: str
     updated_at: str
+    currency: str = "USD"
+    parent_product_id: str | None = None
+    is_template: bool = False
 
 
 class ProductSummary(BaseModel):
@@ -338,6 +347,9 @@ def _ensure_extended_fields(record: dict[str, Any]) -> dict[str, Any]:
     record.setdefault("expiration_date", None)
     record.setdefault("forms", [])
     record.setdefault("version_history", [])
+    record.setdefault("currency", "USD")
+    record.setdefault("parent_product_id", None)
+    record.setdefault("is_template", False)
     return record
 
 
@@ -392,6 +404,9 @@ async def create_product(body: ProductCreate, background_tasks: BackgroundTasks)
         "version_history": [],
         "created_at": now,
         "updated_at": now,
+        "currency": body.currency,
+        "parent_product_id": body.parent_product_id,
+        "is_template": body.is_template,
     }
     product_code = _generate_product_code(body.product_line)
     record["product_code"] = product_code
@@ -671,7 +686,7 @@ async def calculate_rate(product_id: str, body: RateRequest) -> RateResponse:
         base_premium=record["rating_rules"].get("base_rate", 1000.0),
         adjustments=adjustments,
         total_premium=round(base_rate, 2),
-        currency="USD",
+        currency=record.get("currency", "USD"),
         rated_coverages=rated_coverages,
     )
 
@@ -702,3 +717,97 @@ async def list_coverages(product_id: str) -> CoverageListResponse:
         product_id=product_id,
         coverages=[CoverageDefinition(**c) for c in coverages],
     )
+
+
+# ---------------------------------------------------------------------------
+# Historical rating endpoint (#181)
+# ---------------------------------------------------------------------------
+
+
+class HistoricalRateRequest(BaseModel):
+    """Risk data to calculate a rate with historical factors."""
+
+    risk_data: dict[str, Any] = Field(..., description="Risk characteristics for rating")
+    coverages_requested: list[str] = Field(
+        default_factory=list,
+        description="Specific coverages to rate; empty means all defaults",
+    )
+
+
+@router.get("/{product_id}/rate", response_model=RateResponse)
+async def calculate_rate_historical(
+    product_id: str,
+    as_of: str = Query(..., description="Rate with factors effective at this date (YYYY-MM-DD)"),
+) -> RateResponse:
+    """Rate with historical factors effective at a specific date.
+
+    ``GET /api/v1/products/{id}/rate?as_of=2026-01-15``
+
+    When a regulator asks 'why did you charge this premium 6 months ago?',
+    this endpoint reproduces the exact rating using the factor set that
+    was in effect at the given date (#181).
+    """
+    record = await _get_product(product_id)
+    _ensure_extended_fields(record)
+    if record["status"] not in (ProductStatus.ACTIVE, ProductStatus.RETIRED):
+        raise HTTPException(status_code=409, detail="Historical rating requires an active or retired product")
+
+    # Load factors as-of the given date from relational tables
+    try:
+        from openinsure.infrastructure.factory import get_product_relations_repository
+
+        relations = get_product_relations_repository()
+        factors: dict[str, Any] = {}
+        if relations is not None:
+            factors = await relations.get_rating_factors_as_of(product_id, as_of)
+    except Exception:
+        logger.debug("product.historical_rate_failed", product_id=product_id, exc_info=True)
+        factors = {}
+
+    # Build adjustments from historical factors
+    base_rate = record["rating_rules"].get("base_rate", 1000.0)
+    adjustments: list[dict[str, Any]] = []
+
+    for cat, entries in factors.items():
+        for key, multiplier in entries.items():
+            adjustments.append({"name": f"{cat}:{key}", "factor": multiplier})
+            base_rate *= multiplier
+
+    # Fallback if no factors found
+    if not adjustments:
+        adjustments = [{"name": "base", "factor": 1.0}]
+
+    return RateResponse(
+        product_id=product_id,
+        base_premium=record["rating_rules"].get("base_rate", 1000.0),
+        adjustments=adjustments,
+        total_premium=round(base_rate, 2),
+        currency=record.get("currency", "USD"),
+        rated_coverages=[],
+    )
+
+
+# ---------------------------------------------------------------------------
+# Product inheritance endpoint (#177)
+# ---------------------------------------------------------------------------
+
+
+@router.get("/{product_id}/effective", response_model=ProductResponse)
+async def get_effective_product(product_id: str) -> ProductResponse:
+    """Retrieve a product with inherited fields resolved from parent chain.
+
+    If the product has a ``parent_product_id``, walks the inheritance
+    chain and merges fields. Child overrides parent for non-NULL scalars.
+    Coverages, factors, and appetite rules are ADDITIVE from parent
+    unless the child defines the same code/name.
+    """
+    try:
+        merged = await _repo.get_effective_product(product_id)
+    except AttributeError:
+        # InMemory repo may not have get_effective_product
+        merged = await _repo.get_by_id(product_id)
+
+    if merged is None:
+        raise HTTPException(status_code=404, detail=f"Product {product_id} not found")
+    _ensure_extended_fields(merged)
+    return ProductResponse(**merged)

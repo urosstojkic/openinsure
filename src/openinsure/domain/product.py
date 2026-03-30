@@ -8,6 +8,7 @@ from datetime import date
 from decimal import Decimal
 from enum import StrEnum
 from typing import Any
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -107,3 +108,10 @@ class Product(DomainEntity):
     territories: list[str] = Field(default_factory=list)
     effective_date: date
     expiration_date: date | None = None
+
+    # Multi-currency support (#174)
+    currency: str = Field(default="USD", max_length=3)
+
+    # Template inheritance (#177)
+    parent_product_id: UUID | None = None
+    is_template: bool = False

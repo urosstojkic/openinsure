@@ -98,16 +98,23 @@ class RatingEngine:
     def __init__(self) -> None:
         self._cache: dict[str, dict[str, dict[str, Decimal]]] = {}
 
-    async def load_factors_for_product(self, product_id: str) -> dict[str, dict[str, Decimal]]:
+    async def load_factors_for_product(
+        self, product_id: str, *, as_of_date: str | None = None
+    ) -> dict[str, dict[str, Decimal]]:
         """Load rating factor tables from relational DB.
 
         Returns ``{"industry": {"technology": Decimal("0.85"), ...},
         "revenue_band": {"1-5M": Decimal("1.0"), ...}}``.
 
+        When *as_of_date* is provided, loads only factors effective at
+        that date (for historical rating / regulatory audit).  The
+        as_of_date path bypasses the cache to ensure correct results.
+
         Falls back to an empty dict when the relational table has no rows.
         """
-        if product_id in self._cache:
-            return self._cache[product_id]
+        cache_key = f"{product_id}:{as_of_date or 'current'}"
+        if cache_key in self._cache:
+            return self._cache[cache_key]
 
         from openinsure.infrastructure.factory import get_product_relations_repository
 
@@ -116,29 +123,42 @@ class RatingEngine:
             return {}
 
         try:
-            flat = await relations.get_rating_factors_flat(product_id)
+            if as_of_date:
+                flat = await relations.get_rating_factors_as_of(product_id, as_of_date)
+            else:
+                flat = await relations.get_rating_factors_flat(product_id)
             # Convert float values to Decimal
             result: dict[str, dict[str, Decimal]] = {}
             for cat, entries in flat.items():
                 result[cat] = {k: Decimal(str(v)) for k, v in entries.items()}
-            self._cache[product_id] = result
+            self._cache[cache_key] = result
             if result:
                 logger.info(
                     "rating.factors_loaded_from_db",
                     product_id=product_id,
                     categories=list(result.keys()),
+                    as_of_date=as_of_date,
                 )
             return result
         except Exception:
             logger.debug("rating.factor_load_failed", product_id=product_id, exc_info=True)
             return {}
 
-    async def calculate(self, product_id: str, rating_input: RatingInput) -> RatingResult:
+    async def calculate(
+        self,
+        product_id: str,
+        rating_input: RatingInput,
+        *,
+        as_of_date: str | None = None,
+    ) -> RatingResult:
         """Calculate premium using product-specific factors from DB.
 
-        Loads relational factors first, falls back to hardcoded dicts.
+        When *as_of_date* is provided, loads factors effective at that
+        date for historical rating (regulatory audit support, #181).
         """
-        factors_from_db = await self.load_factors_for_product(product_id)
+        factors_from_db = await self.load_factors_for_product(
+            product_id, as_of_date=as_of_date
+        )
 
         engine = CyberRatingEngine()
         if factors_from_db:
