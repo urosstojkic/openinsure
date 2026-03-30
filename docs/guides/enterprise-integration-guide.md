@@ -1407,6 +1407,12 @@ Complete this checklist before enabling user access to production.
 - [ ] E&O insurance policy in force (covers AI decision errors)
 - [ ] Audit trail retention policy set (7 years for financial, 10 years for claims)
 - [ ] Bias monitoring enabled (4/5ths rule analysis on underwriting decisions)
+- [ ] GDPR API endpoints verified (`/api/v1/gdpr` — consent, erasure, portability)
+- [ ] Soft deletes enabled on all core tables (`deleted_at` column — migration 008)
+- [ ] Data-level change log active (`change_log` table — migration 009)
+- [ ] Consent records table seeded with retention policies (migration 014)
+- [ ] Right-to-erasure workflow tested (anonymize PII → soft delete → audit log)
+- [ ] Data portability export tested (structured JSON export per party)
 
 ### Go/No-Go Decision
 
@@ -1428,6 +1434,36 @@ Complete this checklist before enabling user access to production.
    - 5:00 PM: End-of-day review, review submission/claim counts
 5. **T+1 day:** Morning stand-up, address any overnight issues
 6. **T+7 days:** Post-go-live retrospective, document lessons learned
+
+### GDPR & Data Privacy Implementation
+
+OpenInsure includes built-in GDPR compliance infrastructure:
+
+**Database Tables:**
+- `consent_records` — Art. 7 consent tracking per party (purpose, evidence, grant/revoke timestamps)
+- `retention_policies` — configurable retention schedules per entity type
+- `change_log` — immutable data-level audit trail for every INSERT/UPDATE/DELETE
+
+**Soft Deletes:**
+All 10 core tables include a `deleted_at DATETIME2` column (migration 008). Records are never physically deleted — queries filter by `deleted_at IS NULL` by default.
+
+**API Endpoints** (`/api/v1/gdpr`):
+| Endpoint | Description |
+|----------|-------------|
+| `POST /parties/{id}/consent` | Grant consent for a purpose |
+| `DELETE /parties/{id}/consent/{purpose}` | Revoke consent |
+| `GET /parties/{id}/consent` | List consent records |
+| `POST /parties/{id}/erasure` | Right to erasure (anonymizes PII) |
+| `GET /parties/{id}/portability` | Data portability export |
+| `GET /retention-policies` | View retention schedules |
+
+**Retention Schedule** (default, customizable via API):
+| Entity | Period | Action |
+|--------|--------|--------|
+| Financial records | 7 years | Archive |
+| Claims records | 10 years | Archive |
+| Consent records | 3 years post-revocation | Delete |
+| Audit logs | 10 years | Archive |
 
 ---
 

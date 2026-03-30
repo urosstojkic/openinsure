@@ -5,7 +5,15 @@ The rating engine uses a factor-based approach where:
   base_premium = base_rate * revenue_factor
   adjusted_premium = base_premium * product(all_factors)
   final_premium = max(min_premium, min(max_premium, adjusted_premium))
+
+**v106 — Relational factor loading (issue #164)**:
+When a ``product_id`` is supplied, :class:`RatingEngine` loads factors
+from the ``rating_factor_tables`` SQL table first.  Hardcoded dicts
+(``INDUSTRY_RISK_FACTORS``, ``REVENUE_BANDS``) serve as the fallback
+when no relational data exists — backward compatibility is preserved.
 """
+
+from __future__ import annotations
 
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
@@ -46,6 +54,8 @@ class RatingResult(BaseModel):
     warnings: list[str] = Field(default_factory=list)
 
 
+# -- Hardcoded fallback factors (kept for backward compat) -----------------
+
 # Industry risk multipliers by SIC code prefix
 INDUSTRY_RISK_FACTORS: dict[str, Decimal] = {
     "73": Decimal("1.0"),  # Computer services (baseline)
@@ -71,6 +81,72 @@ REVENUE_BANDS: list[tuple[Decimal, Decimal, Decimal]] = [
 ]
 
 
+# ---------------------------------------------------------------------------
+# Product-aware rating engine — loads factors from SQL when available
+# ---------------------------------------------------------------------------
+
+
+class RatingEngine:
+    """Product-aware rating engine — loads factors from relational DB.
+
+    When ``product_id`` is provided to :meth:`calculate`, the engine
+    queries ``rating_factor_tables`` for that product.  When no
+    relational data exists, falls back to the hardcoded
+    ``INDUSTRY_RISK_FACTORS`` and ``REVENUE_BANDS`` dicts.
+    """
+
+    def __init__(self) -> None:
+        self._cache: dict[str, dict[str, dict[str, Decimal]]] = {}
+
+    async def load_factors_for_product(self, product_id: str) -> dict[str, dict[str, Decimal]]:
+        """Load rating factor tables from relational DB.
+
+        Returns ``{"industry": {"technology": Decimal("0.85"), ...},
+        "revenue_band": {"1-5M": Decimal("1.0"), ...}}``.
+
+        Falls back to an empty dict when the relational table has no rows.
+        """
+        if product_id in self._cache:
+            return self._cache[product_id]
+
+        from openinsure.infrastructure.factory import get_product_relations_repository
+
+        relations = get_product_relations_repository()
+        if relations is None:
+            return {}
+
+        try:
+            flat = await relations.get_rating_factors_flat(product_id)
+            # Convert float values to Decimal
+            result: dict[str, dict[str, Decimal]] = {}
+            for cat, entries in flat.items():
+                result[cat] = {k: Decimal(str(v)) for k, v in entries.items()}
+            self._cache[product_id] = result
+            if result:
+                logger.info(
+                    "rating.factors_loaded_from_db",
+                    product_id=product_id,
+                    categories=list(result.keys()),
+                )
+            return result
+        except Exception:
+            logger.debug("rating.factor_load_failed", product_id=product_id, exc_info=True)
+            return {}
+
+    async def calculate(self, product_id: str, rating_input: RatingInput) -> RatingResult:
+        """Calculate premium using product-specific factors from DB.
+
+        Loads relational factors first, falls back to hardcoded dicts.
+        """
+        factors_from_db = await self.load_factors_for_product(product_id)
+
+        engine = CyberRatingEngine()
+        if factors_from_db:
+            engine.set_db_factors(factors_from_db)
+
+        return engine.calculate_premium(rating_input)
+
+
 class CyberRatingEngine:
     """Configurable cyber insurance rating engine."""
 
@@ -83,6 +159,21 @@ class CyberRatingEngine:
         self.base_rate = base_rate_per_thousand
         self.min_premium = min_premium
         self.max_premium = max_premium
+        # Optional DB-loaded factors (set via set_db_factors)
+        self._db_industry_factors: dict[str, Decimal] | None = None
+        self._db_revenue_factors: dict[str, Decimal] | None = None
+
+    def set_db_factors(self, factors: dict[str, dict[str, Decimal]]) -> None:
+        """Inject relational factors loaded from DB.
+
+        Accepts the dict returned by ``RatingEngine.load_factors_for_product()``.
+        Categories named ``industry`` or ``revenue_band`` override the
+        corresponding hardcoded dicts.
+        """
+        if "industry" in factors:
+            self._db_industry_factors = factors["industry"]
+        if "revenue_band" in factors:
+            self._db_revenue_factors = factors["revenue_band"]
 
     def calculate_premium(self, rating_input: RatingInput) -> RatingResult:
         """Calculate cyber insurance premium based on risk factors."""
@@ -165,6 +256,21 @@ class CyberRatingEngine:
         )
 
     def _get_revenue_factor(self, revenue: Decimal) -> Decimal:
+        # Try DB-loaded revenue factors first
+        if self._db_revenue_factors:
+            for key, factor in self._db_revenue_factors.items():
+                try:
+                    if "-" in key:
+                        parts = key.split("-")
+                        low = Decimal(parts[0].strip().replace("M", "000000").replace("K", "000"))
+                        high = Decimal(parts[1].strip().replace("M", "000000").replace("K", "000"))
+                        if low <= revenue < high:
+                            return Decimal(str(factor))
+                except (ValueError, IndexError):
+                    continue
+            # If DB factors exist but none matched, use default
+            return Decimal("1.0")
+        # Fallback to hardcoded bands
         for low, high, factor in REVENUE_BANDS:
             if low <= revenue < high:
                 return factor
@@ -172,6 +278,14 @@ class CyberRatingEngine:
 
     def _get_industry_factor(self, sic_code: str) -> Decimal:
         prefix = sic_code[:2] if len(sic_code) >= 2 else sic_code
+        # Try DB-loaded industry factors first
+        if self._db_industry_factors:
+            # Check by SIC prefix and by full code
+            for key in [prefix, sic_code, sic_code.lower()]:
+                if key in self._db_industry_factors:
+                    return Decimal(str(self._db_industry_factors[key]))
+            return Decimal("1.0")
+        # Fallback to hardcoded dict
         return INDUSTRY_RISK_FACTORS.get(prefix, Decimal("1.0"))
 
     def _get_security_factor(self, score: float) -> Decimal:

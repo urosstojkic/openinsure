@@ -7,6 +7,14 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 from uuid import UUID, uuid4
 
+<<<<<<< HEAD
+=======
+import structlog
+
+from openinsure.infrastructure.repositories.sql_product_relations import (
+    ProductRelationsRepository,
+)
+>>>>>>> origin/main
 from openinsure.infrastructure.repository import (
     BaseRepository,
     IntegrityConstraintError,
@@ -16,7 +24,15 @@ from openinsure.infrastructure.repository import (
 if TYPE_CHECKING:
     from openinsure.infrastructure.database import DatabaseAdapter
 
+logger = structlog.get_logger()
+
 # -- JSON field names that are stored as NVARCHAR(MAX) in the products table --
+# DEPRECATED (issue #164): These JSON columns are being migrated to normalised
+# relational tables (product_coverages, rating_factor_tables,
+# product_appetite_rules, etc.).  During the transition period, writes go to
+# both JSON and relational tables (dual-write).  Reads prefer relational data
+# and fall back to JSON.  Do NOT drop these columns until all consumers have
+# been migrated and the migration period ends.
 _JSON_FIELDS: set[str] = {
     "coverages",
     "rating_factors",
@@ -147,10 +163,16 @@ def _from_sql_row(row: dict[str, Any]) -> dict[str, Any]:
 
 
 class SqlProductRepository(BaseRepository):
-    """Azure SQL implementation of the product repository."""
+    """Azure SQL implementation of the product repository.
+
+    On create/update, dual-writes to the normalised relational tables
+    via :class:`ProductRelationsRepository` so data is available in both
+    the JSON columns and the new relational tables.
+    """
 
     def __init__(self, db: DatabaseAdapter) -> None:
         self.db = db
+        self._relations = ProductRelationsRepository(db)
 
     async def create(self, entity: dict[str, Any]) -> dict[str, Any]:
         entity.setdefault("id", str(uuid4()))
@@ -191,8 +213,18 @@ class SqlProductRepository(BaseRepository):
                 row["updated_at"],
             ],
         )
+        # Dual-write: sync normalised relational tables
+        await self._relations.sync_from_product(str(row["id"]), entity)
         return _from_sql_row(row)
 
+<<<<<<< HEAD
+=======
+    @property
+    def relations(self) -> ProductRelationsRepository:
+        """Expose the relational sub-repository for direct queries."""
+        return self._relations
+
+>>>>>>> origin/main
     async def get_by_id(self, entity_id: UUID | str, *, include_deleted: bool = False) -> dict[str, Any] | None:
         sql = "SELECT * FROM products WHERE id = ?"
         if not include_deleted:
@@ -229,7 +261,13 @@ class SqlProductRepository(BaseRepository):
         rows = await self.db.fetch_all(query, params)
         return [_from_sql_row(r) for r in rows]
 
+<<<<<<< HEAD
     async def update(self, entity_id: UUID | str, updates: dict[str, Any], *, expected_version: str | None = None) -> dict[str, Any] | None:
+=======
+    async def update(
+        self, entity_id: UUID | str, updates: dict[str, Any], *, expected_version: str | None = None
+    ) -> dict[str, Any] | None:
+>>>>>>> origin/main
         sets: list[str] = []
         params: list[Any] = []
         seen_cols: set[str] = set()
@@ -266,7 +304,15 @@ class SqlProductRepository(BaseRepository):
             from fastapi import HTTPException
 
             raise HTTPException(status_code=409, detail="Record modified by another user")
+<<<<<<< HEAD
         return await self.get_by_id(entity_id)
+=======
+        # Dual-write: sync normalised relational tables with merged data
+        result = await self.get_by_id(entity_id)
+        if result:
+            await self._relations.sync_from_product(str(entity_id), result)
+        return result
+>>>>>>> origin/main
 
     async def delete(self, entity_id: UUID | str) -> bool:
         try:

@@ -446,6 +446,28 @@ class SubmissionService:
         fallback_score = 5
         fallback_recommendation = "proceed_to_quote"
         fallback_flags: list[str] = ["source:local_fallback"]
+
+        # -- Phase 3b (#164): check relational appetite rules first -------
+        product_id = record.get("product_id")
+        if product_id:
+            try:
+                from openinsure.infrastructure.factory import get_product_relations_repository
+
+                relations = get_product_relations_repository()
+                if relations is not None:
+                    passes, reasons = await relations.check_appetite(product_id, merged_risk)
+                    if not passes:
+                        fallback_score = 8
+                        fallback_flags.extend(reasons)
+                        fallback_recommendation = "refer"
+                        logger.info(
+                            "triage.appetite_rules_failed",
+                            product_id=product_id,
+                            reasons=reasons,
+                        )
+            except Exception:
+                logger.debug("triage.relational_appetite_check_failed", exc_info=True)
+
         if gl:
             appetite = gl.get("appetite", {})
             revenue = merged_risk.get("annual_revenue", 0) or 0

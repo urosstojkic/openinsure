@@ -63,10 +63,7 @@ class PartyResolutionService:
         # 2. Exact match by registration_number
         if reg_number:
             for party in _party_store.values():
-                if (
-                    party.get("registration_number")
-                    and party["registration_number"] == reg_number
-                ):
+                if party.get("registration_number") and party["registration_number"] == reg_number:
                     logger.info(
                         "party_resolution.matched_by_registration_number",
                         party_id=party["id"],
@@ -145,24 +142,18 @@ class PartyResolutionService:
         # Gather linked submissions
         sub_repo = get_submission_repository()
         all_subs = await sub_repo.list_all(limit=1000)
-        linked_submissions = [
-            s for s in all_subs if s.get("applicant_id") == party_id
-        ]
+        linked_submissions = [s for s in all_subs if s.get("applicant_id") == party_id]
 
         # Gather linked policies
         pol_repo = get_policy_repository()
         all_pols = await pol_repo.list_all(limit=1000)
-        linked_policies = [
-            p for p in all_pols if p.get("insured_id") == party_id
-        ]
+        linked_policies = [p for p in all_pols if p.get("insured_id") == party_id]
 
         # Gather linked claims
         claim_repo = get_claim_repository()
         all_claims = await claim_repo.list_all(limit=1000)
         policy_ids = {p.get("id") for p in linked_policies}
-        linked_claims = [
-            c for c in all_claims if c.get("policy_id") in policy_ids
-        ]
+        linked_claims = [c for c in all_claims if c.get("policy_id") in policy_ids]
 
         return {
             "party": party,
