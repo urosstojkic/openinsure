@@ -434,6 +434,8 @@ Premium calculation uses a cascading strategy:
 
 This ensures every submission receives a quote even when upstream services are unavailable.
 
+**Rating factor version history (#181):** `rating_factor_tables` uses `effective_date`/`expiration_date` to track factor versions. When a factor is updated, the old row is expired and a new row is inserted (never UPDATE). `RatingEngine.calculate(as_of_date="YYYY-MM-DD")` loads only factors effective at that date, enabling historical quote reproduction for regulatory audit. `GET /products/{id}/rate?as_of=` exposes this via REST.
+
 ### Authority Limits (Centralized)
 
 All authority, reserve, and premium thresholds are centralized in `domain/limits.py`:
@@ -840,17 +842,18 @@ stateDiagram-v2
     written_off --> [*]
 ```
 
-### Database Schema (40 Tables)
+### Database Schema (41 Tables)
 
 | Module | Tables | Purpose |
 |---|---|---|
 | **Parties** | `parties`, `party_roles`, `party_addresses`, `party_contacts` | Insured, brokers, claimants, agents |
-| **Products** | `products`, `product_coverages`, `coverage_deductibles`, `product_rating_factors`, `rating_factor_tables`, `product_appetite_rules`, `product_authority_limits`, `product_territories`, `product_forms`, `product_pricing` | LOB definitions; 9 normalised relational tables since v106 (coverages, deductibles, rating factors, appetite rules, authority limits, territories, forms, pricing) |
-| **Submissions** | `submissions`, `submission_documents` | Applications, extracted data, triage results |
-| **Policies** | `policies`, `policy_coverages`, `policy_endorsements` | Active coverage, terms, mid-term changes |
-| **Claims** | `claims`, `claim_reserves`, `claim_payments` | Loss records, reserves, settlements |
-| **Billing** | `billing_accounts`, `invoices` | Premium invoicing, payment tracking |
-| **Reinsurance** | `reinsurance_treaties`, `reinsurance_cessions`, `reinsurance_recoveries` | Treaty management, capacity, recoveries |
+| **Products** | `products`, `product_coverages`, `coverage_deductibles`, `product_rating_factors`, `rating_factor_tables`, `product_appetite_rules`, `product_authority_limits`, `product_territories`, `product_forms`, `product_pricing` | LOB definitions; 9 normalised relational tables since v106; `parent_product_id` + `is_template` for template inheritance (#177); `currency` column (#174) |
+| **Submissions** | `submissions`, `submission_documents` | Applications, extracted data, triage results; `currency` and `rated_with_snapshot_id` columns (#174, #181) |
+| **Policies** | `policies`, `policy_coverages`, `policy_endorsements` | Active coverage, terms, mid-term changes; `currency` column (#174) |
+| **Claims** | `claims`, `claim_reserves`, `claim_payments` | Loss records, reserves, settlements; `currency` column on all three tables (#174) |
+| **Billing** | `billing_accounts`, `invoices` | Premium invoicing, payment tracking; `currency` column (#174) |
+| **Reinsurance** | `reinsurance_treaties`, `reinsurance_cessions`, `reinsurance_recoveries` | Treaty management, capacity, recoveries; `currency` column on all three tables (#174) |
+| **Currency** | `exchange_rates` | Currency conversion reference with `from_currency`, `to_currency`, `rate`, `effective_date` (#174) |
 | **Actuarial** | `actuarial_triangles`, `actuarial_reserves`, `loss_development_analysis` | Loss triangles, IBNR, reserve adequacy |
 | **Renewals** | `renewal_records` | Renewal terms, rate changes |
 | **MGA** | `mga_contracts`, `mga_performance` | Delegated authority, performance tracking |
@@ -1108,11 +1111,14 @@ The `BiasMonitor` applies the **4/5ths rule** (80% rule from EEOC Uniform Guidel
 OpenInsure ships with a **Cyber Liability SMB** product definition. The platform supports:
 
 - **Product CRUD** with versioning (draft → published → archived)
+- **Product template inheritance** (#177) — products can set `parent_product_id` to inherit coverages, rating factors, appetite rules, and territories from a parent. `GET /products/{id}/effective` resolves the full chain
+- **Multi-currency** (#174) — `currency` column (ISO 4217, default USD) on products and all monetary tables
 - **5 coverages** with configurable limits and deductibles
 - **Deterministic rating engine** (CyberRatingEngine):
   - Base rate: $1.50 per $1,000 annual revenue
   - Industry multipliers: Low-risk 0.80×, Standard 1.00×, Elevated 1.40×, High-risk 1.80×
   - Premium bounds: $2,500 minimum — $500,000 maximum
+  - **Historical rating** (#181) — `as_of_date` parameter reproduces quotes with factors from any past date
 - **Security controls verification** tiered by company size (Tier 1/2/3)
 - **Knowledge-driven guidelines** — carriers update underwriting rules via YAML → Cosmos DB → AI Search
 

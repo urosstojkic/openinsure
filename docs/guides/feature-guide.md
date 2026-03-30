@@ -1032,13 +1032,16 @@ Each product is defined in Azure SQL with a **hybrid storage model** (v106, #164
 | `effective_date` | DATETIME2 | When product takes effect (defaults to today if not provided) |
 | `published_at` | DATETIME2 | When product was last published |
 | `created_by` | NVARCHAR | Creator identity |
+| `currency` | NVARCHAR(3) | ISO 4217 currency code, default `USD` (#174) |
+| `parent_product_id` | UUID | FK to parent product for template inheritance; NULL if standalone (#177) |
+| `is_template` | BIT | `1` = template product (not directly quotable), `0` = normal product (#177) |
 
 **Normalised relational tables** (v106):
 
 | Table | Purpose | Key Columns |
 |-------|---------|-------------|
 | `product_coverages` | Coverage definitions per product | `coverage_code`, `coverage_name`, `default_limit`, `max_limit`, `default_deductible`, `is_optional` |
-| `rating_factor_tables` | Rating factor lookup entries | `factor_category` (e.g., "industry"), `factor_key` (e.g., "technology"), `factor_value` (multiplier) |
+| `rating_factor_tables` | Rating factor lookup entries | `factor_category` (e.g., "industry"), `factor_key` (e.g., "technology"), `factor_value` (multiplier), `effective_date`, `expiration_date` — versioned: updates INSERT new row + expire old (#181) |
 | `product_appetite_rules` | Underwriting appetite constraints | `field_name`, `operator` (>=, <=, between, in, not_in, eq), `numeric_value`, `string_value` |
 | `product_authority_limits` | Auto-bind thresholds | `auto_bind_premium_max`, `auto_bind_limit_max`, `requires_senior_review_above` |
 | `product_territories` | Jurisdiction availability | `territory_code`, `approval_status`, `filing_reference` |
@@ -1069,8 +1072,42 @@ The platform ships with 4 pre-configured products:
 | `POST` | `/api/v1/products/{id}/publish` | Publish a draft product → `active` (records version snapshot) |
 | `POST` | `/api/v1/products/{id}/versions` | Create a new version (bumps version, resets to `draft`) |
 | `POST` | `/api/v1/products/{id}/rate` | Calculate premium for given risk data against product's rating factors |
+| `GET` | `/api/v1/products/{id}/rate?as_of=YYYY-MM-DD` | Rate with historical factors effective at a specific date (#181) |
 | `GET` | `/api/v1/products/{id}/coverages` | List available coverages for a product |
+| `GET` | `/api/v1/products/{id}/effective` | Get product with inherited fields resolved from parent chain (#177) |
 | `GET` | `/api/v1/products/{id}/performance` | Aggregated performance metrics (GWP, loss ratio, bind rate, trend) |
+
+### Product Template Inheritance (#177)
+
+Products can inherit from a parent product via `parent_product_id`. This enables LOB specialization:
+
+- **"Cyber SMB Plus"** inherits from **"Cyber SMB"** and overrides specific coverages/limits
+- **"Commercial Property — West Coast"** inherits from **"Commercial Property"** with territory-specific appetite rules
+
+**Inheritance rules:**
+- Child overrides parent for non-NULL scalar fields (description, min/max premium, currency, etc.)
+- Coverages, rating factors, and appetite rules are **additive** from parent unless child defines the same `coverage_code` / `factor_name` / `field_name`
+- Territories merge (union of parent + child)
+- Max inheritance depth: 10 (circular references detected and logged)
+- Template products (`is_template = 1`) are not directly quotable
+
+```
+GET /api/v1/products/{id}/effective
+# Returns the product with all inherited fields resolved from the parent chain
+```
+
+### Multi-Currency (#174)
+
+All monetary fields carry a `currency` column (ISO 4217, 3-char, default `USD`). Affected tables: `policies`, `claims`, `claim_reserves`, `claim_payments`, `billing_accounts`, `invoices`, `reinsurance_treaties`, `reinsurance_cessions`, `reinsurance_recoveries`, `products`, `submissions`.
+
+The `exchange_rates` reference table supports future conversion:
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `from_currency` | NVARCHAR(3) | Source currency code |
+| `to_currency` | NVARCHAR(3) | Target currency code |
+| `rate` | DECIMAL(18,8) | Conversion rate |
+| `effective_date` | DATE | When this rate takes effect |
 
 ### Rating Engine
 
@@ -1088,6 +1125,33 @@ engine = RatingEngine()
 result = await engine.calculate(product_id="...", rating_input=rating_input)
 # Loads industry/revenue_band factors from DB, falls back to hardcoded dicts
 ```
+
+**v108 historical rating (#181):**
+
+Rate with factors effective at a specific date for regulatory audit:
+
+```python
+# Python
+result = await engine.calculate(product_id="...", rating_input=ri, as_of_date="2026-01-15")
+```
+
+```
+# REST API
+GET /api/v1/products/{id}/rate?as_of=2026-01-15
+```
+
+Factor updates use version history (INSERT new + expire old, never UPDATE):
+
+```python
+await relations.version_rating_factor(
+    product_id="...", factor_category="industry", factor_key="73",
+    new_multiplier=1.2, description="2026 rate revision"
+)
+# Old row: expiration_date = today
+# New row: effective_date = today, expiration_date = NULL
+```
+
+Submissions record which factors were used via `rated_with_snapshot_id`.
 
 The `CyberRatingEngine` accepts DB-loaded factors via `set_db_factors()`:
 - `"industry"` category overrides `INDUSTRY_RISK_FACTORS` dict

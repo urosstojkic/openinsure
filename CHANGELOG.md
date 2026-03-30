@@ -5,6 +5,37 @@ All notable changes to OpenInsure will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## v108 — Multi-Currency, Product Inheritance, Rating Factor Versioning (2026-04-01)
+
+### Summary
+Three medium-priority innovations: multi-currency foundation across all monetary tables (#174),
+product template inheritance for LOB specialization (#177), and rating factor version history
+for regulatory audit (#181). 2 new migrations (023–024), 1 new table, currency columns on 12
+existing tables, inheritance columns on products.
+
+### Database — New Tables
+- **`exchange_rates`** — Currency conversion reference table with `from_currency`, `to_currency`, `rate`, `effective_date`; seeded with USD↔GBP, USD↔EUR baseline rates (migration 023, #174)
+
+### Database — Schema Changes
+- **Multi-currency** — `currency NVARCHAR(3) DEFAULT 'USD'` added to: `policies`, `claims`, `claim_reserves`, `claim_payments`, `billing_accounts`, `invoices`, `reinsurance_treaties`, `reinsurance_cessions`, `reinsurance_recoveries`, `products`, `submissions` (migration 023, #174)
+- **Product inheritance** — `parent_product_id UNIQUEIDENTIFIER REFERENCES products(id)` and `is_template BIT DEFAULT 0` on `products` table with filtered index (migration 024, #177)
+
+### New Capabilities
+- **Product template inheritance** — `SqlProductRepository.get_effective_product()` resolves parent chains (max depth 10, circular-ref safe). Child overrides parent for non-NULL scalars; coverages, rating factors, and appetite rules merge additively unless child defines same code. API: `GET /products/{id}/effective` (#177)
+- **Historical rating** — `GET /products/{id}/rate?as_of=YYYY-MM-DD` rates with factors effective at a specific date for regulatory audit. `RatingEngine.calculate(as_of_date=)` filters `rating_factor_tables` by `effective_date`/`expiration_date` (#181)
+- **Rating factor versioning** — `ProductRelationsRepository.version_rating_factor()` inserts a new factor version and expires the old one (INSERT + SET expiration_date, never UPDATE) (#181)
+- **Rated-with tracking** — `Submission.rated_with_snapshot_id` records which factor set was used for a quote (#181)
+
+### Metrics
+- 110 tests pass on affected modules (81 existing + 29 new)
+- 41 database tables across 17 migrations (up from 40/15)
+- 175+ API endpoints
+
+### Agents
+- Backend (#174, #177, #181)
+
+---
+
 ## v107 — Data Model Hardening Complete (2026-03-31)
 
 ### Summary
