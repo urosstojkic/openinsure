@@ -59,12 +59,12 @@ class ProductRelationsRepository:
     # ------------------------------------------------------------------
 
     async def get_coverages(self, product_id: str) -> list[dict[str, Any]]:
-        """Get coverages from relational table."""
+        """Get coverages from relational table, mapped to API field names."""
         rows = await self.db.fetch_all(
             "SELECT * FROM product_coverages WHERE product_id = ? ORDER BY sort_order",
             [product_id],
         )
-        return [self._row_to_dict(r) for r in rows]
+        return [self._coverage_to_api(r) for r in rows]
 
     async def get_rating_factors(self, product_id: str) -> list[dict[str, Any]]:
         """Get rating factors from relational table."""
@@ -91,12 +91,12 @@ class ProductRelationsRepository:
         return [self._row_to_dict(r) for r in rows]
 
     async def get_authority_limits(self, product_id: str) -> dict[str, Any] | None:
-        """Get authority limits from relational table."""
+        """Get authority limits from relational table, mapped to API shape."""
         row = await self.db.fetch_one(
             "SELECT * FROM product_authority_limits WHERE product_id = ?",
             [product_id],
         )
-        return self._row_to_dict(row) if row else None
+        return self._authority_to_api(row) if row else None
 
     async def get_territories(self, product_id: str) -> list[dict[str, Any]]:
         """Get territories from relational table."""
@@ -520,3 +520,25 @@ class ProductRelationsRepository:
             else:
                 result[key] = val
         return result
+
+    @staticmethod
+    def _coverage_to_api(row: dict[str, Any]) -> dict[str, Any]:
+        """Map relational coverage row to CoverageDefinition API shape."""
+        return {
+            "name": row.get("coverage_name") or row.get("name") or row.get("coverage_code", ""),
+            "description": str(row.get("description") or ""),
+            "default_limit": float(row.get("default_limit") or 0),
+            "max_limit": float(row.get("max_limit") or 0),
+            "default_deductible": float(row.get("default_deductible") or 0),
+            "is_optional": bool(row.get("is_optional", False)),
+        }
+
+    @staticmethod
+    def _authority_to_api(row: dict[str, Any]) -> dict[str, Any]:
+        """Map relational authority limits row to AuthorityLimit API shape."""
+        return {
+            "max_auto_bind_premium": float(row.get("auto_bind_premium_max") or 0),
+            "max_auto_bind_limit": float(row.get("auto_bind_limit_max") or 0),
+            "requires_senior_review_above": float(row.get("requires_senior_review_above") or 0),
+            "requires_cuo_review_above": float(row.get("requires_cuo_review_above") or 0),
+        }
