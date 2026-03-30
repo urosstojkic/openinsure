@@ -27,8 +27,10 @@ from openinsure.api.products import router as products_router
 from openinsure.api.regulatory import router as regulatory_router
 from openinsure.api.reinsurance import router as reinsurance_router
 from openinsure.api.renewals import router as renewals_router
+from openinsure.api.risk_attributes import router as risk_attributes_router
 from openinsure.api.submissions import router as submissions_router
 from openinsure.api.underwriter import router as underwriter_router
+from openinsure.api.work_items import router as work_items_router
 from openinsure.api.workflows import router as workflows_router
 from openinsure.rbac.auth import get_current_user
 
@@ -66,5 +68,7 @@ api_v1_router.include_router(admin_router, prefix="/admin", tags=["admin"])
 api_v1_router.include_router(audit_router, prefix="/audit", tags=["audit"])
 api_v1_router.include_router(parties_router, prefix="/parties", tags=["parties"])
 api_v1_router.include_router(gdpr_router, prefix="/gdpr", tags=["gdpr"])
+api_v1_router.include_router(work_items_router, prefix="/work-items", tags=["work-items"])
+api_v1_router.include_router(risk_attributes_router, tags=["risk-attributes"])
 
 api_router.include_router(api_v1_router)

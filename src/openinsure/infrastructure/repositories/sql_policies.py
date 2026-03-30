@@ -272,6 +272,32 @@ class SqlPolicyRepository(BaseRepository):
         row = await self.db.fetch_one(sql, [str(entity_id)])
         return _policy_from_sql_row(row) if row else None
 
+    async def get_by_id_as_of(self, entity_id: UUID | str, as_of: str) -> dict[str, Any] | None:
+        """Retrieve a policy's state at a specific point in time.
+
+        Uses SQL Server temporal tables (``FOR SYSTEM_TIME AS OF``).
+        Requires migration 018_temporal_tables.sql to have been applied.
+        Falls back to current state if temporal tables are not enabled.
+        """
+        try:
+            sql = (
+                "SELECT p.*, pa.name AS party_name, pr.line_of_business AS product_lob"
+                " FROM policies FOR SYSTEM_TIME AS OF ? p"
+                " LEFT JOIN parties pa ON p.insured_id = pa.id"
+                " LEFT JOIN products pr ON p.product_id = pr.id"
+                " WHERE p.id = ?"
+            )
+            row = await self.db.fetch_one(sql, [as_of, str(entity_id)])
+            return _policy_from_sql_row(row) if row else None
+        except Exception:
+            # Temporal tables may not be enabled — fall back to current state
+            logger.warning(
+                "Temporal query failed for policy %s as_of %s, falling back to current state",
+                entity_id,
+                as_of,
+            )
+            return await self.get_by_id(entity_id)
+
     async def list_all(
         self,
         filters: dict[str, Any] | None = None,

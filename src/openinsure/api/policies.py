@@ -185,6 +185,31 @@ class PolicyDocumentList(BaseModel):
     documents: list[DocumentItem]
 
 
+class PolicyTransactionResponse(BaseModel):
+    """A single policy transaction record."""
+
+    id: str
+    policy_id: str
+    transaction_type: str
+    effective_date: str
+    expiration_date: str | None = None
+    premium_change: float = 0.0
+    description: str | None = None
+    coverages_snapshot: str | None = None
+    terms_snapshot: str | None = None
+    created_by: str | None = None
+    created_at: str
+    version: int = 1
+
+
+class PolicyTransactionList(BaseModel):
+    """List of transactions for a policy."""
+
+    policy_id: str
+    items: list[PolicyTransactionResponse]
+    total: int
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -266,8 +291,39 @@ async def list_policies(
 
 
 @router.get("/{policy_id}", response_model=PolicyResponse)
-async def get_policy(policy_id: str) -> PolicyResponse:
-    """Retrieve a single policy by ID."""
+async def get_policy(
+    policy_id: str,
+    as_of: str | None = Query(
+        None,
+        description="ISO-8601 datetime for temporal (time-travel) query, e.g. 2026-03-01T14:47:00",
+    ),
+) -> PolicyResponse:
+    """Retrieve a single policy by ID.
+
+    When ``as_of`` is provided, queries the policy state at that point in
+    time using SQL Server temporal tables (``FOR SYSTEM_TIME AS OF``).
+    Requires system-versioned temporal tables (migration 018).
+    """
+    if as_of:
+        from openinsure.infrastructure.factory import get_database_adapter
+
+        db = get_database_adapter()
+        if db is None:
+            # In-memory mode — temporal queries not supported, return current state
+            return PolicyResponse(**await _get_policy(policy_id))
+
+        from openinsure.infrastructure.repositories.sql_policies import (
+            SqlPolicyRepository,
+        )
+
+        repo = SqlPolicyRepository(db)
+        policy = await repo.get_by_id_as_of(policy_id, as_of)
+        if policy is None:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Policy {policy_id} not found at {as_of}",
+            )
+        return PolicyResponse(**policy)
     return PolicyResponse(**await _get_policy(policy_id))
 
 
@@ -472,6 +528,20 @@ async def reinstate_policy(policy_id: str, body: ReinstateRequest) -> ReinstateR
         status=PolicyStatus.ACTIVE,
         reason=body.reason,
         reinstated_at=now,
+    )
+
+
+@router.get("/{policy_id}/transactions", response_model=PolicyTransactionList)
+async def list_policy_transactions(policy_id: str) -> PolicyTransactionList:
+    """List all transactions for a policy (time-travel history)."""
+    from openinsure.services.policy_transaction_service import get_transactions
+
+    await _get_policy(policy_id)  # Verify policy exists
+    txns = await get_transactions(policy_id)
+    return PolicyTransactionList(
+        policy_id=policy_id,
+        items=[PolicyTransactionResponse(**t) for t in txns],
+        total=len(txns),
     )
 
 
