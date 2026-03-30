@@ -16,6 +16,7 @@ from slowapi.errors import RateLimitExceeded
 from openinsure.api.errors import make_error
 from openinsure.api.router import api_router
 from openinsure.config import get_settings
+from openinsure.domain.exceptions import DomainError
 from openinsure.infrastructure.repository import IntegrityConstraintError
 from openinsure.logging import redact_pii_processor
 from openinsure.rate_limit import limiter
@@ -80,6 +81,7 @@ def create_app() -> FastAPI:
             except Exception as exc:
                 logger.warning("openinsure.migrations.failed", error=str(exc))
                 import traceback
+
                 print(f"[MIGRATIONS] FAILED: {exc}", flush=True)
                 traceback.print_exc()
 
@@ -250,6 +252,28 @@ def create_app() -> FastAPI:
                 code="CONFLICT",
                 request_id=request_id,
                 reason="FK_RESTRICT",
+            ),
+        )
+
+    @app.exception_handler(DomainError)
+    async def _domain_exception_handler(request: Request, exc: DomainError) -> JSONResponse:
+        request_id = str(uuid4())
+        logger.warning(
+            "domain_exception",
+            path=request.url.path,
+            error=str(exc),
+            code=exc.code,
+            request_id=request_id,
+        )
+        return JSONResponse(
+            status_code=exc.status_code,
+            content=make_error(
+                error=str(exc),
+                code=exc.code,
+                request_id=request_id,
+                resource_type=exc.details.get("resource_type"),
+                resource_id=exc.details.get("resource_id"),
+                reason=exc.details.get("reason"),
             ),
         )
 
