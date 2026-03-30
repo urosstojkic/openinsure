@@ -308,6 +308,8 @@ def get_mga_bordereau_repository() -> BaseRepository:
 
 
 @lru_cache
+<<<<<<< HEAD
+=======
 def get_product_relations_repository():
     """Return a ProductRelationsRepository when SQL is configured, else ``None``."""
     settings = get_settings()
@@ -322,6 +324,7 @@ def get_product_relations_repository():
 
 
 @lru_cache
+>>>>>>> origin/main
 def get_audit_service():
     """Return a shared AuditService instance."""
     from openinsure.services.audit_service import AuditService

@@ -298,9 +298,13 @@ class SqlPolicyRepository(BaseRepository):
         rows = await self.db.fetch_all(query, params)
         return [_policy_from_sql_row(r) for r in rows]
 
+<<<<<<< HEAD
+    async def update(self, entity_id: UUID | str, updates: dict[str, Any], *, expected_version: str | None = None) -> dict[str, Any] | None:
+=======
     async def update(
         self, entity_id: UUID | str, updates: dict[str, Any], *, expected_version: str | None = None
     ) -> dict[str, Any] | None:
+>>>>>>> origin/main
         from openinsure.domain.state_machine import (
             validate_policy_invariants,
             validate_policy_transition,

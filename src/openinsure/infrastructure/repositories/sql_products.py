@@ -7,11 +7,14 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 from uuid import UUID, uuid4
 
+<<<<<<< HEAD
+=======
 import structlog
 
 from openinsure.infrastructure.repositories.sql_product_relations import (
     ProductRelationsRepository,
 )
+>>>>>>> origin/main
 from openinsure.infrastructure.repository import (
     BaseRepository,
     IntegrityConstraintError,
@@ -214,11 +217,14 @@ class SqlProductRepository(BaseRepository):
         await self._relations.sync_from_product(str(row["id"]), entity)
         return _from_sql_row(row)
 
+<<<<<<< HEAD
+=======
     @property
     def relations(self) -> ProductRelationsRepository:
         """Expose the relational sub-repository for direct queries."""
         return self._relations
 
+>>>>>>> origin/main
     async def get_by_id(self, entity_id: UUID | str, *, include_deleted: bool = False) -> dict[str, Any] | None:
         sql = "SELECT * FROM products WHERE id = ?"
         if not include_deleted:
@@ -255,9 +261,13 @@ class SqlProductRepository(BaseRepository):
         rows = await self.db.fetch_all(query, params)
         return [_from_sql_row(r) for r in rows]
 
+<<<<<<< HEAD
+    async def update(self, entity_id: UUID | str, updates: dict[str, Any], *, expected_version: str | None = None) -> dict[str, Any] | None:
+=======
     async def update(
         self, entity_id: UUID | str, updates: dict[str, Any], *, expected_version: str | None = None
     ) -> dict[str, Any] | None:
+>>>>>>> origin/main
         sets: list[str] = []
         params: list[Any] = []
         seen_cols: set[str] = set()
@@ -294,11 +304,15 @@ class SqlProductRepository(BaseRepository):
             from fastapi import HTTPException
 
             raise HTTPException(status_code=409, detail="Record modified by another user")
+<<<<<<< HEAD
+        return await self.get_by_id(entity_id)
+=======
         # Dual-write: sync normalised relational tables with merged data
         result = await self.get_by_id(entity_id)
         if result:
             await self._relations.sync_from_product(str(entity_id), result)
         return result
+>>>>>>> origin/main
 
     async def delete(self, entity_id: UUID | str) -> bool:
         try:
