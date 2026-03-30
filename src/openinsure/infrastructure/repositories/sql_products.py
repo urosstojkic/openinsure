@@ -219,7 +219,6 @@ class SqlProductRepository(BaseRepository):
         """Expose the relational sub-repository for direct queries."""
         return self._relations
 
-
     async def get_by_id(self, entity_id: UUID | str, *, include_deleted: bool = False) -> dict[str, Any] | None:
         sql = "SELECT * FROM products WHERE id = ?"
         if not include_deleted:
