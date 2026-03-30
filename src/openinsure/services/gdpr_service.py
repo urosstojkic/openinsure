@@ -84,10 +84,7 @@ class GDPRService:
         pol_repo = get_policy_repository()
         all_policies = await pol_repo.list_all(limit=1000)
         active_policies = [
-            p
-            for p in all_policies
-            if p.get("insured_id") == party_id
-            and p.get("status") in ("active", "pending")
+            p for p in all_policies if p.get("insured_id") == party_id and p.get("status") in ("active", "pending")
         ]
         if active_policies:
             return {
@@ -195,11 +192,7 @@ class GDPRService:
 
     async def get_consent_status(self, party_id: str) -> list[dict[str, Any]]:
         """Art 7: Return all consent records for a party."""
-        return [
-            c
-            for c in _consent_store.values()
-            if c.get("party_id") == party_id
-        ]
+        return [c for c in _consent_store.values() if c.get("party_id") == party_id]
 
     async def grant_consent(
         self,

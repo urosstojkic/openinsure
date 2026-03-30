@@ -70,7 +70,7 @@ class TestRowVersionFromSqlRow:
             "policy_id": str(uuid4()),
             "total_reserved": 0,
             "total_paid": 0,
-            "row_version": b"\xAB\xCD\xEF\x01\x23\x45\x67\x89",
+            "row_version": b"\xab\xcd\xef\x01\x23\x45\x67\x89",
         }
         result = _claim_from_sql_row(row)
         assert result["row_version"] == "abcdef0123456789"
@@ -91,7 +91,7 @@ class TestRowVersionFromSqlRow:
             "product_name": "Cyber Pro",
             "status": "active",
             "version": 1,
-            "row_version": b"\xFF\xEE\xDD\xCC\xBB\xAA\x99\x88",
+            "row_version": b"\xff\xee\xdd\xcc\xbb\xaa\x99\x88",
         }
         result = _product_from_sql_row(row)
         assert result["row_version"] == "ffeeddccbbaa9988"
@@ -121,10 +121,15 @@ class TestOptimisticConcurrencyUpdate:
     async def test_policy_update_concurrency_conflict(self) -> None:
         db = AsyncMock()
         db.execute_query = AsyncMock(return_value=0)  # 0 rows affected
-        db.fetch_one = AsyncMock(return_value={
-            "id": "test-id", "policy_number": "POL-1", "total_premium": 1000,
-            "status": "active", "row_version": b"\x00" * 8,
-        })
+        db.fetch_one = AsyncMock(
+            return_value={
+                "id": "test-id",
+                "policy_number": "POL-1",
+                "total_premium": 1000,
+                "status": "active",
+                "row_version": b"\x00" * 8,
+            }
+        )
         repo = SqlPolicyRepository(db)
         with pytest.raises(Exception) as exc_info:
             await repo.update("test-id", {"status": "active"}, expected_version="0000000000012345")
@@ -135,10 +140,15 @@ class TestOptimisticConcurrencyUpdate:
     async def test_policy_update_no_version_succeeds(self) -> None:
         db = AsyncMock()
         db.execute_query = AsyncMock(return_value=1)
-        db.fetch_one = AsyncMock(return_value={
-            "id": "test-id", "policy_number": "POL-1", "total_premium": 1000,
-            "status": "active", "row_version": b"\x00" * 8,
-        })
+        db.fetch_one = AsyncMock(
+            return_value={
+                "id": "test-id",
+                "policy_number": "POL-1",
+                "total_premium": 1000,
+                "status": "active",
+                "row_version": b"\x00" * 8,
+            }
+        )
         repo = SqlPolicyRepository(db)
         result = await repo.update("test-id", {"total_premium": 2000})
         assert result is not None
@@ -147,11 +157,17 @@ class TestOptimisticConcurrencyUpdate:
     async def test_claim_update_concurrency_conflict(self) -> None:
         db = AsyncMock()
         db.execute_query = AsyncMock(return_value=0)
-        db.fetch_one = AsyncMock(return_value={
-            "id": "test-id", "claim_number": "CLM-1", "status": "fnol",
-            "policy_id": str(uuid4()), "total_reserved": 0, "total_paid": 0,
-            "row_version": b"\x00" * 8,
-        })
+        db.fetch_one = AsyncMock(
+            return_value={
+                "id": "test-id",
+                "claim_number": "CLM-1",
+                "status": "fnol",
+                "policy_id": str(uuid4()),
+                "total_reserved": 0,
+                "total_paid": 0,
+                "row_version": b"\x00" * 8,
+            }
+        )
         repo = SqlClaimRepository(db)
         with pytest.raises(Exception) as exc_info:
             await repo.update("test-id", {"description": "updated"}, expected_version="aabbccdd11223344")
@@ -161,10 +177,14 @@ class TestOptimisticConcurrencyUpdate:
     async def test_submission_update_concurrency_conflict(self) -> None:
         db = AsyncMock()
         db.execute_query = AsyncMock(return_value=0)
-        db.fetch_one = AsyncMock(return_value={
-            "id": "test-id", "submission_number": "SUB-0001", "status": "received",
-            "row_version": b"\x00" * 8,
-        })
+        db.fetch_one = AsyncMock(
+            return_value={
+                "id": "test-id",
+                "submission_number": "SUB-0001",
+                "status": "received",
+                "row_version": b"\x00" * 8,
+            }
+        )
         repo = SqlSubmissionRepository(db)
         with pytest.raises(Exception) as exc_info:
             await repo.update("test-id", {"channel": "api"}, expected_version="0102030405060708")
@@ -174,10 +194,15 @@ class TestOptimisticConcurrencyUpdate:
     async def test_product_update_concurrency_conflict(self) -> None:
         db = AsyncMock()
         db.execute_query = AsyncMock(return_value=0)
-        db.fetch_one = AsyncMock(return_value={
-            "id": "test-id", "product_name": "Test", "status": "active",
-            "version": 1, "row_version": b"\x00" * 8,
-        })
+        db.fetch_one = AsyncMock(
+            return_value={
+                "id": "test-id",
+                "product_name": "Test",
+                "status": "active",
+                "version": 1,
+                "row_version": b"\x00" * 8,
+            }
+        )
         repo = SqlProductRepository(db)
         with pytest.raises(Exception) as exc_info:
             await repo.update("test-id", {"description": "new"}, expected_version="ffeeddccbbaa9988")
@@ -187,11 +212,15 @@ class TestOptimisticConcurrencyUpdate:
     async def test_billing_update_concurrency_conflict(self) -> None:
         db = AsyncMock()
         db.execute_query = AsyncMock(return_value=0)
-        db.fetch_one = AsyncMock(return_value={
-            "id": "test-id", "policy_id": str(uuid4()),
-            "total_premium": 5000, "balance_due": 2500,
-            "row_version": b"\x00" * 8,
-        })
+        db.fetch_one = AsyncMock(
+            return_value={
+                "id": "test-id",
+                "policy_id": str(uuid4()),
+                "total_premium": 5000,
+                "balance_due": 2500,
+                "row_version": b"\x00" * 8,
+            }
+        )
         repo = SqlBillingRepository(db)
         with pytest.raises(Exception) as exc_info:
             await repo.update("test-id", {"balance_due": 1000}, expected_version="1122334455667788")

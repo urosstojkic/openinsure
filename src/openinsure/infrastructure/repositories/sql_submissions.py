@@ -236,7 +236,12 @@ class SqlSubmissionRepository(BaseRepository):
         return [_from_sql_row(r) for r in rows]
 
     async def update(
-        self, entity_id: UUID | str, updates: dict[str, Any], *, txn: TransactionContext | None = None, expected_version: str | None = None
+        self,
+        entity_id: UUID | str,
+        updates: dict[str, Any],
+        *,
+        txn: TransactionContext | None = None,
+        expected_version: str | None = None,
     ) -> dict[str, Any] | None:
         from openinsure.domain.state_machine import (
             validate_submission_invariants,

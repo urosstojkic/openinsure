@@ -60,11 +60,13 @@ class TestErasureRequest:
     ):
         mock_pol_repo.return_value = _mock_repo()
 
-        party_id = await party_svc.resolve_or_create({
-            "name": "Acme Corp",
-            "tax_id": "12-3456789",
-            "contacts": [{"contact_type": "primary", "name": "Jane", "email": "jane@acme.com"}],
-        })
+        party_id = await party_svc.resolve_or_create(
+            {
+                "name": "Acme Corp",
+                "tax_id": "12-3456789",
+                "contacts": [{"contact_type": "primary", "name": "Jane", "email": "jane@acme.com"}],
+            }
+        )
         result = await gdpr_svc.process_erasure_request(party_id)
         assert result["status"] == "completed"
         assert "name" in result["fields_anonymised"]
@@ -85,9 +87,11 @@ class TestErasureRequest:
         gdpr_svc: GDPRService,
     ):
         repo = AsyncMock()
-        repo.list_all = AsyncMock(return_value=[
-            {"insured_id": "will-be-set", "status": "active", "id": "pol-1"},
-        ])
+        repo.list_all = AsyncMock(
+            return_value=[
+                {"insured_id": "will-be-set", "status": "active", "id": "pol-1"},
+            ]
+        )
         mock_pol_repo.return_value = repo
 
         party_id = await party_svc.resolve_or_create({"name": "Acme Corp"})

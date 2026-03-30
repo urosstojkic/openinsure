@@ -61,12 +61,8 @@ class TestResolveOrCreate:
     @pytest.mark.asyncio
     async def test_dedup_by_registration_number(self, svc: PartyResolutionService):
         """Matching registration_number should return the same party."""
-        id1 = await svc.resolve_or_create(
-            {"name": "Acme Corp", "registration_number": "REG-001"}
-        )
-        id2 = await svc.resolve_or_create(
-            {"name": "Acme Inc", "registration_number": "REG-001"}
-        )
+        id1 = await svc.resolve_or_create({"name": "Acme Corp", "registration_number": "REG-001"})
+        id2 = await svc.resolve_or_create({"name": "Acme Inc", "registration_number": "REG-001"})
         assert id1 == id2
 
     @pytest.mark.asyncio
