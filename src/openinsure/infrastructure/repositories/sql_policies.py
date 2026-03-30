@@ -8,7 +8,11 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 from uuid import UUID, uuid4
 
-from openinsure.infrastructure.repository import BaseRepository, safe_pagination_clause
+from openinsure.infrastructure.repository import (
+    BaseRepository,
+    IntegrityConstraintError,
+    safe_pagination_clause,
+)
 
 if TYPE_CHECKING:
     from openinsure.infrastructure.database import DatabaseAdapter, TransactionContext
@@ -30,6 +34,7 @@ _POLICY_SKIP_IN_SQL: set[str] = {
     "insured_name",
     "lob",
     "party_name",
+    "row_version",
 }
 
 
@@ -96,6 +101,7 @@ def _policy_from_sql_row(row: dict[str, Any]) -> dict[str, Any]:
     premium = float(row["total_premium"]) if row.get("total_premium") else None
     policyholder = _str(row.get("party_name")) or _str(row.get("insured_name")) or ""
     lob = _str(row.get("product_lob")) or _str(row.get("line_of_business")) or "cyber"
+    rv = row.get("row_version")
     return {
         "id": _str(row.get("id")),
         "policy_number": _str(row.get("policy_number")),
@@ -121,6 +127,7 @@ def _policy_from_sql_row(row: dict[str, Any]) -> dict[str, Any]:
         "bound_at": _str(row.get("bound_at")) if row.get("bound_at") else None,
         "created_at": _str(row.get("created_at")),
         "updated_at": _str(row.get("updated_at")),
+        "row_version": rv.hex() if isinstance(rv, (bytes, bytearray)) else None,
     }
 
 
@@ -253,14 +260,16 @@ class SqlPolicyRepository(BaseRepository):
         entity.setdefault("documents", [])
         return entity
 
-    async def get_by_id(self, entity_id: UUID | str) -> dict[str, Any] | None:
-        row = await self.db.fetch_one(
+    async def get_by_id(self, entity_id: UUID | str, *, include_deleted: bool = False) -> dict[str, Any] | None:
+        sql = (
             "SELECT p.*, pa.name AS party_name, pr.line_of_business AS product_lob"
             " FROM policies p LEFT JOIN parties pa ON p.insured_id = pa.id"
             " LEFT JOIN products pr ON p.product_id = pr.id"
-            " WHERE p.id = ?",
-            [str(entity_id)],
+            " WHERE p.id = ?"
         )
+        if not include_deleted:
+            sql += " AND p.deleted_at IS NULL"
+        row = await self.db.fetch_one(sql, [str(entity_id)])
         return _policy_from_sql_row(row) if row else None
 
     async def list_all(
@@ -271,7 +280,7 @@ class SqlPolicyRepository(BaseRepository):
     ) -> list[dict[str, Any]]:
         query = "SELECT p.*, pa.name AS party_name, pr.line_of_business AS product_lob FROM policies p LEFT JOIN parties pa ON p.insured_id = pa.id LEFT JOIN products pr ON p.product_id = pr.id"
         params: list[Any] = []
-        where_clauses: list[str] = []
+        where_clauses: list[str] = ["p.deleted_at IS NULL"]
         if filters:
             if "status" in filters:
                 where_clauses.append("p.status = ?")
@@ -282,15 +291,14 @@ class SqlPolicyRepository(BaseRepository):
             if "policyholder_name__contains" in filters:
                 where_clauses.append("pa.name LIKE ?")
                 params.append(f"%{filters['policyholder_name__contains']}%")
-        if where_clauses:
-            query += " WHERE " + " AND ".join(where_clauses)
+        query += " WHERE " + " AND ".join(where_clauses)
         pag_clause, pag_params = safe_pagination_clause("p.created_at DESC", skip, limit)
         query += pag_clause
         params.extend(pag_params)
         rows = await self.db.fetch_all(query, params)
         return [_policy_from_sql_row(r) for r in rows]
 
-    async def update(self, entity_id: UUID | str, updates: dict[str, Any]) -> dict[str, Any] | None:
+    async def update(self, entity_id: UUID | str, updates: dict[str, Any], *, expected_version: str | None = None) -> dict[str, Any] | None:
         from openinsure.domain.state_machine import (
             validate_policy_invariants,
             validate_policy_transition,
@@ -313,14 +321,37 @@ class SqlPolicyRepository(BaseRepository):
         sets.append("updated_at = ?")
         params.append(datetime.now(UTC).isoformat())
         params.append(str(entity_id))
-        await self.db.execute_query(
-            f"UPDATE policies SET {', '.join(sets)} WHERE id = ?",  # noqa: S608  # nosec B608 — parameterized query, sets built from validated keys
+        where = "WHERE id = ?"
+        if expected_version:
+            where += " AND row_version = CONVERT(BINARY(8), ?, 1)"
+            params.append(f"0x{expected_version}")
+        rowcount = await self.db.execute_query(
+            f"UPDATE policies SET {', '.join(sets)} {where}",  # noqa: S608  # nosec B608 — parameterized query, sets built from validated keys
             params,
         )
+        if expected_version and rowcount == 0:
+            from fastapi import HTTPException
+
+            raise HTTPException(status_code=409, detail="Record modified by another user")
         return await self.get_by_id(entity_id)
 
     async def delete(self, entity_id: UUID | str) -> bool:
-        result = await self.db.execute_query("DELETE FROM policies WHERE id = ?", [str(entity_id)])
+        try:
+            result = await self.db.execute_query(
+                "UPDATE policies SET deleted_at = GETUTCDATE() WHERE id = ? AND deleted_at IS NULL",
+                [str(entity_id)],
+            )
+            return result > 0
+        except Exception as exc:
+            if "REFERENCE" in str(exc).upper() or "547" in str(exc):
+                raise IntegrityConstraintError from exc
+            raise
+
+    async def restore(self, entity_id: UUID | str) -> bool:
+        result = await self.db.execute_query(
+            "UPDATE policies SET deleted_at = NULL WHERE id = ? AND deleted_at IS NOT NULL",
+            [str(entity_id)],
+        )
         return result > 0
 
     async def count(self, filters: dict[str, Any] | None = None) -> int:
@@ -329,7 +360,7 @@ class SqlPolicyRepository(BaseRepository):
         if join_needed:
             query += " LEFT JOIN parties pa ON p.insured_id = pa.id"
         params: list[Any] = []
-        where_clauses: list[str] = []
+        where_clauses: list[str] = ["p.deleted_at IS NULL"]
         if filters:
             if "status" in filters:
                 where_clauses.append("p.status = ?")
@@ -340,7 +371,6 @@ class SqlPolicyRepository(BaseRepository):
             if "policyholder_name__contains" in filters:
                 where_clauses.append("pa.name LIKE ?")
                 params.append(f"%{filters['policyholder_name__contains']}%")
-        if where_clauses:
-            query += " WHERE " + " AND ".join(where_clauses)
+        query += " WHERE " + " AND ".join(where_clauses)
         result = await self.db.fetch_one(query, params)
         return result.get("cnt", 0) if result else 0

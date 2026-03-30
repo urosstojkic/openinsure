@@ -11,7 +11,11 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 from uuid import UUID, uuid4
 
-from openinsure.infrastructure.repository import BaseRepository, safe_pagination_clause
+from openinsure.infrastructure.repository import (
+    BaseRepository,
+    IntegrityConstraintError,
+    safe_pagination_clause,
+)
 
 if TYPE_CHECKING:
     from openinsure.infrastructure.database import DatabaseAdapter
@@ -168,8 +172,13 @@ class SqlActuarialReserveRepository(BaseRepository):
         return await self.get_by_id(entity_id)
 
     async def delete(self, entity_id: UUID | str) -> bool:
-        result = await self.db.execute_query("DELETE FROM actuarial_reserves WHERE id = ?", [str(entity_id)])
-        return result > 0
+        try:
+            result = await self.db.execute_query("DELETE FROM actuarial_reserves WHERE id = ?", [str(entity_id)])
+            return result > 0
+        except Exception as exc:
+            if "REFERENCE" in str(exc).upper() or "547" in str(exc):
+                raise IntegrityConstraintError from exc
+            raise
 
     async def count(self, filters: dict[str, Any] | None = None) -> int:
         query = "SELECT COUNT(*) as cnt FROM actuarial_reserves"
@@ -268,8 +277,13 @@ class SqlTriangleRepository(BaseRepository):
         return await self.get_by_id(entity_id)
 
     async def delete(self, entity_id: UUID | str) -> bool:
-        result = await self.db.execute_query("DELETE FROM loss_triangle_entries WHERE id = ?", [str(entity_id)])
-        return result > 0
+        try:
+            result = await self.db.execute_query("DELETE FROM loss_triangle_entries WHERE id = ?", [str(entity_id)])
+            return result > 0
+        except Exception as exc:
+            if "REFERENCE" in str(exc).upper() or "547" in str(exc):
+                raise IntegrityConstraintError from exc
+            raise
 
     async def count(self, filters: dict[str, Any] | None = None) -> int:
         query = "SELECT COUNT(*) as cnt FROM loss_triangle_entries"
@@ -361,8 +375,13 @@ class SqlRateAdequacyRepository(BaseRepository):
         return await self.get_by_id(entity_id)
 
     async def delete(self, entity_id: UUID | str) -> bool:
-        result = await self.db.execute_query("DELETE FROM rate_adequacy WHERE id = ?", [str(entity_id)])
-        return result > 0
+        try:
+            result = await self.db.execute_query("DELETE FROM rate_adequacy WHERE id = ?", [str(entity_id)])
+            return result > 0
+        except Exception as exc:
+            if "REFERENCE" in str(exc).upper() or "547" in str(exc):
+                raise IntegrityConstraintError from exc
+            raise
 
     async def count(self, filters: dict[str, Any] | None = None) -> int:
         query = "SELECT COUNT(*) as cnt FROM rate_adequacy"

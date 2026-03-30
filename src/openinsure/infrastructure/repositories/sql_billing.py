@@ -12,7 +12,11 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 from uuid import UUID, uuid4
 
-from openinsure.infrastructure.repository import BaseRepository, safe_pagination_clause
+from openinsure.infrastructure.repository import (
+    BaseRepository,
+    IntegrityConstraintError,
+    safe_pagination_clause,
+)
 
 if TYPE_CHECKING:
     from openinsure.infrastructure.database import DatabaseAdapter, TransactionContext
@@ -98,6 +102,7 @@ class SqlBillingRepository(BaseRepository):
         balance_due = float(row.get("balance_due") or 0)
         total_paid = total_premium - balance_due
 
+        rv = row.get("row_version")
         return {
             "id": _str(row.get("id")),
             "policy_id": _str(row.get("policy_id")),
@@ -114,6 +119,7 @@ class SqlBillingRepository(BaseRepository):
             "metadata": {},
             "created_at": _str(row.get("created_at")),
             "updated_at": _str(row.get("updated_at")),
+            "row_version": rv.hex() if isinstance(rv, (bytes, bytearray)) else None,
         }
 
     async def create(self, entity: dict[str, Any], *, txn: TransactionContext | None = None) -> dict[str, Any]:
@@ -144,8 +150,11 @@ class SqlBillingRepository(BaseRepository):
             await self.db.execute_query(sql, params)
         return entity
 
-    async def get_by_id(self, entity_id: UUID | str) -> dict[str, Any] | None:
-        row = await self.db.fetch_one("SELECT * FROM billing_accounts WHERE id = ?", [str(entity_id)])
+    async def get_by_id(self, entity_id: UUID | str, *, include_deleted: bool = False) -> dict[str, Any] | None:
+        sql = "SELECT * FROM billing_accounts WHERE id = ?"
+        if not include_deleted:
+            sql += " AND deleted_at IS NULL"
+        row = await self.db.fetch_one(sql, [str(entity_id)])
         if not row:
             return None
         invoices = await self._fetch_invoices(str(entity_id))
@@ -159,25 +168,24 @@ class SqlBillingRepository(BaseRepository):
     ) -> list[dict[str, Any]]:
         query = "SELECT * FROM billing_accounts"
         params: list[Any] = []
-        where: list[str] = []
+        where: list[str] = ["deleted_at IS NULL"]
         if filters:
             if "policy_id" in filters:
                 where.append("policy_id = ?")
                 params.append(filters["policy_id"])
-        if where:
-            query += " WHERE " + " AND ".join(where)
+        query += " WHERE " + " AND ".join(where)
         pag_clause, pag_params = safe_pagination_clause("created_at DESC", skip, limit)
         query += pag_clause
         params.extend(pag_params)
         rows = await self.db.fetch_all(query, params)
         return [self._from_sql_row(r) for r in rows]
 
-    async def update(self, entity_id: UUID | str, updates: dict[str, Any]) -> dict[str, Any] | None:
+    async def update(self, entity_id: UUID | str, updates: dict[str, Any], *, expected_version: str | None = None) -> dict[str, Any] | None:
         sets: list[str] = []
         params: list[Any] = []
         col_map = {"total_premium": "total_premium", "balance_due": "balance_due"}
         for key, val in updates.items():
-            if key in ("id", "created_at", "payments", "invoices", "metadata"):
+            if key in ("id", "created_at", "payments", "invoices", "metadata", "row_version"):
                 continue
             col = col_map.get(key, key)
             if key == "installments":
@@ -190,25 +198,47 @@ class SqlBillingRepository(BaseRepository):
         sets.append("updated_at = ?")
         params.append(datetime.now(UTC).isoformat())
         params.append(str(entity_id))
-        await self.db.execute_query(
-            f"UPDATE billing_accounts SET {', '.join(sets)} WHERE id = ?",  # noqa: S608  # nosec B608
+        where = "WHERE id = ?"
+        if expected_version:
+            where += " AND row_version = CONVERT(BINARY(8), ?, 1)"
+            params.append(f"0x{expected_version}")
+        rowcount = await self.db.execute_query(
+            f"UPDATE billing_accounts SET {', '.join(sets)} {where}",  # noqa: S608  # nosec B608
             params,
         )
+        if expected_version and rowcount == 0:
+            from fastapi import HTTPException
+
+            raise HTTPException(status_code=409, detail="Record modified by another user")
         return await self.get_by_id(entity_id)
 
     async def delete(self, entity_id: UUID | str) -> bool:
-        result = await self.db.execute_query("DELETE FROM billing_accounts WHERE id = ?", [str(entity_id)])
+        try:
+            result = await self.db.execute_query(
+                "UPDATE billing_accounts SET deleted_at = GETUTCDATE() WHERE id = ? AND deleted_at IS NULL",
+                [str(entity_id)],
+            )
+            return result > 0
+        except Exception as exc:
+            if "REFERENCE" in str(exc).upper() or "547" in str(exc):
+                raise IntegrityConstraintError from exc
+            raise
+
+    async def restore(self, entity_id: UUID | str) -> bool:
+        result = await self.db.execute_query(
+            "UPDATE billing_accounts SET deleted_at = NULL WHERE id = ? AND deleted_at IS NOT NULL",
+            [str(entity_id)],
+        )
         return result > 0
 
     async def count(self, filters: dict[str, Any] | None = None) -> int:
         query = "SELECT COUNT(*) as cnt FROM billing_accounts"
         params: list[Any] = []
-        where: list[str] = []
+        where: list[str] = ["deleted_at IS NULL"]
         if filters:
             if "policy_id" in filters:
                 where.append("policy_id = ?")
                 params.append(filters["policy_id"])
-        if where:
-            query += " WHERE " + " AND ".join(where)
+        query += " WHERE " + " AND ".join(where)
         result = await self.db.fetch_one(query, params)
         return result.get("cnt", 0) if result else 0
