@@ -120,8 +120,8 @@ After completing a significant feature block (new process, major fix, architectu
 
 | Metric | Value |
 |--------|-------|
-| Tests | 862 collected (unit, pytest CI green) |
-| API endpoints | 172 across 31 modules |
+| Tests | 896 collected (unit, pytest CI green) |
+| API endpoints | 182 across 32 modules |
 | Dashboard pages | 25 (React 18 + TypeScript + Tailwind) |
 | Foundry agents | 10 deployed on Azure AI Foundry (GPT-5.2 + AI Search tools) |
 | MCP tools | 32 tools + 5 resources |
@@ -142,7 +142,7 @@ After completing a significant feature block (new process, major fix, architectu
 - **All 16 tech-debt issues (#92–#107) resolved**
 - **Data model hardening** — 9 migrations (006–014): referential integrity, performance indexes, soft deletes, audit trail, concurrency control, business constraints, unique constraints, party dedup indexes, GDPR tables
 - **New services** — `AuditService`, `GDPRService`, `PartyResolutionService`
-- **Database** — 42 tables across 18 migrations (up from 26/3)
+- **Database** — 45 tables across 21 migrations (up from 26/3)
 - **DDD aggregate roots** — `SubmissionAggregate`, `PolicyAggregate`, `ClaimAggregate` with event-driven cross-aggregate communication (#170)
 - **Data-driven workflows** — `WorkflowRegistry` loads per-product workflow templates from SQL (#180)
 

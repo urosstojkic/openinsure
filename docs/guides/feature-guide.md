@@ -33,6 +33,9 @@
 | 16 | [Broker Portal](#16-broker-portal) | ✅ Working |
 | 17 | [Product Management](#17-product-management) | ✅ Working |
 | 18 | [GDPR & Data Privacy](#18-gdpr--data-privacy) | ✅ Working |
+| 19 | [Policy Transaction History](#19-policy-transaction-history) | ✅ Working |
+| 20 | [Polymorphic Document Management](#20-polymorphic-document-management) | ✅ Working |
+| 21 | [Work Items & Inbox](#21-work-items--inbox) | ✅ Working |
 
 ---
 
@@ -1281,6 +1284,161 @@ Default retention schedules (seeded via migration 014):
 
 ---
 
+## 19. Policy Transaction History
+
+> **Issue**: [#173](https://github.com/urosstojkic/openinsure/issues/173) | **Migration**: `020_policy_transactions.sql`
+
+### Overview
+
+Every policy mutation (bind, endorse, renew, cancel, reinstate) creates an immutable transaction record. The current state of a policy is the cumulative effect of all its transactions, enabling time-travel queries like "what coverage limits were in effect on March 1?"
+
+### Data Model
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | UUID | Transaction ID |
+| `policy_id` | UUID FK | Parent policy |
+| `transaction_type` | NVARCHAR(30) | `new_business`, `endorsement`, `renewal`, `cancellation`, `reinstatement`, `audit` |
+| `effective_date` | DATE | When this change takes effect |
+| `premium_change` | DECIMAL(18,2) | Premium delta (negative for cancellation return) |
+| `coverages_snapshot` | NVARCHAR(MAX) | JSON snapshot of coverages at time of transaction |
+| `created_at` | DATETIME2 | Timestamp |
+
+### API
+
+```bash
+# Get all transactions for a policy
+curl GET /api/v1/policies/{policy_id}/transactions
+
+# Response
+{
+  "policy_id": "abc-123",
+  "items": [
+    {
+      "id": "txn-001",
+      "transaction_type": "new_business",
+      "effective_date": "2026-01-01",
+      "premium_change": 15000.00,
+      "coverages_snapshot": "[{\"coverage_code\": \"CYB-001\", ...}]"
+    },
+    {
+      "id": "txn-002",
+      "transaction_type": "endorsement",
+      "effective_date": "2026-06-01",
+      "premium_change": 2000.00,
+      "description": "Add ransomware coverage"
+    }
+  ],
+  "total": 2
+}
+```
+
+### Service Integration
+
+Transactions are recorded automatically by `PolicyLifecycleService`:
+- `bind_policy()` → `new_business` with full coverage snapshot
+- `endorse_policy()` → `endorsement` with post-change coverage snapshot
+- `renew_policy()` → `renewal` with new effective/expiration dates
+- `cancel_policy()` → `cancellation` with negative premium change (return premium)
+
+**Status**: ✅ Working — Transaction recording on all lifecycle operations, chronological query endpoint, 11 tests.
+
+---
+
+## 20. Polymorphic Document Management
+
+> **Issue**: [#175](https://github.com/urosstojkic/openinsure/issues/175) | **Migration**: `021_documents.sql`
+
+### Overview
+
+Unified document tracking for any entity type (submission, policy, claim, endorsement, regulatory filing). Replaces the per-entity `submission_documents` table with a single polymorphic `documents` table. Existing data is migrated automatically.
+
+### Data Model
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `entity_type` | NVARCHAR(50) | `submission`, `policy`, `claim`, `endorsement`, etc. |
+| `entity_id` | UUID | ID of the related entity |
+| `document_type` | NVARCHAR(50) | Classification (e.g., `application_form`, `declaration`, `loss_report`) |
+| `filename` | NVARCHAR(500) | Original filename |
+| `storage_url` | NVARCHAR(2000) | Blob storage URL |
+| `extracted_data` | NVARCHAR(MAX) | JSON from Document Intelligence extraction |
+| `classification_confidence` | FLOAT | AI classification confidence score |
+| `deleted_at` | DATETIME2 | Soft-delete timestamp (NULL = active) |
+
+### API
+
+```bash
+# Create a document record
+curl -X POST /api/v1/documents/records \
+  -d '{"entity_type": "policy", "entity_id": "abc-123", "document_type": "declaration", "filename": "dec-page.pdf"}'
+
+# List documents for an entity
+curl GET /api/v1/documents/records?entity_type=policy&entity_id=abc-123
+
+# Soft-delete a document
+curl -X DELETE /api/v1/documents/records/{document_id}
+```
+
+### Backward Compatibility
+
+The old `submission_documents` table is retained. Migration 021 copies existing rows into the new `documents` table with `entity_type='submission'` using `NOT EXISTS` guards for idempotency.
+
+**Status**: ✅ Working — CRUD endpoints, soft-delete, entity filtering, 7 tests.
+
+---
+
+## 21. Work Items & Inbox
+
+> **Issue**: [#176](https://github.com/urosstojkic/openinsure/issues/176) | **Migration**: `022_work_items.sql`
+
+### Overview
+
+Structured task tracking with owners, priorities, deadlines, and SLA tracking. Provides inbox-style work queues for underwriters, claims adjusters, and other platform personas. Integrates with the escalation system to auto-create work items when escalations are raised.
+
+### Data Model
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `entity_type` | NVARCHAR(50) | Related entity type |
+| `entity_id` | UUID | Related entity ID |
+| `work_type` | NVARCHAR(50) | `underwriting_review`, `claims_review`, `escalation_review`, etc. |
+| `assigned_to` | NVARCHAR(200) | User email/ID |
+| `assigned_role` | NVARCHAR(50) | Role for role-based assignment |
+| `priority` | NVARCHAR(20) | `low`, `medium`, `high`, `urgent` |
+| `status` | NVARCHAR(20) | `open`, `in_progress`, `completed`, `cancelled`, `escalated` |
+| `due_date` | DATETIME2 | Auto-computed from `sla_hours` if not set |
+| `sla_hours` | INT | SLA deadline in hours from creation |
+
+### API
+
+```bash
+# Create a work item
+curl -X POST /api/v1/work-items \
+  -d '{"entity_type": "submission", "entity_id": "abc-123", "work_type": "underwriting_review", "title": "Review Acme Corp submission", "assigned_to": "uw@example.com", "priority": "high", "sla_hours": 24}'
+
+# Get inbox for a user (returns open/in_progress items)
+curl GET /api/v1/work-items?assigned_to=uw@example.com
+
+# Complete a work item
+curl -X POST /api/v1/work-items/{item_id}/complete \
+  -d '{"completed_by": "uw@example.com"}'
+```
+
+### Escalation Integration
+
+When `escalation.escalate()` is called, a corresponding work item is auto-created:
+- `work_type`: `escalation_review`
+- `priority`: `high`
+- `sla_hours`: `24`
+- `assigned_role`: the required approval role (e.g., `CUO`)
+
+This ensures every escalation appears in the approver's inbox with SLA tracking.
+
+**Status**: ✅ Working — Work item CRUD, inbox filtering, SLA auto-calculation, escalation integration, 16 tests.
+
+---
+
 ## Appendix A: Foundry Agent Architecture
 
 OpenInsure uses a multi-agent architecture powered by Microsoft Foundry (GPT-5.1/5.2). All agents inherit from an `InsuranceAgent` base class.
@@ -1331,7 +1489,7 @@ All endpoints are under `/api/v1/` and require authentication.
 | `POST` | `/submissions/{id}/process` | Full submission processing |
 | `POST` | `/submissions/acord-ingest` | ACORD XML ingestion (multipart) |
 
-### Policies (11 endpoints)
+### Policies (13 endpoints)
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `POST` | `/policies` | Create policy |
@@ -1342,6 +1500,8 @@ All endpoints are under `/api/v1/` and require authentication.
 | `POST` | `/policies/{id}/renew` | Renew policy |
 | `POST` | `/policies/{id}/cancel` | Cancel policy |
 | `POST` | `/policies/{id}/reinstate` | Reinstate policy |
+| `GET` | `/policies/{id}/transactions` | Policy transaction history (#173) |
+| `GET` | `/policies/{id}/documents` | List policy documents |
 | `GET` | `/policies/{id}/documents/declaration` | Generate declaration |
 | `GET` | `/policies/{id}/documents/certificate` | Generate certificate |
 | `GET` | `/policies/{id}/documents/schedule` | Generate schedule |
@@ -1467,6 +1627,23 @@ All endpoints are under `/api/v1/` and require authentication.
 | `POST` | `/escalations` | Create escalation |
 | `POST` | `/escalations/{id}/approve` | Approve |
 | `POST` | `/escalations/{id}/reject` | Reject |
+
+### Documents — Records (5 endpoints, #175)
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/documents/records` | Create document record |
+| `GET` | `/documents/records` | List document records (filter by entity_type, entity_id, document_type) |
+| `GET` | `/documents/records/{id}` | Get document record |
+| `PUT` | `/documents/records/{id}` | Update document record |
+| `DELETE` | `/documents/records/{id}` | Soft-delete document record |
+
+### Work Items (4 endpoints, #176)
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/work-items` | Create work item |
+| `GET` | `/work-items` | List work items (inbox with `assigned_to` filter) |
+| `GET` | `/work-items/{id}` | Get work item |
+| `POST` | `/work-items/{id}/complete` | Complete work item |
 
 ### Other Endpoints
 | Method | Endpoint | Description |
