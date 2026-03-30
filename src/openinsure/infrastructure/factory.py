@@ -305,3 +305,12 @@ def get_mga_bordereau_repository() -> BaseRepository:
     from openinsure.infrastructure.repositories.mga import InMemoryMGABordereauRepository
 
     return InMemoryMGABordereauRepository()
+
+
+@lru_cache
+def get_audit_service():
+    """Return a shared AuditService instance."""
+    from openinsure.services.audit_service import AuditService
+
+    db = get_database_adapter()
+    return AuditService(db)
