@@ -179,6 +179,13 @@ Clicking **Process** triggers the **Microsoft Foundry AI Pipeline** modal showin
 
 Each step shows a "Foundry" badge and real-time progress.
 
+**Data-driven workflow templates**: Workflow steps are now configurable per product via the `workflow_templates` and `workflow_steps` database tables (migration 025). The `WorkflowRegistry` resolves templates in order: product-specific → default → hardcoded fallback. This means a cyber product can have different workflow steps than a professional indemnity product — no code changes required.
+
+Default workflows seeded:
+- **new_business** — 5 steps (orchestration → enrichment → intake → underwriting → compliance)
+- **claims** — 3 steps (orchestration → assessment → compliance)
+- **renewal** — 4 steps (orchestration → assessment → policy_review → compliance)
+
 ### Submissions List
 
 ![Submissions List](../../test-screenshots/feature-guide/02-submissions-list.png)
@@ -217,7 +224,9 @@ curl -X POST "$API/submissions/{id}/quote" \
 
 ## 3. Policy Binding & Documents
 
-**What it does**: Binding converts a quoted submission into an active policy. The PolicyAgent creates the policy record, generates a billing account, and produces insurance documents (declarations page, certificate of insurance, coverage schedule).
+**What it does**: Binding converts a quoted submission into an active policy. The bind flow uses the **DDD aggregate pattern** — the `SubmissionAggregate` validates the transition and emits a `SubmissionBound` event. Three event handlers respond: `PolicyCreationHandler` creates the policy, `BillingHandler` creates the billing account, and `ReinsuranceHandler` calculates cessions. The PolicyAgent generates insurance documents (declarations page, certificate of insurance, coverage schedule).
+
+**Aggregate boundaries** (Evans DDD Ch.6): Each handler operates on its own aggregate — no handler directly modifies another aggregate's state. Policy + billing are created within a single database transaction; cessions are best-effort outside it.
 
 ### Policies List
 

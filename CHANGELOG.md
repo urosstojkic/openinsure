@@ -5,6 +5,44 @@ All notable changes to OpenInsure will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## v109 — Data-Driven Workflow Templates & DDD Aggregate Boundaries (2026-04-01)
+
+### Summary
+Two DDD/innovation features: data-driven workflow templates configurable per product (#180) and
+proper aggregate boundaries with domain event-driven cross-aggregate communication (#170).
+1 new migration, 3 new aggregate roots, 1 workflow registry service, 3 bind event handlers,
+57 new tests.
+
+### Database — New Tables
+- **`workflow_templates`** — Configurable workflow definitions per product with type, version, and status (migration 025, #180)
+- **`workflow_steps`** — Ordered steps within a template: agent assignment, dependencies, timeouts, conditions, optional flags (migration 025, #180)
+
+### Database — Seed Data
+- Default **new_business** workflow (5 steps: orchestration → enrichment → intake → underwriting → compliance)
+- Default **claims** workflow (3 steps: orchestration → assessment → compliance)
+- Default **renewal** workflow (4 steps: orchestration → assessment → policy_review → compliance)
+
+### New Capabilities
+- **Data-driven workflow templates** — `WorkflowRegistry.get_workflow_for_product(product_id, workflow_type)` loads workflow steps from DB per product, falling back to defaults. Products can now have custom workflow steps without code changes (#180)
+- **DDD aggregate roots** — `SubmissionAggregate`, `PolicyAggregate`, `ClaimAggregate` in `domain/aggregates/`: each owns its state transitions (validates before mutating), emits domain events, never directly modifies another aggregate (#170)
+- **SubmissionBound event** — New domain event emitted when a submission is bound, replacing direct cross-aggregate writes (#170)
+- **Bind event handlers** — `PolicyCreationHandler`, `BillingHandler`, `ReinsuranceHandler` each listen for `SubmissionBound` and operate on their own aggregate boundary (#170)
+- **Workflow engine registry integration** — `execute_workflow()` accepts `product_id` parameter to load product-specific workflow templates from the registry (#180)
+
+### Refactoring
+- `SubmissionService.bind()` refactored to use `SubmissionAggregate` for state validation and `dispatch_bind_events()` for cross-aggregate side-effects (#170)
+- Bind flow now follows DDD: aggregate validates → emits event → handlers create policy/billing/cessions in response (#170)
+
+### Metrics
+- 57 new tests (aggregates: 27, workflow registry: 20, bind handlers: 10)
+- 862 unit tests pass (up from 805)
+- 42 database tables across 18 migrations (up from 40/15)
+
+### Agents
+- Backend (#170, #180)
+
+---
+
 ## v108 — Multi-Currency, Product Inheritance, Rating Factor Versioning (2026-04-01)
 
 ### Summary

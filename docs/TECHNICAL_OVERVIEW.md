@@ -198,6 +198,33 @@ graph LR
 
 **Key design principle:** API endpoints are thin delegators (~10-25 LOC). All business logic — Foundry agent invocations, rating calculations, authority checks, escalation, compliance recording, event publishing — lives in the **Service Layer**. This ensures testability (services can be unit-tested without HTTP), reusability (MCP tools and CLI can call services directly), and maintainability (business rules change in one place).
 
+### DDD Aggregate Boundaries
+
+The domain model enforces **aggregate boundaries** (Evans DDD Ch.6): each aggregate root owns its state transitions, validates invariants before mutating, and emits domain events. Aggregates never directly modify another aggregate — cross-aggregate communication happens via domain events.
+
+| Aggregate Root | Location | State Transitions | Events Emitted |
+|---|---|---|---|
+| **SubmissionAggregate** | `domain/aggregates/submission.py` | receive → triage → quote → bind / decline | `SubmissionReceived`, `SubmissionTriaged`, `SubmissionQuoted`, `SubmissionBound`, `SubmissionDeclined` |
+| **PolicyAggregate** | `domain/aggregates/policy.py` | activate → endorse / cancel / renew | `PolicyActivated`, `PolicyBound`, `PolicyEndorsed`, `PolicyCancelled`, `PolicyRenewed` |
+| **ClaimAggregate** | `domain/aggregates/claim.py` | report → investigate → reserve → pay → close / deny | `ClaimReported`, `ClaimReserved`, `ClaimPaid`, `ClaimClosed`, `ClaimDenied` |
+
+**Bind flow (event-driven):** When `SubmissionService.bind()` is called, the `SubmissionAggregate` validates the transition and emits a `SubmissionBound` event. Three handlers respond synchronously:
+1. **PolicyCreationHandler** — creates the policy record (within transaction)
+2. **BillingHandler** — creates the billing account (within transaction)
+3. **ReinsuranceHandler** — calculates cessions (best-effort, outside transaction)
+
+### Data-Driven Workflow Templates
+
+Workflow definitions are stored in the `workflow_templates` / `workflow_steps` tables (migration 025), enabling per-product customisation without code changes. The `WorkflowRegistry` resolves templates in order: product-specific → default → hardcoded fallback.
+
+```python
+# Product-specific workflow (e.g., cyber product skips enrichment)
+definition = await get_workflow_for_product(product_id="cyber-smb", workflow_type="new_business")
+
+# Default workflow (no product specified — uses hardcoded definitions)
+definition = await get_workflow_for_product(product_id=None, workflow_type="new_business")
+```
+
 ### Data Flow: Submission → Triage → Quote → Bind → Policy
 
 ```mermaid
@@ -279,12 +306,19 @@ SQL repository `create()` / `update()` methods accept an optional `txn: Transact
 - Treaty capacity in-memory updates
 
 ```python
-# Example: bind transaction in SubmissionService.bind()
+# Example: bind transaction using aggregate root + event handlers
+from openinsure.domain.aggregates.submission import SubmissionAggregate
+from openinsure.services.bind_handlers import dispatch_bind_events
+
+aggregate = SubmissionAggregate(record)
+aggregate.bind(policy_id=policy_id, policy_number=policy_number, premium=premium)
+bind_events = aggregate.clear_events()
+
 db = get_database_adapter()
 if db:
     async with db.transaction() as txn:
-        await policy_repo.create(policy_data, txn=txn)
-        await create_billing_account_on_bind(..., txn=txn)
+        # Event handlers create policy + billing within the transaction
+        await dispatch_bind_events(bind_events, handler_ctx)
         await submission_repo.update(sid, {"status": "bound"}, txn=txn)
 # Non-critical ops run after commit
 await publish_domain_event("policy.bound", ...)
@@ -1335,13 +1369,18 @@ Domain events are published to Azure Service Bus and Event Grid for downstream c
 |---|---|---|
 | `submission.received` | New submission created | submission_id, applicant, LOB |
 | `submission.triaged` | AI triage completed | submission_id, risk_score, recommendation |
+| `submission.quoted` | Quote generated | submission_id, premium |
+| `submission.bound` | Submission bound (aggregate event) | submission_id, policy_id, policy_number, premium |
+| `submission.declined` | Submission declined | submission_id, reason |
 | `underwriting.completed` | Quote generated | submission_id, premium, authority_decision |
 | `policy.bound` | Policy issued | policy_id, policy_number, premium |
+| `policy.activated` | Policy activated (aggregate event) | policy_id |
 | `policy.endorsed` | Mid-term change | policy_id, endorsement_id, premium_delta |
 | `policy.cancelled` | Cancellation processed | policy_id, reason, refund_amount |
 | `claim.reported` | FNOL received | claim_id, policy_id, cause_of_loss |
 | `claim.reserved` | Reserve set/updated | claim_id, amount, category |
 | `claim.settled` | Payment made | claim_id, amount, payee |
+| `claim.denied` | Claim denied (aggregate event) | claim_id, reason |
 | `compliance.check.completed` | Audit completed | decision_id, compliant, violations |
 
 ### Document Ingestion
@@ -1467,11 +1506,11 @@ These are representative metrics from a running deployment with 3+ years of seed
 | **REST API Endpoints** | 172 across 31 modules |
 | **MCP Tools** | 32 + 5 resources |
 | **RBAC Roles** | 26 (20 MGA, 26 Carrier) |
-| **Database Tables** | 40 across 15 migrations |
-| **Domain Entities** | 13 with state machines |
-| **Business Services** | 25 |
+| **Database Tables** | 42 across 18 migrations |
+| **Domain Entities** | 13 with state machines + 3 aggregate roots |
+| **Business Services** | 27 |
 | **Infrastructure Adapters** | 13 |
-| **Test Suite** | 750 tests |
+| **Test Suite** | 862 tests |
 | **Bicep IaC Modules** | 9 |
 | **Dashboard Pages** | 25 |
 | **Knowledge Categories** | 7 (guidelines, rating factors, coverages, precedents, compliance, industry, jurisdiction) |
@@ -1519,9 +1558,12 @@ openinsure/
 │   │       ├── _comparable.py     # Comparable account prompts
 │   │       └── _orchestrator.py   # Workflow orchestration prompts
 │   ├── domain/                    # 14 Pydantic domain entities + state machines + limits
+│   │   ├── aggregates/            # DDD aggregate roots (Submission, Policy, Claim) — #170
 │   │   └── limits.py              # Centralized authority, reserve, premium limits (v95)
-│   ├── services/                  # 22 business logic services
+│   ├── services/                  # 27 business logic services
 │   │   ├── rating.py              # CyberRatingEngine (tier 2 of 3-tier cascade)
+│   │   ├── workflow_registry.py   # Data-driven workflow template registry (#180)
+│   │   ├── bind_handlers.py       # DDD event handlers: PolicyCreation, Billing, Reinsurance (#170)
 │   │   └── product_knowledge_sync.py  # SQL → Cosmos → AI Search sync (v95)
 │   ├── infrastructure/            # Azure service adapters + repository layer
 │   │   ├── database.py            # Azure SQL (async SQLAlchemy + pyodbc)
@@ -1582,6 +1624,8 @@ These decisions are foundational and unlikely to change. They are recorded here 
 | **ADR-006** | EU AI Act compliance-by-design | Insurance underwriting classified as high-risk (Annex III). Deadline Aug 2026, fines up to €15M / 3% turnover. Retroactive compliance would require costly rewrite |
 | **ADR-007** | ACORD-aligned JSON/REST API | Industry-standard terminology for interoperability, modern JSON/REST (no legacy XML overhead), OpenAPI auto-generated |
 | **ADR-008** | Explicit transaction boundaries for multi-step operations | Bind (policy + billing + status) wrapped in a single DB transaction to prevent orphan records. Non-critical ops (events, AI, compliance) excluded to avoid coupling. Cessions use a separate transaction for independent atomicity |
+| **ADR-009** | DDD aggregate boundaries with synchronous event dispatch | Submission, Policy, Claim as independent consistency units (Evans DDD Ch.6). Cross-aggregate communication via domain events dispatched synchronously for now. Async event-driven architecture is future work. Each aggregate validates its own invariants before mutating (#170) |
+| **ADR-010** | Data-driven workflow templates with hardcoded fallback | Workflow steps stored in SQL (per-product configurable) with in-memory defaults as fallback. Product-specific templates loaded via `WorkflowRegistry` only when `product_id` is specified; otherwise hardcoded definitions preserved for backward compatibility (#180) |
 
 ## Appendix D: Related Documentation
 
