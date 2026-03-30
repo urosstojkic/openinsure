@@ -26,7 +26,7 @@ async def escalate(
     authority_result: dict[str, Any],
     context: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Add an item to the escalation queue."""
+    """Add an item to the escalation queue and create a corresponding work item."""
     item = {
         "id": str(uuid4()),
         "action": action,
@@ -47,6 +47,25 @@ async def escalate(
     }
     _escalation_queue.append(item)
     logger.info("escalation.created", id=item["id"], action=action, entity_id=entity_id)
+
+    # Create a corresponding work item for the approver
+    try:
+        from openinsure.services.work_item_service import create_work_item
+
+        required_role = authority_result.get("required_role", "")
+        await create_work_item(
+            entity_type=entity_type,
+            entity_id=entity_id,
+            work_type="escalation_review",
+            title=f"Escalation: {action} requires {required_role} approval",
+            description=authority_result.get("reason", ""),
+            assigned_role=required_role,
+            priority="high",
+            sla_hours=24,
+        )
+    except Exception:
+        logger.warning("escalation.work_item_creation_failed", escalation_id=item["id"])
+
     return item
 
 
