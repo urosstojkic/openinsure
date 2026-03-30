@@ -5,6 +5,41 @@ All notable changes to OpenInsure will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## v110 — Policy Transactions, Polymorphic Documents, Work Items (2026-04-01)
+
+### Summary
+Three data model features: transaction-based policy history for time-travel queries (#173),
+unified polymorphic documents table replacing per-entity document tables (#175), and
+structured work items with SLA tracking and inbox-style queues (#176).
+3 new migrations, 2 new services, 1 new API module, 34 new tests.
+
+### Database — New Tables (Migrations 020–022)
+- **`policy_transactions`** — Every policy mutation (bind, endorse, renew, cancel, reinstate) creates an immutable transaction record with coverage/terms snapshots. Enables "what was in effect on date X?" queries (migration 020, #173)
+- **`documents`** — Polymorphic document tracking for any entity (submission, policy, claim, endorsement). Replaces per-entity document tables. Includes soft-delete, classification confidence, extracted data (migration 021, #175)
+- **`work_items`** — Structured task tracking with assignee, priority (low/medium/high/urgent), status (open/in_progress/completed/cancelled/escalated), due date, SLA hours, completion tracking (migration 022, #176)
+
+### Database — Data Migration
+- Existing `submission_documents` rows migrated into `documents` table with `entity_type='submission'` (old table retained for backward compatibility) (#175)
+
+### New Capabilities
+- **Transaction-based policy history** — `policy_transaction_service.py` records every lifecycle operation. `PolicyLifecycleService.bind_policy()` → `new_business`, `endorse_policy()` → `endorsement` (with coverage snapshot), `renew_policy()` → `renewal`, `cancel_policy()` → `cancellation` (#173)
+- **Polymorphic document CRUD** — `POST/GET/PUT/DELETE /api/v1/documents/records` with filtering by entity_type, entity_id, document_type. Soft-delete support. Extends existing blob-storage document endpoints (#175)
+- **Work item service** — `create_work_item()`, `complete_work_item()`, `get_inbox()` with SLA auto-calculation from `sla_hours`. Inbox returns open/in_progress items for a user (#176)
+- **Work items API** — `GET /api/v1/work-items?assigned_to=X`, `POST /api/v1/work-items`, `POST /api/v1/work-items/{id}/complete` (#176)
+- **Escalation → work item integration** — When an escalation is created, a corresponding `escalation_review` work item is auto-created with high priority and 24h SLA (#176)
+- **Policy transactions endpoint** — `GET /api/v1/policies/{id}/transactions` returns chronological transaction history (#173)
+
+### Metrics
+- 34 new tests (policy transactions: 11, work items: 16, documents: 7)
+- 896 unit tests pass (up from 862)
+- 45 database tables across 21 migrations (up from 42/18)
+- 182 API endpoints across 32 modules (up from 172/31)
+
+### Agents
+- Backend (#173, #175, #176)
+
+---
+
 ## v109 — Data-Driven Workflow Templates & DDD Aggregate Boundaries (2026-04-01)
 
 ### Summary

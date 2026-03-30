@@ -66,7 +66,7 @@ graph TB
     end
 
     subgraph "Data Layer"
-        L[(Azure SQL<br/>40 tables — OLTP)]
+        L[(Azure SQL<br/>45 tables — OLTP)]
         M[(Cosmos DB NoSQL<br/>Knowledge graph)]
         N[Azure Blob Storage<br/>Documents]
         O[Azure AI Search<br/>Knowledge index]
@@ -96,7 +96,7 @@ graph TB
 |---|---|---|
 | **Backend** | Python 3.12, FastAPI, Pydantic v2 | Async/await throughout, OpenAPI auto-generated, strict typing |
 | **Frontend** | React 19, TypeScript 5.9, Tailwind CSS 4, Vite 7 | 25 dashboard pages, Recharts, React Query, react-router-dom |
-| **Database (OLTP)** | Azure SQL Database | 40 tables across 15 migrations, Entra-only auth, TDE encryption |
+| **Database (OLTP)** | Azure SQL Database | 45 tables across 21 migrations, Entra-only auth, TDE encryption |
 | **Database (Knowledge)** | Azure Cosmos DB (NoSQL API) | Knowledge graph documents, serverless (dev), session consistency |
 | **AI Platform** | Azure AI Foundry, GPT-5.2 | 10 prompt agents, AI Search tools, function calling, memory |
 | **Search** | Azure AI Search | Knowledge RAG — guidelines, rating factors, compliance rules, precedents |
@@ -590,6 +590,40 @@ The system automatically refers submissions to human review when any of these co
 | PHI handling | Healthcare with protected health information |
 | International | Operations outside US |
 
+### Policy Transaction History (#173)
+
+Every policy mutation creates an immutable transaction record in `policy_transactions`:
+
+| Transaction Type | Trigger | Data Captured |
+|---|---|---|
+| `new_business` | `bind_policy()` | Full coverage list, premium, effective/expiration dates |
+| `endorsement` | `endorse_policy()` | Coverage snapshot (post-change), premium delta, description |
+| `renewal` | `renew_policy()` | Renewal coverage, new dates, premium |
+| `cancellation` | `cancel_policy()` | Cancellation date, return premium (negative premium_change) |
+| `reinstatement` | `reinstate_policy()` | Reinstatement date, restored unearned premium |
+
+**Time-travel queries:** `GET /api/v1/policies/{id}/transactions` returns chronological transaction history. The current state of a policy is the cumulative effect of all its transactions. Snapshots in `coverages_snapshot` (JSON) enable answering "what coverage limits were in effect on March 1?"
+
+### Polymorphic Documents (#175)
+
+The `documents` table provides unified document tracking across all entity types, replacing per-entity document tables (`submission_documents`):
+
+- **entity_type** — `submission`, `policy`, `claim`, `endorsement`, or any future entity
+- **Soft-delete** — `deleted_at` column; deleted records excluded from default queries
+- **Classification** — `classification_confidence` and `extracted_data` from Document Intelligence
+- **CRUD API** — `POST/GET/PUT/DELETE /api/v1/documents/records` with filtering
+
+Existing `submission_documents` data is migrated automatically (migration 021). The old table is retained for backward compatibility.
+
+### Work Items & Inbox (#176)
+
+Structured task tracking replaces ad-hoc notification patterns:
+
+- **Inbox** — `GET /api/v1/work-items?assigned_to=X` returns open/in_progress items for a user
+- **SLA tracking** — `sla_hours` auto-computes `due_date` on creation
+- **Priority** — `low`, `medium`, `high`, `urgent`
+- **Escalation integration** — Every escalation auto-creates a `work_type=escalation_review` work item with `priority=high` and 24h SLA
+
 ---
 
 ## 5. Domain Model
@@ -607,6 +641,7 @@ erDiagram
     POLICY ||--o{ CLAIM : "claim_against"
     POLICY ||--o{ ENDORSEMENT : "modified_by"
     POLICY ||--o{ COVERAGE : "includes"
+    POLICY ||--o{ POLICY_TRANSACTION : "history"
     POLICY ||--o{ BILLING_ACCOUNT : "billed_via"
     POLICY ||--o{ REINSURANCE_CESSION : "ceded_under"
     CLAIM ||--o{ RESERVE : "reserved_for"
@@ -764,6 +799,55 @@ erDiagram
         decimal base_rate
     }
 
+    POLICY_TRANSACTION {
+        uuid id PK
+        uuid policy_id FK
+        enum transaction_type "new_business | endorsement | renewal | cancellation | reinstatement | audit"
+        date effective_date
+        date expiration_date
+        decimal premium_change
+        nvarchar description
+        nvarchar coverages_snapshot "JSON"
+        nvarchar terms_snapshot "JSON"
+        string created_by
+        datetime2 created_at
+        int version
+    }
+
+    DOCUMENT {
+        uuid id PK
+        string entity_type "submission | policy | claim | endorsement"
+        uuid entity_id
+        string document_type
+        string filename
+        string storage_url
+        string content_type
+        bigint file_size_bytes
+        nvarchar extracted_data "JSON"
+        float classification_confidence
+        string uploaded_by
+        datetime2 uploaded_at
+        datetime2 deleted_at "soft delete"
+    }
+
+    WORK_ITEM {
+        uuid id PK
+        string entity_type
+        uuid entity_id
+        string work_type
+        string title
+        nvarchar description
+        string assigned_to
+        string assigned_role
+        enum priority "low | medium | high | urgent"
+        enum status "open | in_progress | completed | cancelled | escalated"
+        datetime2 due_date
+        int sla_hours
+        datetime2 completed_at
+        string completed_by
+        datetime2 created_at
+    }
+
     CHANGE_LOG {
         bigint id PK
         string entity_type
@@ -876,14 +960,14 @@ stateDiagram-v2
     written_off --> [*]
 ```
 
-### Database Schema (41 Tables)
+### Database Schema (45 Tables)
 
 | Module | Tables | Purpose |
 |---|---|---|
 | **Parties** | `parties`, `party_roles`, `party_addresses`, `party_contacts` | Insured, brokers, claimants, agents |
 | **Products** | `products`, `product_coverages`, `coverage_deductibles`, `product_rating_factors`, `rating_factor_tables`, `product_appetite_rules`, `product_authority_limits`, `product_territories`, `product_forms`, `product_pricing` | LOB definitions; 9 normalised relational tables since v106; `parent_product_id` + `is_template` for template inheritance (#177); `currency` column (#174) |
 | **Submissions** | `submissions`, `submission_documents` | Applications, extracted data, triage results; `currency` and `rated_with_snapshot_id` columns (#174, #181) |
-| **Policies** | `policies`, `policy_coverages`, `policy_endorsements` | Active coverage, terms, mid-term changes; `currency` column (#174) |
+| **Policies** | `policies`, `policy_coverages`, `policy_endorsements`, `policy_transactions` | Active coverage, terms, mid-term changes; transaction-based history (#173); `currency` column (#174) |
 | **Claims** | `claims`, `claim_reserves`, `claim_payments` | Loss records, reserves, settlements; `currency` column on all three tables (#174) |
 | **Billing** | `billing_accounts`, `invoices` | Premium invoicing, payment tracking; `currency` column (#174) |
 | **Reinsurance** | `reinsurance_treaties`, `reinsurance_cessions`, `reinsurance_recoveries` | Treaty management, capacity, recoveries; `currency` column on all three tables (#174) |
@@ -891,6 +975,8 @@ stateDiagram-v2
 | **Actuarial** | `actuarial_triangles`, `actuarial_reserves`, `loss_development_analysis` | Loss triangles, IBNR, reserve adequacy |
 | **Renewals** | `renewal_records` | Renewal terms, rate changes |
 | **MGA** | `mga_contracts`, `mga_performance` | Delegated authority, performance tracking |
+| **Documents** | `documents` | Polymorphic document tracking for any entity type; replaces per-entity tables (#175) |
+| **Work Items** | `work_items` | Structured task tracking with assignee, priority, SLA, due dates (#176) |
 | **Compliance** | `decision_records`, `audit_events`, `change_log`, `consent_records`, `retention_policies` | AI decision audit trail, EU AI Act records, data-level change log, GDPR consent tracking, data retention policies |
 
 ---
@@ -899,7 +985,7 @@ stateDiagram-v2
 
 ### Overview
 
-- **172 REST API endpoints** across **31 modules**
+- **182 REST API endpoints** across **32 modules**
 - All endpoints under `/api/v1/` with OpenAPI documentation at `/docs`
 - Pydantic v2 request/response validation on every endpoint
 - Consistent error format with correlation IDs
@@ -918,7 +1004,7 @@ stateDiagram-v2
 | Module | Endpoints | Key Operations |
 |---|---|---|
 | **Submissions** | 15 | `POST` create, `GET` list/get, `POST` triage, quote, bind, process, enrich, refer, decline |
-| **Policies** | 12 | `POST` create, `GET` list/get/documents, `POST` endorse, cancel, reinstate, renew |
+| **Policies** | 13 | `POST` create, `GET` list/get/documents/transactions, `POST` endorse, cancel, reinstate, renew |
 | **Claims** | 15 | `POST` file, `GET` list/get, `PUT` update, `POST` reserve, payment, close, reopen, notify, subrogation |
 | **Knowledge** | 17 | `GET` sync-status, search, guidelines, rating-factors, coverage-options, products, precedents, compliance-rules, industry-profiles, jurisdiction-rules; `PUT` update |
 | **Reinsurance** | 10 | Treaties (CRUD, utilization, capacity), cessions, recoveries, bordereaux |
@@ -933,7 +1019,7 @@ stateDiagram-v2
 | **Finance** | 5 | Summary, cash flow, commissions, reconciliation, bordereaux/generate |
 | **Metrics** | 5 | Summary, pipeline, agents, premium trend, executive |
 | **Workflows** | 5 | New business, claims, renewal, history, execution details |
-| **Documents** | 3 | Upload (with OCR), list, download |
+| **Documents** | 8 | Upload (with OCR), list, download; records CRUD (create, list, get, update, soft-delete) |
 | **Broker** | 3 | Broker-filtered submissions, policies, claims |
 | **Agent Traces** | 2 | List traces, summary |
 | **Admin** | 3 | Deploy agents, seed knowledge, sync knowledge |
@@ -941,6 +1027,7 @@ stateDiagram-v2
 | **Health** | 3 | Root, health check, readiness probe |
 | **Events** | 1 | Recent domain events |
 | **Underwriter** | 1 | Queue (pending review items) |
+| **Work Items** | 4 | `POST` create, `GET` list/get (with inbox filtering by `assigned_to`), `POST` complete |
 | **GDPR** | 6 | Consent grant/revoke/list, right to erasure, data portability, retention policies |
 | **Audit** | 2 | Change log queries, entity audit history |
 | **Parties** | 3 | Party CRUD, party search for deduplication |
