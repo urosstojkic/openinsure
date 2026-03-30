@@ -108,7 +108,7 @@ After completing a significant feature block (new process, major fix, architectu
 
 | Metric | Value |
 |--------|-------|
-| Tests | 627 collected (unit, pytest CI green) |
+| Tests | 665 collected (unit, pytest CI green) |
 | API endpoints | 153 across 28 modules |
 | Dashboard pages | 25 (React 18 + TypeScript + Tailwind) |
 | Foundry agents | 10 deployed on Azure AI Foundry (GPT-5.2 + AI Search tools) |
@@ -125,6 +125,7 @@ After completing a significant feature block (new process, major fix, architectu
 - **Prompts refactored** — `agents/prompts/` package (13 modules) replaces monolithic `prompts.py`
 - **Rating cascade** — 3-tier fallback: Foundry → CyberRatingEngine → LOB minimum
 - **Product sync pipeline** — SQL → Cosmos DB → AI Search on every product mutation
+- **Product relational migration** — JSON blobs → normalised tables with dual-write (v106, #164)
 - **Authority limits centralized** — `domain/limits.py` replaces 30+ hardcoded values
 - **All 16 tech-debt issues (#92–#107) resolved**
 

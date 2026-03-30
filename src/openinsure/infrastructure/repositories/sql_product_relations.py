@@ -361,9 +361,7 @@ class ProductRelationsRepository:
                 cat = str(r.get("factor_category", ""))
                 if cat not in result:
                     result[cat] = {}
-                result[cat][str(r.get("factor_key", ""))] = float(
-                    r.get("factor_value", 1.0)
-                )
+                result[cat][str(r.get("factor_key", ""))] = float(r.get("factor_value", 1.0))
             return result
         except Exception:
             logger.debug(
@@ -377,9 +375,7 @@ class ProductRelationsRepository:
     # Evaluate appetite rules against risk data
     # ------------------------------------------------------------------
 
-    async def check_appetite(
-        self, product_id: str, risk_data: dict[str, Any]
-    ) -> tuple[bool, list[str]]:
+    async def check_appetite(self, product_id: str, risk_data: dict[str, Any]) -> tuple[bool, list[str]]:
         """Evaluate all appetite rules for *product_id* against *risk_data*.
 
         Returns ``(passes, reasons)`` where *passes* is ``True`` when

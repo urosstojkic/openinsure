@@ -5,6 +5,41 @@ All notable changes to OpenInsure will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## v106 — Product Data: JSON → Relational Migration (#164) (2026-03-30)
+
+### Added
+- **`ProductRelationsRepository`** — normalised relational tables for product sub-entities
+  (`product_coverages`, `rating_factor_tables`, `product_appetite_rules`, `product_authority_limits`,
+  `product_territories`, `product_forms`, `product_pricing`) with dual-write sync from JSON blobs.
+- **`RatingEngine`** — product-aware rating engine that loads factors from `rating_factor_tables` SQL
+  table. Falls back to hardcoded `INDUSTRY_RISK_FACTORS` / `REVENUE_BANDS` dicts when no relational
+  data exists (backward compat).
+- **`check_appetite()`** — evaluates product appetite rules from relational DB against submission risk
+  data during triage fallback. Supports operators: `>=`, `<=`, `between`, `in`, `not_in`, `eq`, `neq`.
+- **`get_product_relations_repository()`** factory function for DI.
+- **`ProductSummary`** response model for lightweight list endpoint.
+- **Relational enrichment** on `GET /products/{id}` — assembles response from normalised tables,
+  falls back to JSON columns.
+
+### Changed
+- **Rating engine** (`CyberRatingEngine`) now accepts optional DB-loaded factors via `set_db_factors()`.
+  Industry and revenue band lookups prefer relational data when available.
+- **Triage service** (`SubmissionService.run_triage`) checks relational appetite rules before legacy
+  in-memory knowledge store rules.
+- **Knowledge sync** (`ProductKnowledgeSyncService.sync_product`) loads relational coverages, factors,
+  and rules when available, building richer knowledge documents from typed columns instead of JSON parsing.
+- **Product coverages endpoint** (`GET /products/{id}/coverages`) prefers relational table data.
+- **Product list endpoint** (`GET /products`) remains lightweight — does NOT load relations per product.
+
+### Deprecated
+- JSON blob columns on `products` table (`coverages`, `rating_factors`, `appetite_rules`,
+  `authority_limits`, `territories`, `forms`, `metadata`) — marked deprecated in code comments.
+  Will be removed after migration period when all consumers read from relational tables.
+
+### Metrics
+- 665 unit tests passing
+- 0 regressions from JSON → relational migration
+
 ## v105 — Service Layer Extraction for Submissions (#137) (2026-03-27)
 
 ### Refactored

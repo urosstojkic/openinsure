@@ -647,10 +647,46 @@ erDiagram
         enum line_of_business
         enum status "draft | published | archived"
         int version
-        json coverages
+        json coverages "DEPRECATED — use product_coverages"
         json underwriting_guidelines
-        json rating_factors
+        json rating_factors "DEPRECATED — use rating_factor_tables"
     }
+
+    PRODUCT_COVERAGE {
+        uuid id PK
+        uuid product_id FK
+        string coverage_code
+        string coverage_name
+        decimal default_limit
+        decimal max_limit
+        decimal default_deductible
+        bit is_optional
+        int sort_order
+    }
+
+    RATING_FACTOR_TABLE {
+        uuid id PK
+        uuid product_id FK
+        string factor_category
+        string factor_key
+        decimal factor_value
+        int sort_order
+    }
+
+    PRODUCT_APPETITE_RULE {
+        uuid id PK
+        uuid product_id FK
+        string rule_name
+        string field_name
+        string operator
+        string value_type
+        decimal numeric_value
+        int sort_order
+    }
+
+    PRODUCT ||--o{ PRODUCT_COVERAGE : "defines"
+    PRODUCT ||--o{ RATING_FACTOR_TABLE : "rated_by"
+    PRODUCT ||--o{ PRODUCT_APPETITE_RULE : "constrained_by"
 ```
 
 ### State Machines
@@ -731,12 +767,12 @@ stateDiagram-v2
     written_off --> [*]
 ```
 
-### Database Schema (26 Tables)
+### Database Schema (33 Tables)
 
 | Module | Tables | Purpose |
 |---|---|---|
 | **Parties** | `parties`, `party_roles`, `party_addresses`, `party_contacts` | Insured, brokers, claimants, agents |
-| **Products** | `products` | LOB definitions, coverages, rating factors |
+| **Products** | `products`, `product_coverages`, `rating_factor_tables`, `product_appetite_rules`, `product_authority_limits`, `product_territories`, `product_forms`, `product_pricing` | LOB definitions, coverages, rating factors, appetite rules (normalised since v106) |
 | **Submissions** | `submissions`, `submission_documents` | Applications, extracted data, triage results |
 | **Policies** | `policies`, `policy_coverages`, `policy_endorsements` | Active coverage, terms, mid-term changes |
 | **Claims** | `claims`, `claim_reserves`, `claim_payments` | Loss records, reserves, settlements |

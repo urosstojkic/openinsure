@@ -1008,7 +1008,9 @@ Products follow a defined lifecycle: **Draft → Active → Sunset → Retired**
 
 ### Data Model
 
-Each product is defined in Azure SQL with the following structure:
+Each product is defined in Azure SQL with a **hybrid storage model** (v106, #164):
+
+**Core product table** (`products`):
 
 | Field | Type | Description |
 |-------|------|-------------|
@@ -1019,16 +1021,30 @@ Each product is defined in Azure SQL with the following structure:
 | `description` | NVARCHAR | Product description |
 | `status` | NVARCHAR | Lifecycle status: `draft`, `active`, `sunset`, `retired` |
 | `version` | INT | Version counter (coerced to INT on creation; bumped on new version) |
-| `coverages` | JSON | Array of coverage definitions (code, name, limits, deductibles) |
-| `rating_factors` | JSON | Array of rating factor definitions (name, type, weight) |
-| `appetite_rules` | JSON | Array of underwriting appetite constraints (field, operator, value) |
-| `authority_limits` | JSON | Auto-bind thresholds (premium, limit, senior/CUO review triggers) |
-| `territories` | JSON | Array of territory codes (e.g., `["US", "UK"]`) |
-| `forms` | JSON | Required application forms |
+| `coverages` | JSON | ⚠️ DEPRECATED — use `product_coverages` table |
+| `rating_factors` | JSON | ⚠️ DEPRECATED — use `rating_factor_tables` table |
+| `appetite_rules` | JSON | ⚠️ DEPRECATED — use `product_appetite_rules` table |
+| `authority_limits` | JSON | ⚠️ DEPRECATED — use `product_authority_limits` table |
+| `territories` | JSON | ⚠️ DEPRECATED — use `product_territories` table |
+| `forms` | JSON | ⚠️ DEPRECATED — use `product_forms` table |
 | `metadata` | JSON | Flexible key-value metadata (min/max premium, base rates) |
 | `effective_date` | DATETIME2 | When product takes effect (defaults to today if not provided) |
 | `published_at` | DATETIME2 | When product was last published |
 | `created_by` | NVARCHAR | Creator identity |
+
+**Normalised relational tables** (v106):
+
+| Table | Purpose | Key Columns |
+|-------|---------|-------------|
+| `product_coverages` | Coverage definitions per product | `coverage_code`, `coverage_name`, `default_limit`, `max_limit`, `default_deductible`, `is_optional` |
+| `rating_factor_tables` | Rating factor lookup entries | `factor_category` (e.g., "industry"), `factor_key` (e.g., "technology"), `factor_value` (multiplier) |
+| `product_appetite_rules` | Underwriting appetite constraints | `field_name`, `operator` (>=, <=, between, in, not_in, eq), `numeric_value`, `string_value` |
+| `product_authority_limits` | Auto-bind thresholds | `auto_bind_premium_max`, `auto_bind_limit_max`, `requires_senior_review_above` |
+| `product_territories` | Jurisdiction availability | `territory_code`, `approval_status`, `filing_reference` |
+| `product_forms` | Required application forms | `form_code`, `form_name`, `form_type`, `required` |
+| `product_pricing` | Base pricing parameters | `min_premium`, `max_premium`, `base_rate_per_1000`, `currency` |
+
+> **Migration pattern:** writes go to both JSON columns and relational tables (dual-write via `ProductRelationsRepository.sync_from_product()`). Reads prefer relational data and fall back to JSON. The JSON columns will be dropped after the migration period.
 
 ### Seed Products
 
@@ -1061,6 +1077,21 @@ The rating endpoint (`/rate`) uses a two-tier approach:
 
 1. **Structured factor tables** — When `rating_factor_tables` are configured, the engine looks up the risk value in the table and applies the entry's multiplier. Supports industry, revenue band, security maturity, and custom factors.
 2. **Flat factor fallback** — When no structured tables match, applies `industry_factor × revenue_factor` from the risk data.
+
+**v106 relational factor loading (#164):**
+
+The `RatingEngine` class now loads factors from the normalised `rating_factor_tables` SQL table when a `product_id` is provided:
+
+```python
+engine = RatingEngine()
+result = await engine.calculate(product_id="...", rating_input=rating_input)
+# Loads industry/revenue_band factors from DB, falls back to hardcoded dicts
+```
+
+The `CyberRatingEngine` accepts DB-loaded factors via `set_db_factors()`:
+- `"industry"` category overrides `INDUSTRY_RISK_FACTORS` dict
+- `"revenue_band"` category overrides `REVENUE_BANDS` list
+- Hardcoded values remain as fallback when no relational data exists
 
 Example rate request:
 ```json
@@ -1099,20 +1130,21 @@ Products feed into the AI agent workflow:
 - **Rating Engine** — Uses product's factor tables for premium calculation (3-tier cascade: Foundry → CyberRatingEngine → LOB minimum)
 - **Knowledge Base** — Product definitions are indexed in AI Search for agent retrieval
 
-### Product Sync Pipeline (v95)
+### Product Sync Pipeline (v95, updated v106)
 
 All product mutations trigger an async knowledge sync:
 
 ```
-Product API (SQL) ──sync──▸ Cosmos DB ──sync──▸ AI Search ──tool──▸ Foundry Agents
+Product API (SQL) ──dual-write──▸ Relational Tables ──sync──▸ Cosmos DB ──sync──▸ AI Search ──tool──▸ Foundry Agents
 ```
 
 - `ProductKnowledgeSyncService` converts SQL product records into structured knowledge documents
+- **v106:** sync now loads data from normalised relational tables (`product_coverages`, `rating_factor_tables`, `product_appetite_rules`) when available, falling back to JSON blobs
 - Retired products are removed from the search index so agents no longer reference them
 - The pipeline is **fail-open** — product CRUD still works if Cosmos or AI Search is unavailable
 - Sync is fire-and-forget; product API responses are not delayed by downstream sync
 
-**Status**: ✅ Working — 6 products in SQL, full CRUD API, rating engine, versioning, publish workflow, knowledge sync pipeline.
+**Status**: ✅ Working — 6 products in SQL (normalised to 7 relational tables since v106), full CRUD API, rating engine with DB factor loading, versioning, publish workflow, knowledge sync pipeline.
 
 ---
 
