@@ -34,3 +34,7 @@ Expert in testing strategy, quality gates, E2E testing, Playwright browser testi
 4. `mypy src/openinsure/` — no errors
 5. `bandit -r src/openinsure/ -ll` — no findings
 6. `cd dashboard && npm run build` — succeeds
+
+## Before Submitting Work
+Follow the completion checklist: `.squad/templates/completion-checklist.md`
+Every item must be verified before closing an issue.

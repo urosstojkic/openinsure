@@ -37,6 +37,13 @@ This project uses the **Squad framework** (`.squad/`) for all development. Every
 
 Full routing rules including issue triage and @copilot assignment: `.squad/routing.md`
 
+### Process Templates
+
+- **Completion checklist:** `.squad/templates/completion-checklist.md` — every agent must verify all items before closing an issue
+- **Issue lifecycle:** `.squad/templates/issue-lifecycle.md` — full flow from issue creation to merge
+- **Branch naming:** `squad/{issue-number}-{slug}` (e.g., `squad/156-referential-integrity`)
+- **Parallel execution:** P1 specialists (Backend, Frontend, Insurance, Security) can run in parallel; P2 supporting agents (QA, Scribe, Infra) can run alongside P1. See `.squad/routing.md` for dependency tiers.
+
 ### How to Route Work
 
 1. **Read the user's request** and determine which Squad agent(s) should handle it

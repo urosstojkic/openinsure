@@ -29,3 +29,7 @@ Expert in Azure infrastructure, Bicep IaC, Container Apps, Foundry, CI/CD.
 
 - `az deployment group what-if` before any Bicep deployment
 - CI must be green (all recent runs passing)
+
+## Before Submitting Work
+Follow the completion checklist: `.squad/templates/completion-checklist.md`
+Every item must be verified before closing an issue.

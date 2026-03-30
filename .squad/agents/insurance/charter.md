@@ -26,3 +26,7 @@ Expert in insurance domain logic, ACORD standards, cyber insurance, regulatory c
 - Authority tiers: agent auto → analyst → Sr UW → LOB Head → CUO
 - Carrier mode enables: reinsurance, actuarial, MGA oversight, statutory reporting
 - MGA mode: core modules only (underwriting, policy, claims, billing, compliance)
+
+## Before Submitting Work
+Follow the completion checklist: `.squad/templates/completion-checklist.md`
+Every item must be verified before closing an issue.

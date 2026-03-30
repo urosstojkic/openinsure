@@ -31,3 +31,7 @@ Expert in application security, EU AI Act compliance, RBAC, audit trails.
 - All /api/v1/* endpoints require authentication
 - Every AI decision must produce a DecisionRecord
 - Quality compromises must be tracked as GitHub issues
+
+## Before Submitting Work
+Follow the completion checklist: `.squad/templates/completion-checklist.md`
+Every item must be verified before closing an issue.

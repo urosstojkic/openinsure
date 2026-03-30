@@ -29,3 +29,7 @@ Expert in the OpenInsure React dashboard: Vite, TypeScript, Tailwind CSS, role-b
 
 - `npm run build` — must succeed with zero errors
 - No hardcoded mock data in production path (only as fallback)
+
+## Before Submitting Work
+Follow the completion checklist: `.squad/templates/completion-checklist.md`
+Every item must be verified before closing an issue.

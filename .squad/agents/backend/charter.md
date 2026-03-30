@@ -32,3 +32,7 @@ Expert in the OpenInsure Python backend: FastAPI, Pydantic v2, Azure SDK, Foundr
 - `ruff check src/ tests/` — lint clean
 - `mypy src/openinsure/` — type clean
 - `bandit -r src/openinsure/ -ll` — security clean
+
+## Before Submitting Work
+Follow the completion checklist: `.squad/templates/completion-checklist.md`
+Every item must be verified before closing an issue.

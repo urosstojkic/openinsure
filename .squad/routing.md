@@ -55,3 +55,38 @@ When triaging, the Lead should ask:
 6. **Anticipate downstream work.** If a feature is being built, spawn the tester to write test cases from requirements simultaneously.
 7. **Issue-labeled work** — when a `squad:{member}` label is applied to an issue, route to that member. The Lead handles all `squad` (base label) triage.
 8. **@copilot routing** — when evaluating issues, check @copilot's capability profile in `team.md`. Route 🟢 good-fit tasks to `squad:copilot`. Flag 🟡 needs-review tasks for PR review. Keep 🔴 not-suitable tasks with squad members.
+
+## Branch Strategy
+
+All squad work uses the naming convention: `squad/{issue-number}-{slug}`
+
+Examples:
+- `squad/156-referential-integrity`
+- `squad/201-add-reinsurance-api`
+- `squad/189-fix-claim-state-machine`
+
+See `.squad/templates/issue-lifecycle.md` for the full issue-to-merge flow.
+
+## Parallel Execution Rules
+
+Agents are grouped into dependency tiers that determine execution ordering:
+
+| Tier | Agents | Execution | Rationale |
+|------|--------|-----------|-----------|
+| **P0 — Lead** | Lead (coordinator) | Sequential | Must triage and assign before others start |
+| **P1 — Specialists** | Backend, Frontend, Insurance, Security | Parallel OK | Independent domain owners; can work simultaneously |
+| **P2 — Supporting** | QA, Scribe, Infra | Parallel OK | Can run alongside P1 or after P1 completes |
+
+### Parallel Execution Guidelines
+
+1. **P1 agents can always run in parallel** with each other (e.g., Backend + Frontend on the same feature).
+2. **P2 agents can run in parallel** with P1 or each other (e.g., QA writes tests while Backend implements).
+3. **P0 (Lead) is sequential** — triage and routing must complete before specialist work begins.
+4. **Cross-tier dependencies** — if a P2 agent (e.g., QA) depends on P1 output (e.g., Backend API), the P2 agent should wait for the dependency to complete.
+5. **Fan-out pattern** — for "Team, ..." requests, spawn all relevant P1+P2 agents in parallel.
+
+## Dependency Tiers
+
+- **P0 = Lead (sequential):** Triage, routing, priority decisions. Must complete before work begins.
+- **P1 = Specialists (parallel OK):** Backend, Frontend, Insurance, Security. Own their domains independently.
+- **P2 = Supporting (parallel OK):** QA, Scribe, Infra. Support P1 work and can run concurrently.
