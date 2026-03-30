@@ -80,34 +80,56 @@ def _apply_sync(db: Any) -> list[str]:
 
         already_recorded = row and row[0] > 0
 
-        # Repair: if recorded but target tables are missing, delete the
-        # stale record so the migration re-runs.  Extract table names from
-        # CREATE TABLE statements in the SQL file.
+        # Repair: if recorded but target tables/columns are missing,
+        # delete the stale record so the migration re-runs.
         if already_recorded:
             sql_text = path.read_text(encoding="utf-8")
+            missing = False
+            cursor = conn.cursor()
+
+            # Check CREATE TABLE targets
             table_names = re.findall(r"(?i)CREATE\s+TABLE\s+(\w+)", sql_text)
-            if table_names:
-                cursor = conn.cursor()
-                missing = False
-                for tbl in table_names:
+            for tbl in table_names:
+                cursor.execute(
+                    "SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = ?",
+                    [tbl],
+                )
+                tbl_row = cursor.fetchone()
+                if not tbl_row or tbl_row[0] == 0:
+                    missing = True
+                    break
+
+            # Check ALTER TABLE ADD column targets
+            if not missing:
+                alter_cols = re.findall(
+                    r"(?i)ALTER\s+TABLE\s+(\w+)\s+ADD\s+(\w+)",
+                    sql_text,
+                )
+                for tbl, col in alter_cols:
                     cursor.execute(
                         "SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = ?",
                         [tbl],
                     )
                     tbl_row = cursor.fetchone()
-                    if not tbl_row or tbl_row[0] == 0:
-                        missing = True
-                        break
+                    if tbl_row and tbl_row[0] > 0:
+                        cursor.execute(
+                            "SELECT COL_LENGTH(?, ?)", [tbl, col]
+                        )
+                        col_row = cursor.fetchone()
+                        if col_row is None or col_row[0] is None:
+                            missing = True
+                            break
+            cursor.close()
+
+            if missing:
+                logger.info("Repair: migration %s recorded but objects missing, re-applying", name)
+                cursor = conn.cursor()
+                cursor.execute(
+                    "DELETE FROM _migration_history WHERE migration_name = ?",
+                    [name],
+                )
                 cursor.close()
-                if missing:
-                    logger.info("Repair: migration %s recorded but tables missing, re-applying", name)
-                    cursor = conn.cursor()
-                    cursor.execute(
-                        "DELETE FROM _migration_history WHERE migration_name = ?",
-                        [name],
-                    )
-                    cursor.close()
-                    already_recorded = False
+                already_recorded = False
 
         if already_recorded:
             continue
@@ -118,7 +140,13 @@ def _apply_sync(db: Any) -> list[str]:
         sql = re.sub(r"(?i)\bCOMMIT\s+TRANSACTION\b;?", "", sql)
         sql = re.sub(r"(?i)\bCOMMIT\b;?", "", sql)
 
-        batches = [b.strip() for b in sql.split(";") if b.strip()]
+        # Split on GO batch separator (T-SQL convention). If no GO
+        # separators are present, execute the entire SQL as one batch
+        # to preserve BEGIN/END blocks that contain semicolons.
+        if re.search(r"^\s*GO\s*$", sql, re.MULTILINE):
+            batches = [b.strip() for b in re.split(r"^\s*GO\s*$", sql, flags=re.MULTILINE) if b.strip()]
+        else:
+            batches = [sql.strip()] if sql.strip() else []
 
         cursor = conn.cursor()
         executed = 0

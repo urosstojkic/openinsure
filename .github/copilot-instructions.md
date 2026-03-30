@@ -49,6 +49,17 @@ Full routing rules including issue triage and @copilot assignment: `.squad/routi
 1. **Read the user's request** and determine which Squad agent(s) should handle it
 2. **Reference the agent's charter** in the prompt — include the charter file path
 3. **Fan-out for cross-cutting work** — spawn multiple agents in parallel (e.g., Backend + Frontend + QA)
+4. **Branch-based development** — each agent works on a branch: `squad/{issue-number}-{slug}`
+5. **Auto-merge on completion** — after passing quality gates, the agent MUST create a PR and merge it to main:
+   ```
+   gh pr create --base main --head squad/{issue}-{slug} --title "feat: {description} (#{issue})" --body "Closes #{issue}"
+   gh pr merge {pr_number} --squash --admin --subject "feat: {description} (#{issue})"
+   ```
+   The user should NOT need to manually merge squad branches — agents are responsible for the full lifecycle.
+6. **After completion**: update the agent's `history.md` with learnings
+7. **Record decisions** in `.squad/decisions.md` if architectural choices were made
+8. **Label GitHub issues** with `squad:{agent}` for tracking
+3. **Fan-out for cross-cutting work** — spawn multiple agents in parallel (e.g., Backend + Frontend + QA)
 4. **After completion**: update the agent's `history.md` with learnings
 5. **Record decisions** in `.squad/decisions.md` if architectural choices were made
 6. **Label GitHub issues** with `squad:{agent}` for tracking
@@ -88,6 +99,7 @@ After completing a significant feature block (new process, major fix, architectu
 
 ### Never Do
 
+- Never leave squad branches unmerged — agents must create PRs and merge them to main after passing quality gates
 - Never launch generic unnamed agents — always route through Squad
 - Never deploy without smoke test passing
 - Never deploy without running `scripts/foundry_smoke_test.py` to verify Foundry agents respond
