@@ -105,7 +105,7 @@ from openinsure.agents.prompts._underwriting import (
 from openinsure.agents.prompts.versioning import (
     PromptTemplate as PromptTemplate,
 )
-from openinsure.agents.prompts.versioning import (
+from openinsure.agents.prompts.versioning import (  # noqa: F401
     clear_cache as clear_prompt_cache,
 )
 from openinsure.agents.prompts.versioning import (
