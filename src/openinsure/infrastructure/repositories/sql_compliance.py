@@ -412,10 +412,10 @@ def _deserialize_decision(row: dict[str, Any]) -> dict[str, Any]:
     row["entity_id"] = ds.get("entity_id") or (inp.get("entity_id") if isinstance(inp, dict) else "") or ""
     row["entity_type"] = ds.get("entity_type") or (inp.get("entity_type") if isinstance(inp, dict) else "") or ""
 
-    # Map model_used / agent_id → model_id
+    # Map model_used → model_id; keep agent_id for agent-status grouping
     raw_agent_id = row.get("agent_id", "")
     row["model_id"] = row.pop("model_used", "") or raw_agent_id
-    row.pop("agent_id", None)
+    row["agent_id"] = raw_agent_id
 
     # Derive human-readable agent_name for the compliance dashboard
     _agent_display = {

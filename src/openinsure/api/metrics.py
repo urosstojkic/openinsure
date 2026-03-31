@@ -290,7 +290,7 @@ async def get_agent_status() -> AgentStatusResponse:
     agent_display: dict[str, str] = {}
 
     for row in all_rows:
-        raw_aid = row.get("model_id", row.get("agent_id", "unknown"))
+        raw_aid = row.get("agent_id", row.get("model_id", "unknown"))
         # Normalise to canonical agent key when possible
         aid = raw_aid
         for key in foundry_agents:

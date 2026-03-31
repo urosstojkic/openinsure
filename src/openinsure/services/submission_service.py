@@ -626,8 +626,8 @@ class SubmissionService:
                     "rating_breakdown": rating_breakdown,
                 }
 
-        # Local fallback -- use deterministic rating engine
-        premium = 5000.00
+        # Local fallback -- use deterministic rating engine (no hardcoded premium)
+        premium = None
         rating_breakdown = None
         try:
             from openinsure.agents.prompts import _get_rating_breakdown
@@ -643,6 +643,35 @@ class SubmissionService:
                 )
         except Exception:
             logger.debug("submissions.rating_engine_fallback_failed", exc_info=True)
+
+        # Second attempt: CyberRatingEngine
+        if premium is None:
+            try:
+                risk_data = _extract_risk_data(record)
+                rating_input = _build_rating_input(risk_data)
+                engine = CyberRatingEngine()
+                rating_result = engine.calculate_premium(rating_input)
+                premium = float(rating_result.final_premium)
+                rating_breakdown = {
+                    "final_premium": premium,
+                    "confidence": rating_result.confidence,
+                    "factors_applied": {k: float(v) for k, v in rating_result.factors_applied.items()},
+                    "explanation": rating_result.explanation,
+                }
+                logger.info(
+                    "submissions.fallback_quote_engine",
+                    submission_id=submission_id,
+                    premium=premium,
+                    source="cyber_rating_engine",
+                )
+            except Exception:
+                logger.warning("submissions.rating_engine_also_failed", submission_id=submission_id, exc_info=True)
+
+        # Last resort: LOB-appropriate minimum premium
+        if premium is None:
+            lob = record.get("line_of_business", "cyber")
+            premium = _LOB_MIN_PREMIUMS.get(lob, _DEFAULT_MIN_PREMIUM)
+            logger.error("submissions.lob_minimum_fallback", submission_id=submission_id, premium=premium, lob=lob)
 
         now = _now()
 

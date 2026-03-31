@@ -171,8 +171,9 @@ class InMemoryComplianceRepository(BaseRepository):
         agent_id = record.get("agent_id", record.get("model_used", record.get("model_id", "")))
         entry = {
             "id": record_id,
+            "agent_id": agent_id,
             "decision_type": record.get("decision_type", ""),
-            "entity_id": record.get("entity_id", record.get("agent_id", "")),
+            "entity_id": record.get("entity_id", ""),
             "entity_type": record.get("entity_type", "agent"),
             "model_id": record.get("model_used", record.get("model_id", "")),
             "model_version": record.get("model_version", ""),

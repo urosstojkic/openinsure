@@ -621,7 +621,26 @@ async def get_product_performance(product_id: str) -> ProductPerformance:
             **real_data,
         )
 
-    # Fallback: deterministic seeded stub data for demo / empty DB
+    # No real data available — return zeroed metrics (no stubs in live mode)
+    from openinsure.infrastructure.factory import get_settings
+
+    settings = get_settings()
+    if settings.storage_mode != "memory":
+        return ProductPerformance(
+            product_id=product_id,
+            product_name=record["name"],
+            policies_in_force=0,
+            total_gwp=0.0,
+            loss_ratio=0.0,
+            bind_rate=0.0,
+            avg_premium=0.0,
+            submissions_count=0,
+            bound_count=0,
+            declined_count=0,
+            premium_trend=[],
+        )
+
+    # Demo / memory mode: deterministic seeded stub data
     import hashlib
 
     seed = int(hashlib.md5(product_id.encode()).hexdigest()[:8], 16)  # noqa: S324

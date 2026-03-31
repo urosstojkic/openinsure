@@ -255,6 +255,21 @@ async def create_submission(body: SubmissionCreate) -> SubmissionResponse:
         "updated_at": now,
     }
     await _repo.create(record)
+
+    # Audit trail
+    audit = get_audit_service()
+    await audit.log_change(
+        "submission",
+        sid,
+        "create",
+        body.applicant_name or "system",
+        changes={
+            "applicant_name": body.applicant_name,
+            "line_of_business": body.line_of_business,
+            "channel": body.channel,
+        },
+    )
+
     return SubmissionResponse(**record)
 
 
@@ -443,6 +458,16 @@ async def generate_quote(
                 "message": f"Action requires approval from {result['required_role']}",
             },
         )
+
+    # Audit trail
+    audit = get_audit_service()
+    await audit.log_change(
+        "submission",
+        submission_id,
+        "update",
+        user.display_name,
+        changes={"status": "quoted", "premium": result["premium"]},
+    )
 
     return QuoteResponse(
         submission_id=submission_id,

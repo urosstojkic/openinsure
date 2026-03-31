@@ -39,6 +39,14 @@ class AuditService:
         if self.db is None:
             logger.debug("AuditService: no DB configured — skipping log_change")
             return
+        # Map domain actions to DB-allowed values; preserve original in changes
+        _allowed_actions = {"create", "update", "delete", "restore", "anonymize"}
+        db_action = action
+        if action not in _allowed_actions:
+            if changes is None:
+                changes = {}
+            changes["_original_action"] = action
+            db_action = "update"
         try:
             await self.db.execute_query(
                 """INSERT INTO change_log
@@ -49,7 +57,7 @@ class AuditService:
                     str(uuid4()),
                     entity_type,
                     entity_id,
-                    action,
+                    db_action,
                     changed_by,
                     datetime.now(UTC).isoformat(),
                     json.dumps(changes) if changes else None,

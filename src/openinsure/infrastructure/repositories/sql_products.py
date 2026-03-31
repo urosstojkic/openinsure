@@ -387,8 +387,13 @@ class SqlProductRepository(BaseRepository):
 
             # Merge scalar fields: child overrides parent for non-None values
             for key in (
-                "description", "line_of_business", "min_premium", "max_premium",
-                "effective_date", "expiration_date", "currency",
+                "description",
+                "line_of_business",
+                "min_premium",
+                "max_premium",
+                "effective_date",
+                "expiration_date",
+                "currency",
             ):
                 if merged.get(key) is None or merged[key] == "":
                     parent_val = parent.get(key)

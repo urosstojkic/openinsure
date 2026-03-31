@@ -145,9 +145,24 @@ async def enrich_submission(submission: dict[str, Any]) -> dict[str, Any]:
     """Run all enrichment providers against a submission.
 
     Returns a dict with provider results and a synthesized risk summary.
+    In live mode (storage_mode != "memory"), simulated providers are
+    skipped — only real provider integrations run.
     """
+    from openinsure.infrastructure.factory import get_settings
+
+    settings = get_settings()
+    is_live = settings.storage_mode != "memory"
+
     results: dict[str, Any] = {}
     for provider in _PROVIDERS:
+        if is_live:
+            # Skip simulated providers in live mode — no fake data
+            results[provider.name] = {
+                "provider": provider.name,
+                "status": "not_configured",
+                "message": "Real provider integration not configured",
+            }
+            continue
         try:
             result = await provider.enrich(submission)
             results[provider.name] = result
