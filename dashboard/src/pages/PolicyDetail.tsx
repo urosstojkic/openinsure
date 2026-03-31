@@ -7,20 +7,13 @@ import { StatCardSkeleton } from '../components/Skeleton';
 import { getPolicy } from '../api/policies';
 import client from '../api/client';
 import type { PolicyStatus } from '../types';
+import { lobDisplayName } from '../utils/lobLabels';
 
 const statusVariant: Record<PolicyStatus, 'green' | 'gray' | 'red' | 'yellow'> = {
   active: 'green',
   expired: 'gray',
   cancelled: 'red',
   pending: 'yellow',
-};
-
-const lobLabels: Record<string, string> = {
-  cyber: 'Cyber Liability',
-  professional_liability: 'Professional Liability',
-  dnol: 'Directors & Officers',
-  epli: 'Employment Practices',
-  general_liability: 'General Liability',
 };
 
 const money = (n: number) =>
@@ -57,7 +50,7 @@ const PolicyDetail: React.FC = () => {
             <h1 className="text-2xl font-bold tracking-tight text-slate-900">{policy.policy_number}</h1>
             <StatusBadge label={policy.status} variant={statusVariant[policy.status]} />
           </div>
-          <p className="text-sm text-slate-500 mt-0.5">{policy.insured_name} · {lobLabels[policy.lob] ?? policy.lob}</p>
+          <p className="text-sm text-slate-500 mt-0.5">{policy.insured_name} · {lobDisplayName(policy.lob)}</p>
         </div>
       </div>
 
@@ -68,7 +61,7 @@ const PolicyDetail: React.FC = () => {
           <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
             <div><dt className="text-[11px] font-medium uppercase tracking-wider text-slate-400">Policy Number</dt><dd className="mt-0.5 font-medium text-slate-800 font-mono">{policy.policy_number}</dd></div>
             <div><dt className="text-[11px] font-medium uppercase tracking-wider text-slate-400">Insured</dt><dd className="mt-0.5 font-medium text-slate-800">{policy.insured_name}</dd></div>
-            <div><dt className="text-[11px] font-medium uppercase tracking-wider text-slate-400">Line of Business</dt><dd className="mt-0.5 font-medium text-slate-800">{lobLabels[policy.lob] ?? policy.lob}</dd></div>
+            <div><dt className="text-[11px] font-medium uppercase tracking-wider text-slate-400">Line of Business</dt><dd className="mt-0.5 font-medium text-slate-800">{lobDisplayName(policy.lob)}</dd></div>
             <div><dt className="text-[11px] font-medium uppercase tracking-wider text-slate-400">Status</dt><dd className="mt-0.5"><StatusBadge label={policy.status} variant={statusVariant[policy.status]} /></dd></div>
             <div><dt className="text-[11px] font-medium uppercase tracking-wider text-slate-400">Effective Date</dt><dd className="mt-0.5 font-medium text-slate-800">{fmtDate(policy.effective_date)}</dd></div>
             <div><dt className="text-[11px] font-medium uppercase tracking-wider text-slate-400">Expiration Date</dt><dd className="mt-0.5 font-medium text-slate-800">{fmtDate(policy.expiration_date)}</dd></div>

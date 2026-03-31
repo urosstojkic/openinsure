@@ -32,13 +32,7 @@ const severityVariant: Record<ClaimSeverity, 'gray' | 'yellow' | 'orange' | 'red
   critical: 'red',
 };
 
-const lobLabels: Record<string, string> = {
-  cyber: 'Cyber Liability',
-  professional_liability: 'Professional Liability',
-  dnol: 'Directors & Officers',
-  epli: 'Employment Practices',
-  general_liability: 'General Liability',
-};
+import { lobDisplayName } from '../utils/lobLabels';
 
 const claimTypeLabels: Record<string, string> = {
   data_breach: 'Data Breach',
@@ -325,7 +319,9 @@ const ClaimDetail: React.FC = () => {
   // Extract AI assessment data from metadata if available
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const meta = (claim as any).metadata || {};
-  const fraudScore = claim.fraud_score ?? meta.fraud_score ?? null;
+  const riskData = (claim as any).risk_data || {};
+  const assessment = (claim as any).assessment || {};
+  const fraudScore = claim.fraud_score ?? meta.fraud_score ?? riskData.fraud_score ?? assessment.fraud_score ?? null;
   const hasAIData = fraudScore != null || claim.total_reserved > 0 || meta.coverage_confirmed != null;
 
   return (
@@ -414,7 +410,7 @@ const ClaimDetail: React.FC = () => {
             <StatusBadge label={claim.severity} variant={severityVariant[claim.severity] || 'gray'} />
           </div>
           <p className="text-sm text-slate-500 mt-0.5">
-            {lobLabels[claim.lob] ?? claim.lob} · {claim.assigned_to}
+            {lobDisplayName(claim.lob)} · {claim.assigned_to}
             {claim.claim_type && <span className="ml-2 text-xs text-slate-400">({claimTypeLabels[claim.claim_type] ?? claim.claim_type})</span>}
           </p>
         </div>
@@ -469,19 +465,6 @@ const ClaimDetail: React.FC = () => {
       {/* AI Assessment Results */}
       {hasAIData && (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
-          {fraudScore != null && (
-            <div className="rounded-2xl border border-slate-200/60 bg-white p-5 shadow-[var(--shadow-card)] flex flex-col items-center">
-              <p className="text-[10px] font-medium uppercase tracking-wider text-slate-400 mb-3">Fraud Score</p>
-              <RiskGauge
-                value={fraudScore * 100}
-                size={100}
-                strokeWidth={8}
-                label={fraudScore < 0.3 ? 'Low' : fraudScore < 0.6 ? 'Medium' : 'High'}
-                thresholds={[30, 60]}
-              />
-            </div>
-          )}
-
           {claim.total_reserved > 0 && (
             <div className="rounded-xl border border-amber-200/60 bg-amber-50/50 p-4 shadow-[var(--shadow-xs)]">
               <p className="text-[10px] font-medium uppercase tracking-wider text-slate-400">Total Reserved</p>
@@ -527,7 +510,7 @@ const ClaimDetail: React.FC = () => {
                   )}
                 </dd>
               </div>
-              <div><dt className="text-[11px] font-medium uppercase tracking-wider text-slate-400">Type</dt><dd className="mt-0.5 font-medium text-slate-800">{claimTypeLabels[claim.claim_type || ''] ?? claim.claim_type ?? lobLabels[claim.lob] ?? claim.lob}</dd></div>
+              <div><dt className="text-[11px] font-medium uppercase tracking-wider text-slate-400">Type</dt><dd className="mt-0.5 font-medium text-slate-800">{claimTypeLabels[claim.claim_type || ''] ?? claim.claim_type ?? lobDisplayName(claim.lob)}</dd></div>
               <div><dt className="text-[11px] font-medium uppercase tracking-wider text-slate-400">Status</dt><dd className="mt-0.5"><StatusBadge label={claim.status} variant={statusVariant[claim.status] || 'gray'} /></dd></div>
               <div><dt className="text-[11px] font-medium uppercase tracking-wider text-slate-400">Severity</dt><dd className="mt-0.5"><StatusBadge label={claim.severity} variant={severityVariant[claim.severity] || 'gray'} /></dd></div>
               <div><dt className="text-[11px] font-medium uppercase tracking-wider text-slate-400">Assigned Adjuster</dt><dd className="mt-0.5 font-medium text-slate-800">{claim.assigned_to}</dd></div>
@@ -723,7 +706,7 @@ const ClaimDetail: React.FC = () => {
               </div>
               <div>
                 <dt className="text-[11px] font-medium uppercase tracking-wider text-slate-400">Line of Business</dt>
-                <dd className="mt-0.5 font-medium text-slate-800">{lobLabels[claim.lob] ?? claim.lob}</dd>
+                <dd className="mt-0.5 font-medium text-slate-800">{lobDisplayName(claim.lob)}</dd>
               </div>
               <div>
                 <dt className="text-[11px] font-medium uppercase tracking-wider text-slate-400">Adjuster</dt>

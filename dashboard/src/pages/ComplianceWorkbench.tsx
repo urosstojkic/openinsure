@@ -82,9 +82,11 @@ const ComplianceWorkbench: React.FC = () => {
                     <td className="px-3 py-2">
                       <StatusBadge label={sys.status} variant={sys.status === 'active' ? 'green' : sys.status === 'testing' ? 'yellow' : 'gray'} />
                     </td>
-                    <td className="px-3 py-2 text-right font-mono text-slate-700">{sys.decisions_count}</td>
+                    <td className="px-3 py-2 text-right font-mono text-slate-700">{sys.decisions_count || '—'}</td>
                     <td className="px-3 py-2 text-right font-mono text-slate-700">
-                      {compliance ? `${Math.round(compliance.avg_confidence * 100)}%` : '—'}
+                      {(sys as any).avg_confidence
+                        ? `${Math.round((sys as any).avg_confidence * 100)}%`
+                        : compliance ? `${Math.round(compliance.avg_confidence * 100)}%` : '—'}
                     </td>
                   </tr>
                 ))}

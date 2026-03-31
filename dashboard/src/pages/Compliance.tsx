@@ -85,8 +85,8 @@ const Compliance: React.FC = () => {
             {comp.ai_systems.map((sys) => (
               <div key={sys.id} className="flex items-center justify-between rounded-lg border border-slate-100 p-3">
                 <div>
-                  <p className="text-sm font-medium text-slate-900">{sys.name} <span className="text-xs text-slate-400">v{sys.version}</span></p>
-                  <p className="text-xs text-slate-400">Last audit: {sys.last_audit} · {sys.decisions_count} decisions</p>
+                  <p className="text-sm font-medium text-slate-900">{sys.name} {sys.version ? <span className="text-xs text-slate-400">v{sys.version}</span> : <span className="text-xs text-slate-400">—</span>}</p>
+                  <p className="text-xs text-slate-400">Last audit: {sys.last_audit || '—'} · {sys.decisions_count ?? '—'} decisions</p>
                 </div>
                 <div className="flex items-center gap-2">
                   <StatusBadge

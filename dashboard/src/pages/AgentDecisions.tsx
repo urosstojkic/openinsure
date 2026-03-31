@@ -10,15 +10,25 @@ import EmptyState from '../components/EmptyState';
 import { TableSkeleton } from '../components/Skeleton';
 import { getDecisions } from '../api/compliance';
 import { formatTimestamp } from '../utils/formatDate';
-import type { AgentDecision, AgentName, OversightLevel } from '../types';
+import type { AgentDecision, OversightLevel } from '../types';
 import { Bot, ChevronDown, Cpu, ExternalLink, Eye, EyeOff, ShieldCheck, Timer, X } from 'lucide-react';
 
-const agentLabels: Record<AgentName, string> = {
+const agentLabels: Record<string, string> = {
   triage_agent: 'Triage Agent',
+  submission_agent: 'Submission Agent',
   underwriting_agent: 'Underwriting Agent',
   claims_agent: 'Claims Agent',
+  claims_assessment_agent: 'Claims Assessment Agent',
   compliance_agent: 'Compliance Agent',
   fraud_agent: 'Fraud Detection',
+  policy_agent: 'Policy Agent',
+  policy_review_agent: 'Policy Review Agent',
+  orchestrator: 'Orchestrator',
+  renewal_agent: 'Renewal Agent',
+  document_agent: 'Document Agent',
+  knowledge_agent: 'Knowledge Agent',
+  enrichment_agent: 'Enrichment Agent',
+  analytics_agent: 'Analytics Agent',
 };
 
 const oversightVariant: Record<OversightLevel, 'green' | 'yellow' | 'red'> = {
@@ -295,7 +305,18 @@ const AgentDecisions: React.FC = () => {
     {
       key: 'outcome',
       header: 'Outcome',
-      render: (r) => <span className="max-w-[200px] truncate block">{r.outcome}</span>,
+      render: (r) => {
+        if (!r.outcome) return <span className="text-slate-400">—</span>;
+        // If outcome looks like raw JSON, try to extract a readable summary
+        if (r.outcome.startsWith('{') || r.outcome.startsWith('[')) {
+          try {
+            const parsed = JSON.parse(r.outcome);
+            const summary = parsed.recommendation || parsed.decision || parsed.authority_decision || parsed.action || parsed.status;
+            if (summary) return <span className="max-w-[200px] truncate block capitalize">{String(summary).replace(/_/g, ' ')}</span>;
+          } catch { /* not valid JSON, display as-is */ }
+        }
+        return <span className="max-w-[200px] truncate block">{r.outcome}</span>;
+      },
     },
     {
       key: 'timestamp',

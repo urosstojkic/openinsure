@@ -10,7 +10,8 @@ import { getUnderwriterQueue } from '../api/workbench';
 import { processSubmission } from '../api/submissions';
 import { TableSkeleton } from '../components/Skeleton';
 import { formatDate } from '../utils/formatDate';
-import type { UnderwriterQueueItem, LOB } from '../types';
+import type { UnderwriterQueueItem } from '../types';
+import { lobShortName, lobDisplayName } from '../utils/lobLabels';
 
 const priorityVariant: Record<string, 'red' | 'orange' | 'yellow' | 'green'> = {
   urgent: 'red',
@@ -19,16 +20,15 @@ const priorityVariant: Record<string, 'red' | 'orange' | 'yellow' | 'green'> = {
   low: 'green',
 };
 
-const lobLabels: Record<LOB, string> = {
-  cyber: 'Cyber',
-  professional_liability: 'Prof Liability',
-  dnol: 'D&O',
-  epli: 'EPLI',
-  general_liability: 'General Liability',
-};
-
 const money = (n: number) =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n);
+
+/** Risk level badge based on risk score (0-10 scale) */
+function riskBadge(score: number) {
+  if (score > 7) return <StatusBadge label="High Risk" variant="red" />;
+  if (score >= 4) return <StatusBadge label="Medium Risk" variant="yellow" />;
+  return <StatusBadge label="Low Risk" variant="green" />;
+}
 
 /** Derive row color class based on confidence & recommendation */
 function rowColorClass(item: UnderwriterQueueItem): string {
@@ -132,7 +132,7 @@ const UnderwriterWorkbench: React.FC = () => {
                     <div className="text-xs font-medium text-slate-900 truncate max-w-[140px]">{item.applicant_name}</div>
                     <div className="text-[10px] text-slate-400 font-mono">{item.submission_number || item.id.substring(0, 8)}</div>
                   </td>
-                  <td className="px-3 py-2 text-xs text-slate-600">{lobLabels[item.lob]}</td>
+                  <td className="px-3 py-2 text-xs text-slate-600">{lobShortName(item.lob)}</td>
                   <td className="px-3 py-2">
                     <span className={`font-mono text-xs ${item.risk_score >= 7 ? 'text-red-600 font-semibold' : item.risk_score >= 4 ? 'text-amber-600' : 'text-emerald-600'}`}>
                       {item.risk_score ? `${item.risk_score}/10` : '—'}
@@ -177,7 +177,7 @@ const UnderwriterWorkbench: React.FC = () => {
               <div>
                 <h2 className="text-lg font-bold text-slate-900">{selected.company_name}</h2>
                 <p className="text-xs text-slate-500">
-                  {selected.applicant_name} · {lobLabels[selected.lob]} · Received {formatDate(selected.received_date)}
+                  {selected.applicant_name} · {lobDisplayName(selected.lob)} · Received {formatDate(selected.received_date)}
                 </p>
               </div>
               <div className="flex items-center gap-3">
@@ -194,6 +194,7 @@ const UnderwriterWorkbench: React.FC = () => {
                   </button>
                 )}
                 <TrafficLight confidence={selected.confidence} humanOversight={selected.confidence < 0.5 ? 'required' : selected.confidence < 0.8 ? 'recommended' : 'none'} />
+                {selected.risk_score > 0 && riskBadge(selected.risk_score)}
               </div>
             </div>
 
@@ -224,7 +225,7 @@ const UnderwriterWorkbench: React.FC = () => {
                         ['Industry', selected.industry || '—'],
                         ['Revenue', selected.annual_revenue ? money(selected.annual_revenue) : '—'],
                         ['Employees', selected.employee_count ? selected.employee_count.toLocaleString() : '—'],
-                        ['Line of Business', lobLabels[selected.lob]],
+                        ['Line of Business', lobDisplayName(selected.lob)],
                       ].map(([label, value]) => (
                         <div key={label} className="flex items-center justify-between rounded border border-slate-100 px-3 py-2">
                           <span className="text-xs text-slate-500">{label}</span>
@@ -292,35 +293,45 @@ const UnderwriterWorkbench: React.FC = () => {
                   </div>
 
                   {/* Comparable Accounts */}
-                  {selected.comparable_accounts.length > 0 && (
-                    <div>
-                      <h3 className="mb-3 text-sm font-semibold text-slate-800">Comparable Accounts</h3>
-                      <div className="overflow-x-auto rounded-xl border border-slate-200/60">
-                        <table className="min-w-full text-sm">
-                          <thead className="sticky top-0 z-10 bg-slate-50/80 backdrop-blur-sm">
-                            <tr>
-                              <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">Company</th>
-                              <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">Industry</th>
-                              <th className="px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-wider text-slate-400">Premium</th>
-                              <th className="px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-wider text-slate-400">Limit</th>
-                              <th className="px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-wider text-slate-400">Loss Ratio</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-slate-50">
-                            {selected.comparable_accounts.map((ca, i) => (
-                              <tr key={i}>
-                                <td className="px-3 py-2 text-slate-700">{ca.company}</td>
-                                <td className="px-3 py-2 text-slate-500">{ca.industry}</td>
-                                <td className="px-3 py-2 text-right font-mono text-slate-700">{money(ca.premium)}</td>
-                                <td className="px-3 py-2 text-right font-mono text-slate-700">{money(ca.limit)}</td>
-                                <td className="px-3 py-2 text-right font-mono text-slate-700">{Math.round(ca.loss_ratio * 100)}%</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
+                  {(() => {
+                    const PLACEHOLDER_RE = /^(Industry\s+)?Peer\s+[A-Z]$/i;
+                    const realAccounts = selected.comparable_accounts.filter((ca) => ca.company && !PLACEHOLDER_RE.test(ca.company));
+                    if (realAccounts.length === 0) return (
+                      <div>
+                        <h3 className="mb-3 text-sm font-semibold text-slate-800">Comparable Accounts</h3>
+                        <p className="text-sm text-slate-400">No comparable accounts available</p>
                       </div>
-                    </div>
-                  )}
+                    );
+                    return (
+                      <div>
+                        <h3 className="mb-3 text-sm font-semibold text-slate-800">Comparable Accounts</h3>
+                        <div className="overflow-x-auto rounded-xl border border-slate-200/60">
+                          <table className="min-w-full text-sm">
+                            <thead className="sticky top-0 z-10 bg-slate-50/80 backdrop-blur-sm">
+                              <tr>
+                                <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">Company</th>
+                                <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">Industry</th>
+                                <th className="px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-wider text-slate-400">Premium</th>
+                                <th className="px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-wider text-slate-400">Limit</th>
+                                <th className="px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-wider text-slate-400">Loss Ratio</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-50">
+                              {realAccounts.map((ca, i) => (
+                                <tr key={i}>
+                                  <td className="px-3 py-2 text-slate-700">{ca.company}</td>
+                                  <td className="px-3 py-2 text-slate-500">{ca.industry}</td>
+                                  <td className="px-3 py-2 text-right font-mono text-slate-700">{money(ca.premium)}</td>
+                                  <td className="px-3 py-2 text-right font-mono text-slate-700">{money(ca.limit)}</td>
+                                  <td className="px-3 py-2 text-right font-mono text-slate-700">{Math.round(ca.loss_ratio * 100)}%</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    );
+                  })()}
 
                   {/* Recommended Terms */}
                   {selected.recommended_terms.premium > 0 && (

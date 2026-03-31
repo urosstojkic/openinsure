@@ -58,6 +58,15 @@ const ClaimsAnalytics: React.FC = () => {
 
   const { frequency_severity, reserve_development, fraud_distribution, claims_by_type } = data;
 
+  // Clip chart data to current month — do not show future dates (#203)
+  const now = new Date();
+  const currentPeriod = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const clipToPresent = <T extends { period: string }>(arr: T[]): T[] =>
+    arr.filter((d) => d.period <= currentPeriod);
+
+  const clippedFreqSev = clipToPresent(frequency_severity);
+  const clippedReserve = clipToPresent(reserve_development);
+
   return (
     <div className="space-y-6">
       <div>
@@ -84,7 +93,7 @@ const ClaimsAnalytics: React.FC = () => {
         <div className="rounded-2xl border border-slate-200/60 bg-white p-6 shadow-[var(--shadow-card)]">
           <h3 className="text-sm font-semibold text-slate-700 mb-4">Frequency & Severity Trend</h3>
           <ResponsiveContainer width="100%" height={280}>
-            <AreaChart data={[...frequency_severity].reverse()}>
+            <AreaChart data={[...clippedFreqSev].reverse()}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
               <XAxis dataKey="period" tick={{ fontSize: 10, fill: '#94a3b8' }} />
               <YAxis yAxisId="left" tick={{ fontSize: 11, fill: '#94a3b8' }} />
@@ -100,7 +109,7 @@ const ClaimsAnalytics: React.FC = () => {
         <div className="rounded-2xl border border-slate-200/60 bg-white p-6 shadow-[var(--shadow-card)]">
           <h3 className="text-sm font-semibold text-slate-700 mb-4">Reserve Development</h3>
           <ResponsiveContainer width="100%" height={280}>
-            <BarChart data={[...reserve_development].reverse()}>
+            <BarChart data={[...clippedReserve].reverse()}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
               <XAxis dataKey="period" tick={{ fontSize: 10, fill: '#94a3b8' }} />
               <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />

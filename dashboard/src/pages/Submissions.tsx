@@ -10,7 +10,8 @@ import { ToastContainer } from '../components/Toast';
 import { useToast } from '../components/useToast';
 import { getSubmissionsPaginated } from '../api/submissions';
 import client from '../api/client';
-import type { Submission, SubmissionStatus, LOB } from '../types';
+import type { Submission, SubmissionStatus } from '../types';
+import { lobShortName } from '../utils/lobLabels';
 
 const statusVariant: Record<SubmissionStatus, 'blue' | 'yellow' | 'orange' | 'green' | 'purple' | 'red' | 'cyan'> = {
   received: 'blue',
@@ -25,13 +26,6 @@ const statusVariant: Record<SubmissionStatus, 'blue' | 'yellow' | 'orange' | 'gr
 const priorityVariant = (p: string) =>
   p === 'urgent' ? 'red' : p === 'high' ? 'orange' : p === 'medium' ? 'yellow' : 'gray';
 
-const lobLabels: Record<LOB, string> = {
-  cyber: 'Cyber',
-  professional_liability: 'Prof Liability',
-  dnol: 'D&O',
-  epli: 'EPLI',
-  general_liability: 'General Liability',
-};
 
 const Submissions: React.FC = () => {
   const navigate = useNavigate();
@@ -125,10 +119,10 @@ const Submissions: React.FC = () => {
           <p className="text-xs text-slate-400">{r.company_name}</p>
         </div>
       ), sortable: true, sortValue: (r) => r.applicant_name },
-    { key: 'lob', header: 'LOB', render: (r) => lobLabels[r.lob] ?? r.lob, sortable: true, sortValue: (r) => r.lob, className: 'hidden md:table-cell' },
+    { key: 'lob', header: 'LOB', render: (r) => lobShortName(r.lob), sortable: true, sortValue: (r) => r.lob, className: 'hidden md:table-cell' },
     { key: 'status', header: 'Status', render: (r) => <StatusBadge label={r.status} variant={statusVariant[r.status] || 'gray'} /> },
     { key: 'risk', header: 'Risk Score', render: (r) => (
-        <span className={`font-mono text-sm ${r.risk_score >= 70 ? 'text-red-600 font-semibold' : r.risk_score >= 40 ? 'text-amber-600' : 'text-slate-600'}`}>
+        <span className={`font-mono text-sm ${r.risk_score >= 7 ? 'text-red-600 font-semibold' : r.risk_score >= 4 ? 'text-amber-600' : 'text-slate-600'}`}>
           {r.risk_score || '—'}
         </span>
       ), sortable: true, sortValue: (r) => r.risk_score, className: 'hidden lg:table-cell' },
@@ -245,8 +239,8 @@ const Submissions: React.FC = () => {
           onChange={(e) => { setLobFilter(e.target.value); setCurrentPage(1); }}
         >
           <option value="all">All LOBs</option>
-          {Object.entries(lobLabels).map(([k, v]) => (
-            <option key={k} value={k}>{v}</option>
+          {[...new Set(submissions.map((s) => s.lob))].sort().map((k) => (
+            <option key={k} value={k}>{lobShortName(k)}</option>
           ))}
         </select>
         <span className="text-[11px] font-medium text-slate-400">{totalItems} total · {filtered.length} shown</span>

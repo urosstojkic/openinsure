@@ -34,7 +34,7 @@ function mapClaim(c: any): Claim {
     lob: c.lob || 'cyber',
     claim_type: c.claim_type || '',
     reported_by: c.reported_by || '',
-    fraud_score: c.fraud_score ?? null,
+    fraud_score: c.fraud_score ?? c.metadata?.fraud_score ?? c.risk_data?.fraud_score ?? c.assessment?.fraud_score ?? null,
     cause_of_loss: c.cause_of_loss || c.claim_type || '',
     reserves: c.reserves || [],
     payments: c.payments || [],

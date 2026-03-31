@@ -318,7 +318,6 @@ export async function getComplianceWorkbenchData(): Promise<ComplianceSummary> {
     ]);
     const decisionItems = decisions.data.items || [];
     const auditItems = audit.data.items || [];
-    const systemItems = systems.data.systems || [];
 
     const decisions_by_agent: Record<string, number> = {};
     const decisions_by_type: Record<string, number> = {};
@@ -336,6 +335,18 @@ export async function getComplianceWorkbenchData(): Promise<ComplianceSummary> {
       totalConfidence += d.confidence || 0;
     }
 
+    const rawSystems = systems.data.systems || [];
+    const mappedSystems = rawSystems.map((sys: Record<string, unknown>) => ({
+      id: sys.system_id || sys.id || '',
+      name: sys.name || '',
+      version: sys.version || (sys.model_ids as string[] || [])[0]?.replace(/.*-v/, '') || '1.0',
+      risk_category: sys.risk_category || sys.risk_level || 'high',
+      status: sys.status || 'active',
+      last_audit: sys.last_audit || (typeof sys.last_assessment === 'string' ? sys.last_assessment.slice(0, 10) : ''),
+      decisions_count: sys.decisions_count || 0,
+      avg_confidence: sys.avg_confidence || 0,
+    }));
+
     return {
       total_decisions: decisions.data.total || decisionItems.length,
       decisions_by_agent,
@@ -345,7 +356,7 @@ export async function getComplianceWorkbenchData(): Promise<ComplianceSummary> {
       avg_confidence: decisionItems.length > 0 ? totalConfidence / decisionItems.length : 0,
       bias_metrics: [],
       audit_trail: auditItems,
-      ai_systems: systemItems,
+      ai_systems: mappedSystems,
     };
   } catch (error) {
     console.warn('[API] Compliance workbench error:', error);

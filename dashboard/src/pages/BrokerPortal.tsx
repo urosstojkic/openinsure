@@ -5,14 +5,7 @@ import { getBrokerSubmissions, getBrokerPolicies, getBrokerClaims } from '../api
 import { createSubmission } from '../api/submissions';
 import { createClaim } from '../api/claims';
 import type { LOB, SubmissionStatus, ClaimStatus, BrokerSubmission, BrokerPolicy } from '../types';
-
-const lobLabels: Record<LOB, string> = {
-  cyber: 'Cyber',
-  professional_liability: 'Prof Liability',
-  dnol: 'D&O',
-  epli: 'EPLI',
-  general_liability: 'General Liability',
-};
+import { lobShortName } from '../utils/lobLabels';
 
 const statusVariant: Record<SubmissionStatus, 'blue' | 'yellow' | 'orange' | 'green' | 'purple' | 'red' | 'cyan'> = {
   received: 'blue',
@@ -204,7 +197,7 @@ const BrokerPortal: React.FC = () => {
                     <tr key={sub.id} className="cursor-pointer hover:bg-slate-50/50 transition-colors" onClick={() => setSelectedSubmission(sub)}>
                       <td className="px-4 py-3 font-mono text-xs text-slate-700">{formatSubId(sub)}</td>
                       <td className="px-4 py-3 text-sm text-slate-900">{sub.applicant_name}</td>
-                      <td className="px-4 py-3 text-sm text-slate-600">{lobLabels[sub.lob] ?? sub.lob}</td>
+                      <td className="px-4 py-3 text-sm text-slate-600">{lobShortName(sub.lob)}</td>
                       <td className="px-4 py-3"><StatusBadge label={sub.status} variant={statusVariant[sub.status]} /></td>
                       <td className="px-4 py-3 text-sm text-slate-600">{formatDate(sub.submitted_date)}</td>
                       <td className="px-4 py-3 text-sm text-slate-500">{formatDate(sub.last_update)}</td>
@@ -222,7 +215,7 @@ const BrokerPortal: React.FC = () => {
             <button onClick={() => setSelectedSubmission(null)} className="text-sm text-indigo-600 hover:text-indigo-800">← Back to submissions</button>
             <div className="rounded-xl border border-slate-200/60 bg-white p-5 shadow-[var(--shadow-xs)]">
               <h2 className="text-xl font-bold text-slate-900">{selectedSubmission.applicant_name}</h2>
-              <p className="text-sm text-slate-500">{formatSubId(selectedSubmission)} · {lobLabels[selectedSubmission.lob] ?? selectedSubmission.lob}</p>
+              <p className="text-sm text-slate-500">{formatSubId(selectedSubmission)} · {lobShortName(selectedSubmission.lob)}</p>
               <div className="mt-2">
                 <StatusBadge label={effectiveStatus} variant={statusVariant[effectiveStatus]} />
               </div>
@@ -344,7 +337,7 @@ const BrokerPortal: React.FC = () => {
                     <tr key={pol.id} className="hover:bg-slate-50/50 transition-colors">
                       <td className="px-4 py-3 font-mono text-xs text-slate-700">{pol.policy_number}</td>
                       <td className="px-4 py-3 text-sm text-slate-900">{pol.insured_name}</td>
-                      <td className="px-4 py-3 text-sm text-slate-600">{lobLabels[pol.lob] ?? pol.lob}</td>
+                      <td className="px-4 py-3 text-sm text-slate-600">{lobShortName(pol.lob)}</td>
                       <td className="px-4 py-3 text-sm text-slate-600">{formatDate(pol.effective_date)}</td>
                       <td className="px-4 py-3 text-sm text-slate-600">{formatDate(pol.expiry_date)}</td>
                       <td className="px-4 py-3 text-right font-mono text-sm text-slate-700">{money(pol.premium)}</td>

@@ -10,17 +10,13 @@ import { useToast } from '../components/useToast';
 import { getPolicies } from '../api/policies';
 import { generateRenewalTerms } from '../api/renewals';
 import type { Policy, PolicyStatus } from '../types';
+import { lobShortName } from '../utils/lobLabels';
 
 const statusVariant: Record<PolicyStatus, 'green' | 'gray' | 'red' | 'yellow'> = {
   active: 'green',
   expired: 'gray',
   cancelled: 'red',
   pending: 'yellow',
-};
-
-const lobLabels: Record<string, string> = {
-  cyber: 'Cyber', professional_liability: 'Prof Liability', dnol: 'D&O',
-  epli: 'EPLI', general_liability: 'General Liability',
 };
 
 const money = (n: number) =>
@@ -120,7 +116,7 @@ const Policies: React.FC = () => {
     },
     { key: 'number', header: 'Policy Number',render: (r) => <span className="font-mono text-xs">{r.policy_number}</span>, sortable: true, sortValue: (r) => r.policy_number },
     { key: 'insured', header: 'Insured', render: (r) => <span className="font-medium text-slate-900">{r.insured_name}</span>, sortable: true, sortValue: (r) => r.insured_name },
-    { key: 'lob', header: 'LOB', render: (r) => lobLabels[r.lob] ?? r.lob },
+    { key: 'lob', header: 'LOB', render: (r) => lobShortName(r.lob) },
     { key: 'status', header: 'Status', render: (r) => <StatusBadge label={r.status} variant={statusVariant[r.status]} /> },
     { key: 'effective', header: 'Effective', render: (r) => fmtDate(r.effective_date), sortable: true, sortValue: (r) => r.effective_date },
     { key: 'expiration', header: 'Expiration', render: (r) => fmtDate(r.expiration_date), sortable: true, sortValue: (r) => r.expiration_date },

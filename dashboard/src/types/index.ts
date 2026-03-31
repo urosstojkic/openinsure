@@ -153,7 +153,7 @@ export interface Claim {
 
 export interface AgentDecision {
   id: string;
-  agent: AgentName;
+  agent: string;
   decision_type: DecisionType;
   confidence: number;
   human_oversight: OversightLevel;

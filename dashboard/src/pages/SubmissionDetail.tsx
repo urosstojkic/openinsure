@@ -16,14 +16,10 @@ import { useToast } from '../components/useToast';
 import { getSubmission, enrichSubmission, bindSubmission, declineSubmission, referSubmission } from '../api/submissions';
 import client from '../api/client';
 import type { SubmissionStatus } from '../types';
+import { lobDisplayName } from '../utils/lobLabels';
 
 const statusVariant: Record<SubmissionStatus, 'blue' | 'yellow' | 'orange' | 'green' | 'purple' | 'red' | 'cyan'> = {
   received: 'blue', triaging: 'yellow', underwriting: 'orange', quoted: 'green', bound: 'purple', declined: 'red', referred: 'cyan',
-};
-
-const lobLabels: Record<string, string> = {
-  cyber: 'Cyber Liability', professional_liability: 'Professional Liability', dnol: 'Directors & Officers',
-  epli: 'Employment Practices', general_liability: 'General Liability',
 };
 
 const money = (n: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n);
@@ -240,7 +236,7 @@ const SubmissionDetail: React.FC = () => {
             <StatusBadge label={sub.status} variant={statusVariant[sub.status]} />
           </div>
           <p className="mt-0.5 text-sm text-slate-500">
-            {sub.company_name} · {lobLabels[sub.lob]}
+            {sub.company_name} · {lobDisplayName(sub.lob)}
             {sub.submission_number && (
               <span className="ml-2 text-xs text-slate-400">ID: {sub.id}</span>
             )}
@@ -258,7 +254,7 @@ const SubmissionDetail: React.FC = () => {
           {sub.risk_score > 0 && (
             <div className="rounded-2xl border border-slate-200/60 bg-white p-5 shadow-[var(--shadow-card)] flex flex-col items-center">
               <p className="text-[10px] font-medium uppercase tracking-wider text-slate-400 mb-3">Risk Score</p>
-              <RiskGauge value={sub.risk_score * 10} size={110} label={sub.risk_score < 4 ? 'Low' : sub.risk_score <= 6 ? 'Medium' : 'High'} thresholds={[40, 70]} />
+              <RiskGauge value={sub.risk_score * 10} displayValue={sub.risk_score} size={110} label={sub.risk_score < 4 ? 'Low' : sub.risk_score < 7 ? 'Medium' : 'High'} thresholds={[40, 70]} />
               <p className="mt-2 text-xs text-slate-500">Scale: 0-10</p>
             </div>
           )}
@@ -351,7 +347,7 @@ const SubmissionDetail: React.FC = () => {
               <div><dt className="text-[11px] font-medium uppercase tracking-wider text-slate-400">Applicant</dt><dd className="mt-0.5 font-medium text-slate-800">{sub.applicant_name}</dd></div>
               <div><dt className="text-[11px] font-medium uppercase tracking-wider text-slate-400">Company</dt><dd className="mt-0.5 font-medium text-slate-800">{sub.company_name}</dd></div>
               <div><dt className="text-[11px] font-medium uppercase tracking-wider text-slate-400">Industry</dt><dd className="mt-0.5 font-medium text-slate-800">{sub.industry}</dd></div>
-              <div><dt className="text-[11px] font-medium uppercase tracking-wider text-slate-400">Line of Business</dt><dd className="mt-0.5 font-medium text-slate-800">{lobLabels[sub.lob]}</dd></div>
+              <div><dt className="text-[11px] font-medium uppercase tracking-wider text-slate-400">Line of Business</dt><dd className="mt-0.5 font-medium text-slate-800">{lobDisplayName(sub.lob)}</dd></div>
               <div><dt className="text-[11px] font-medium uppercase tracking-wider text-slate-400">Annual Revenue</dt><dd className="mt-0.5 font-semibold text-slate-800">{money(sub.annual_revenue)}</dd></div>
               <div><dt className="text-[11px] font-medium uppercase tracking-wider text-slate-400">Employee Count</dt><dd className="mt-0.5 font-medium text-slate-800">{sub.employee_count.toLocaleString()}</dd></div>
               <div><dt className="text-[11px] font-medium uppercase tracking-wider text-slate-400">Requested Coverage</dt><dd className="mt-0.5 font-semibold text-slate-800">{money(sub.requested_coverage)}</dd></div>

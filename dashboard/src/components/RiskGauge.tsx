@@ -3,6 +3,8 @@ import React from 'react';
 interface Props {
   /** Value 0–100 */
   value: number;
+  /** Override the displayed number (e.g. show raw 0–10 score while arc uses 0–100) */
+  displayValue?: number | string;
   /** Size in px (default 120) */
   size?: number;
   /** Label below the value */
@@ -19,6 +21,7 @@ interface Props {
  */
 const RiskGauge: React.FC<Props> = ({
   value,
+  displayValue,
   size = 120,
   label,
   strokeWidth = 10,
@@ -73,7 +76,7 @@ const RiskGauge: React.FC<Props> = ({
         {/* Center text */}
         <div className="absolute inset-0 flex flex-col items-center justify-center">
           <span className="text-2xl font-bold tabular-nums" style={{ color }}>
-            {Math.round(clamped)}
+            {displayValue != null ? displayValue : Math.round(clamped)}
           </span>
           {label && (
             <span className="text-[10px] font-medium text-slate-400 mt-0.5">
