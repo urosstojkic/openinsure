@@ -1,7 +1,11 @@
 import React, { useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, DollarSign, XCircle, Play, Loader2, Sparkles, RefreshCw, Shield, AlertTriangle, ExternalLink } from 'lucide-react';
+import { ArrowLeft, DollarSign, XCircle, Play, Loader2, Sparkles, RefreshCw, Shield, ExternalLink, FileText, Clock, CheckCircle } from 'lucide-react';
+import RiskGauge from '../components/RiskGauge';
+import StackedBar from '../components/StackedBar';
+import JourneyTimeline from '../components/JourneyTimeline';
+import type { JourneyStep } from '../components/JourneyTimeline';
 import StatusBadge from '../components/StatusBadge';
 import ConfirmDialog from '../components/ConfirmDialog';
 import ConfidenceBar from '../components/ConfidenceBar';
@@ -67,42 +71,32 @@ const STATUS_ORDER: Record<string, number> = {
   reported: 0, open: 0, investigating: 1, reserved: 2, closed: 3, denied: -1, litigation: -1,
 };
 
+const CLAIM_JOURNEY_ICONS: Record<string, React.ElementType> = {
+  reported: FileText,
+  investigating: Shield,
+  reserved: DollarSign,
+  closed: CheckCircle,
+};
+
 function ClaimPipeline({ status }: { status: ClaimStatus }) {
   const currentStep = STATUS_ORDER[status] ?? -1;
   const isTerminal = status === 'denied' || status === 'litigation';
 
+  const steps: JourneyStep[] = PIPELINE_STEPS.map((step) => ({
+    key: step.key,
+    label: step.label,
+    icon: CLAIM_JOURNEY_ICONS[step.key] || Clock,
+  }));
+
   return (
-    <div className="rounded-xl border border-slate-200/60 bg-white p-5 shadow-[var(--shadow-xs)]">
-      <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-slate-400">Claims Pipeline</h2>
-      <div className="flex items-center">
-        {PIPELINE_STEPS.map((step, i) => {
-          const done = !isTerminal && i < currentStep;
-          const active = !isTerminal && i === currentStep;
-          return (
-            <React.Fragment key={step.key}>
-              <div className="flex flex-col items-center gap-1.5">
-                <div className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold transition-all ${
-                  done ? 'bg-emerald-500 text-white' : active ? 'bg-indigo-600 text-white ring-4 ring-indigo-100' : 'bg-slate-100 text-slate-400'
-                }`}>
-                  {done ? '✓' : i + 1}
-                </div>
-                <span className={`text-[11px] font-medium ${active ? 'text-indigo-700' : done ? 'text-emerald-600' : 'text-slate-400'}`}>
-                  {step.label}
-                </span>
-              </div>
-              {i < PIPELINE_STEPS.length - 1 && (
-                <div className={`mx-2 h-0.5 flex-1 rounded ${done ? 'bg-emerald-400' : 'bg-slate-200'}`} />
-              )}
-            </React.Fragment>
-          );
-        })}
-      </div>
-      {isTerminal && (
-        <div className="mt-3 flex items-center gap-2 rounded-lg bg-red-50 px-3 py-2 text-xs font-medium text-red-700">
-          <AlertTriangle size={14} />
-          Claim {status === 'denied' ? 'denied' : 'in litigation'}
-        </div>
-      )}
+    <div className="rounded-2xl border border-slate-200/60 bg-white p-6 shadow-[var(--shadow-card)]">
+      <h2 className="mb-5 text-xs font-semibold uppercase tracking-wider text-slate-400">Claims Journey</h2>
+      <JourneyTimeline
+        steps={steps}
+        currentStepIndex={currentStep}
+        isTerminal={isTerminal}
+        terminalLabel={status === 'denied' ? 'Claim denied' : status === 'litigation' ? 'In litigation' : undefined}
+      />
     </div>
   );
 }
@@ -429,24 +423,62 @@ const ClaimDetail: React.FC = () => {
       {/* Pipeline */}
       <ClaimPipeline status={claim.status} />
 
+      {/* Severity Indicator */}
+      {claim.severity && (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-5">
+          <div className="rounded-2xl border border-slate-200/60 bg-white p-5 shadow-[var(--shadow-card)] flex flex-col items-center">
+            <p className="text-[10px] font-medium uppercase tracking-wider text-slate-400 mb-2">Severity</p>
+            <RiskGauge
+              value={claim.severity === 'critical' ? 95 : claim.severity === 'high' ? 75 : claim.severity === 'medium' ? 45 : 20}
+              size={90}
+              strokeWidth={8}
+              label={claim.severity.charAt(0).toUpperCase() + claim.severity.slice(1)}
+              thresholds={[35, 65]}
+            />
+          </div>
+          {fraudScore != null && (
+            <div className="rounded-2xl border border-slate-200/60 bg-white p-5 shadow-[var(--shadow-card)] flex flex-col items-center">
+              <p className="text-[10px] font-medium uppercase tracking-wider text-slate-400 mb-2">Fraud Risk</p>
+              <RiskGauge
+                value={fraudScore * 100}
+                size={90}
+                strokeWidth={8}
+                label={fraudScore < 0.3 ? 'Low' : fraudScore < 0.6 ? 'Medium' : 'High'}
+                thresholds={[30, 60]}
+              />
+            </div>
+          )}
+          {claim.total_reserved > 0 && (
+            <div className="sm:col-span-3 rounded-2xl border border-slate-200/60 bg-white p-5 shadow-[var(--shadow-card)]">
+              <p className="text-[10px] font-medium uppercase tracking-wider text-slate-400 mb-3">Financial Summary</p>
+              <StackedBar
+                segments={[
+                  { label: 'Outstanding Reserve', value: Math.max(0, claim.total_reserved - claim.total_paid), color: '#f59e0b', textColor: '#92400e' },
+                  { label: 'Paid', value: claim.total_paid, color: '#6366f1', textColor: '#3730a3' },
+                ]}
+                height={28}
+              />
+              <div className="mt-3 flex items-center gap-6 text-xs">
+                <span className="text-slate-400">Total Incurred: <span className="font-bold text-slate-700">${claim.total_incurred.toLocaleString()}</span></span>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* AI Assessment Results */}
       {hasAIData && (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
           {fraudScore != null && (
-            <div className={`rounded-xl border p-4 shadow-[var(--shadow-xs)] ${
-              fraudScore < 0.3 ? 'border-emerald-200/60 bg-emerald-50/50'
-                : fraudScore < 0.6 ? 'border-amber-200/60 bg-amber-50/50'
-                : 'border-red-200/60 bg-red-50/50'
-            }`}>
-              <p className="text-[10px] font-medium uppercase tracking-wider text-slate-400">Fraud Score</p>
-              <p className={`mt-1 text-3xl font-bold ${
-                fraudScore < 0.3 ? 'text-emerald-700' : fraudScore < 0.6 ? 'text-amber-700' : 'text-red-700'
-              }`}>
-                {(fraudScore * 100).toFixed(0)}%
-              </p>
-              <p className="mt-0.5 text-xs text-slate-500">
-                {fraudScore < 0.3 ? 'Low risk' : fraudScore < 0.6 ? 'Medium risk' : 'High risk'}
-              </p>
+            <div className="rounded-2xl border border-slate-200/60 bg-white p-5 shadow-[var(--shadow-card)] flex flex-col items-center">
+              <p className="text-[10px] font-medium uppercase tracking-wider text-slate-400 mb-3">Fraud Score</p>
+              <RiskGauge
+                value={fraudScore * 100}
+                size={100}
+                strokeWidth={8}
+                label={fraudScore < 0.3 ? 'Low' : fraudScore < 0.6 ? 'Medium' : 'High'}
+                thresholds={[30, 60]}
+              />
             </div>
           )}
 
@@ -539,6 +571,20 @@ const ClaimDetail: React.FC = () => {
                 <dd className="mt-0.5 text-lg font-bold text-indigo-700">{money(claim.total_incurred)}</dd>
               </div>
             </dl>
+
+            {/* Reserve vs Paid visualization */}
+            {(claim.total_reserved > 0 || claim.total_paid > 0) && (
+              <div className="mt-4 border-t border-slate-100 pt-4">
+                <p className="text-[11px] font-medium uppercase tracking-wider text-slate-400 mb-3">Reserve vs Paid</p>
+                <StackedBar
+                  segments={[
+                    { label: 'Reserved', value: claim.total_reserved, color: '#f59e0b', textColor: '#92400e' },
+                    { label: 'Paid', value: claim.total_paid, color: '#6366f1', textColor: '#3730a3' },
+                  ]}
+                  height={24}
+                />
+              </div>
+            )}
 
             {/* Reserve breakdown */}
             {claim.reserves && claim.reserves.length > 0 && (

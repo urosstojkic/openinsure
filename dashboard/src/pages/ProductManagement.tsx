@@ -610,10 +610,23 @@ const CoveragesTab: React.FC<{
                       <Pencil size={12} className="text-slate-300 ml-auto" />
                     </div>
                     {c.description && <p className="mt-0.5 text-xs text-slate-500">{c.description}</p>}
-                    <div className="mt-2 flex gap-4 text-xs text-slate-400">
-                      <span>Limit: {money(c.default_limit)}</span>
-                      <span>Max: {money(c.max_limit)}</span>
-                      <span>Deductible: {money(c.default_deductible)}</span>
+                    <div className="mt-3 space-y-2">
+                      <div>
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-[10px] font-medium uppercase tracking-wider text-slate-400">Default Limit</span>
+                          <span className="text-xs font-semibold text-indigo-600 tabular-nums">{money(c.default_limit)}</span>
+                        </div>
+                        <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100">
+                          <div className="h-2 rounded-full bg-gradient-to-r from-indigo-500 to-indigo-400 transition-all duration-500" style={{ width: `${Math.min(100, (c.default_limit / c.max_limit) * 100)}%` }} />
+                        </div>
+                        <div className="flex justify-end mt-0.5">
+                          <span className="text-[10px] text-slate-400">Max: {money(c.max_limit)}</span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 rounded-lg bg-amber-50/60 border border-amber-100 px-3 py-1.5">
+                        <Shield size={12} className="text-amber-500" />
+                        <span className="text-[10px] font-medium text-amber-700">Deductible: {money(c.default_deductible)}</span>
+                      </div>
                     </div>
                   </div>
                 )}
@@ -726,14 +739,14 @@ const RatingFactorsTab: React.FC<{
                           onBlur={() => setEditCell(null)} onKeyDown={(e) => e.key === 'Enter' && setEditCell(null)}
                           className="w-full rounded border border-indigo-300 px-1.5 py-0.5 text-xs outline-none" />
                       ) : (
-                        <span
-                          className={`cursor-pointer font-mono font-medium ${
-                            entry.multiplier < 1 ? 'text-emerald-600' : entry.multiplier > 1 ? 'text-red-600' : 'text-slate-600'
-                          }`}
-                          onClick={() => setEditCell({ table: tIdx, row: rIdx, field: 'multiplier' })}
-                        >
-                          {entry.multiplier.toFixed(2)}×
-                        </span>
+                        <div className="flex items-center gap-2 cursor-pointer" onClick={() => setEditCell({ table: tIdx, row: rIdx, field: 'multiplier' })}>
+                          <div className="h-1.5 w-16 overflow-hidden rounded-full bg-slate-100">
+                            <div className={`h-1.5 rounded-full transition-all duration-300 ${entry.multiplier < 1 ? 'bg-emerald-400' : entry.multiplier > 1.2 ? 'bg-red-400' : 'bg-amber-400'}`} style={{ width: `${Math.min(100, (entry.multiplier / 2) * 100)}%` }} />
+                          </div>
+                          <span className={`font-mono font-medium text-xs ${entry.multiplier < 1 ? 'text-emerald-600' : entry.multiplier > 1 ? 'text-red-600' : 'text-slate-600'}`}>
+                            {entry.multiplier.toFixed(2)}×
+                          </span>
+                        </div>
                       )}
                     </td>
                     <td className="px-3 py-2">
@@ -800,10 +813,13 @@ const AppetiteTab: React.FC<{
       </div>
       <div className="space-y-3">
         {rules.map((rule, i) => (
-          <div key={i} className="rounded-xl border border-slate-200/60 bg-slate-50/50 p-4 space-y-3">
-            <div className="flex items-center justify-between">
+          <div key={i} className="rounded-xl border border-slate-200/60 bg-white p-4 space-y-3 transition-all hover:shadow-[var(--shadow-sm)] hover:border-slate-200">
+            <div className="flex items-center gap-3">
+              <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${rule.field && String(rule.value) ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-400'}`}>
+                {rule.field && String(rule.value) ? <Check size={16} /> : <AlertTriangle size={14} />}
+              </div>
               <input value={rule.name} onChange={(e) => handleUpdate(i, 'name', e.target.value)}
-                className="rounded border border-transparent bg-transparent px-1 py-0.5 text-sm font-medium text-slate-900 outline-none hover:border-slate-200 focus:border-indigo-300" />
+                className="flex-1 rounded border border-transparent bg-transparent px-1 py-0.5 text-sm font-medium text-slate-900 outline-none hover:border-slate-200 focus:border-indigo-300" />
               <button onClick={() => handleRemove(i)} className="text-slate-300 hover:text-red-500"><Trash2 size={14} /></button>
             </div>
             <div className="grid grid-cols-3 gap-3">

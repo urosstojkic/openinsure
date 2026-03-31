@@ -6,6 +6,9 @@ import StatusBadge from '../components/StatusBadge';
 import ConfirmDialog from '../components/ConfirmDialog';
 import ConfidenceBar from '../components/ConfidenceBar';
 import ReasoningPanel from '../components/ReasoningPanel';
+import RiskGauge from '../components/RiskGauge';
+import JourneyTimeline from '../components/JourneyTimeline';
+import type { JourneyStep } from '../components/JourneyTimeline';
 import TimelineEvent from '../components/TimelineEvent';
 import Skeleton from '../components/Skeleton';
 import { ToastContainer } from '../components/Toast';
@@ -38,57 +41,24 @@ const STATUS_ORDER: Record<string, number> = {
   received: 0, triaging: 1, underwriting: 2, quoted: 3, bound: 4, declined: -1, referred: -1,
 };
 
-function Pipeline({ status }: { status: SubmissionStatus }) {
+function Pipeline({ status, decisionHistory }: { status: SubmissionStatus; decisionHistory?: Array<{ timestamp: string; action: string }> }) {
   const currentStep = STATUS_ORDER[status] ?? -1;
   const isTerminal = status === 'declined' || status === 'referred';
 
-  return (
-    <div className="rounded-xl border border-slate-200/60 bg-white p-5 shadow-[var(--shadow-xs)]">
-      <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-slate-400">Submission Pipeline</h2>
-      <div className="flex items-center">
-        {PIPELINE_STEPS.map((step, i) => {
-          const Icon = step.icon;
-          const isDone = !isTerminal && currentStep > i;
-          const isActive = !isTerminal && currentStep === i;
-          // isPending derived from isTerminal/currentStep (available if needed)
+  const steps: JourneyStep[] = PIPELINE_STEPS.map((step) => {
+    const event = decisionHistory?.find(e => e.action?.toLowerCase().includes(step.key));
+    return { ...step, timestamp: event?.timestamp };
+  });
 
-          return (
-            <React.Fragment key={step.key}>
-              <div className="flex flex-col items-center gap-1.5">
-                <div
-                  className={`flex h-10 w-10 items-center justify-center rounded-full transition-all ${
-                    isDone
-                      ? 'bg-emerald-500 text-white shadow-sm shadow-emerald-500/20'
-                      : isActive
-                      ? 'bg-indigo-500 text-white shadow-sm shadow-indigo-500/20 ring-4 ring-indigo-100'
-                      : 'bg-slate-100 text-slate-400'
-                  }`}
-                >
-                  {isDone ? <CheckCircle size={16} /> : <Icon size={16} />}
-                </div>
-                <span className={`text-[11px] font-medium ${
-                  isDone ? 'text-emerald-600' : isActive ? 'text-indigo-600' : 'text-slate-400'
-                }`}>
-                  {step.label}
-                </span>
-              </div>
-              {i < PIPELINE_STEPS.length - 1 && (
-                <div className={`mx-1.5 h-0.5 flex-1 rounded-full ${
-                  !isTerminal && currentStep > i ? 'bg-emerald-300' : 'bg-slate-200'
-                }`} />
-              )}
-            </React.Fragment>
-          );
-        })}
-      </div>
-      {isTerminal && (
-        <div className="mt-3 flex items-center gap-2 rounded-lg bg-red-50 px-3 py-2">
-          <XCircle size={14} className="text-red-500" />
-          <span className="text-xs font-medium text-red-700">
-            Submission {status === 'declined' ? 'declined' : 'referred for manual review'}
-          </span>
-        </div>
-      )}
+  return (
+    <div className="rounded-2xl border border-slate-200/60 bg-white p-6 shadow-[var(--shadow-card)]">
+      <h2 className="mb-5 text-xs font-semibold uppercase tracking-wider text-slate-400">Submission Journey</h2>
+      <JourneyTimeline
+        steps={steps}
+        currentStepIndex={currentStep}
+        isTerminal={isTerminal}
+        terminalLabel={status === 'declined' ? 'Submission declined' : status === 'referred' ? 'Referred for manual review' : undefined}
+      />
     </div>
   );
 }
@@ -279,33 +249,17 @@ const SubmissionDetail: React.FC = () => {
       </div>
 
       {/* ── Pipeline ── */}
-      <Pipeline status={sub.status} />
+      <Pipeline status={sub.status} decisionHistory={sub.decision_history} />
 
       {/* ── #120: AI Triage & Underwriting Results ── */}
       {(sub.risk_score > 0 || sub.quoted_premium || sub.recommendation) && (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           {/* Risk Score with color coding */}
           {sub.risk_score > 0 && (
-            <div className={`rounded-xl border p-4 shadow-[var(--shadow-xs)] ${
-              sub.risk_score < 4
-                ? 'border-emerald-200/60 bg-emerald-50/50'
-                : sub.risk_score <= 6
-                ? 'border-amber-200/60 bg-amber-50/50'
-                : 'border-red-200/60 bg-red-50/50'
-            }`}>
-              <p className="text-[10px] font-medium uppercase tracking-wider text-slate-400">Risk Score</p>
-              <p className={`mt-1 text-3xl font-bold ${
-                sub.risk_score < 4
-                  ? 'text-emerald-700'
-                  : sub.risk_score <= 6
-                  ? 'text-amber-700'
-                  : 'text-red-700'
-              }`}>
-                {sub.risk_score.toFixed(1)}
-              </p>
-              <p className="mt-0.5 text-xs text-slate-500">
-                {sub.risk_score < 4 ? 'Low risk' : sub.risk_score <= 6 ? 'Medium risk' : 'High risk'}
-              </p>
+            <div className="rounded-2xl border border-slate-200/60 bg-white p-5 shadow-[var(--shadow-card)] flex flex-col items-center">
+              <p className="text-[10px] font-medium uppercase tracking-wider text-slate-400 mb-3">Risk Score</p>
+              <RiskGauge value={sub.risk_score * 10} size={110} label={sub.risk_score < 4 ? 'Low' : sub.risk_score <= 6 ? 'Medium' : 'High'} thresholds={[40, 70]} />
+              <p className="mt-2 text-xs text-slate-500">Scale: 0-10</p>
             </div>
           )}
 
@@ -356,14 +310,24 @@ const SubmissionDetail: React.FC = () => {
           </div>
           {Object.keys(sub.rating_breakdown.factors_applied).length > 0 && (
             <div>
-              <p className="text-[10px] font-medium uppercase tracking-wider text-slate-400 mb-2">Factors Applied</p>
-              <div className="space-y-1">
-                {Object.entries(sub.rating_breakdown.factors_applied).map(([key, value]) => (
-                  <div key={key} className="flex justify-between rounded-lg bg-slate-50 px-3 py-1.5 text-sm">
-                    <span className="text-slate-600 capitalize">{key.replace(/_/g, ' ')}</span>
-                    <span className="font-medium text-slate-800">{value}</span>
-                  </div>
-                ))}
+              <p className="text-[10px] font-medium uppercase tracking-wider text-slate-400 mb-3">Factors Applied</p>
+              <div className="space-y-2.5">
+                {Object.entries(sub.rating_breakdown.factors_applied).map(([key, value]) => {
+                  const numVal = typeof value === 'number' ? value : parseFloat(String(value)) || 1;
+                  const barWidth = Math.min(100, Math.max(10, (numVal / 2) * 100));
+                  const barColor = numVal < 1 ? 'bg-emerald-400' : numVal <= 1.2 ? 'bg-amber-400' : 'bg-red-400';
+                  return (
+                    <div key={key}>
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs font-medium text-slate-600 capitalize">{key.replace(/_/g, ' ')}</span>
+                        <span className={`text-xs font-bold tabular-nums ${numVal < 1 ? 'text-emerald-600' : numVal <= 1.2 ? 'text-amber-600' : 'text-red-600'}`}>{numVal.toFixed(2)}×</span>
+                      </div>
+                      <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100">
+                        <div className={`h-2 rounded-full ${barColor} transition-all duration-500`} style={{ width: `${barWidth}%` }} />
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}

@@ -90,19 +90,19 @@ function DataTable<T>({ columns, data, onRowClick, keyExtractor, emptyMessage = 
             ))}
           </tr>
         </thead>
-        <tbody className="divide-y divide-slate-50">
-          {sorted.map((row) => {
+        <tbody className="divide-y divide-slate-100/80">
+          {sorted.map((row, rowIndex) => {
             const rowKey = keyExtractor(row);
             const isExpanded = expandedRowKey === rowKey;
             return (
               <React.Fragment key={rowKey}>
                 <tr
-                  className={`transition-colors duration-100 ${
-                    isExpanded ? 'bg-indigo-50/50' : ''
+                  className={`transition-colors duration-150 ${
+                    isExpanded ? 'bg-indigo-50/50' : rowIndex % 2 === 0 ? '' : 'bg-slate-50/40'
                   } ${
                     onRowClick
                       ? 'cursor-pointer hover:bg-indigo-50/40 active:bg-indigo-50/60'
-                      : 'hover:bg-slate-50/50'
+                      : 'hover:bg-slate-50/60'
                   }`}
                   onClick={onRowClick ? () => onRowClick(row) : undefined}
                 >

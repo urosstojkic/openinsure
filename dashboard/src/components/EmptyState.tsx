@@ -10,18 +10,25 @@ interface EmptyStateProps {
 
 export default function EmptyState({ icon: Icon, title, description, action }: EmptyStateProps) {
   return (
-    <div className="flex flex-col items-center justify-center py-16 text-center">
-      <div className="mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-slate-100 to-slate-50 ring-1 ring-slate-200/60">
-        <Icon size={28} className="text-slate-400" />
+    <div className="flex flex-col items-center justify-center py-20 text-center">
+      {/* Decorative illustration */}
+      <div className="relative mb-6">
+        <div className="absolute -inset-4 rounded-full bg-gradient-to-br from-indigo-50 via-slate-50 to-purple-50 opacity-60 blur-xl" />
+        <div className="relative flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-slate-100 to-slate-50 ring-1 ring-slate-200/60 shadow-sm">
+          <Icon size={32} className="text-slate-400" />
+        </div>
+        {/* Floating dots decoration */}
+        <div className="absolute -top-1 -right-1 h-3 w-3 rounded-full bg-indigo-200 opacity-60" />
+        <div className="absolute -bottom-2 -left-2 h-2 w-2 rounded-full bg-purple-200 opacity-50" />
       </div>
       <h3 className="text-lg font-semibold text-slate-800">{title}</h3>
       {description && (
-        <p className="mt-1.5 max-w-sm text-sm leading-relaxed text-slate-500">{description}</p>
+        <p className="mt-2 max-w-sm text-sm leading-relaxed text-slate-500">{description}</p>
       )}
       {action && (
         <Link
           to={action.href}
-          className="mt-5 inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm shadow-indigo-500/20 transition-all hover:bg-indigo-700 hover:shadow-md hover:shadow-indigo-500/25 active:scale-[0.98]"
+          className="mt-6 inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-medium text-white shadow-sm shadow-indigo-500/20 transition-all hover:bg-indigo-700 hover:shadow-md hover:shadow-indigo-500/25 active:scale-[0.98]"
         >
           {action.label}
         </Link>

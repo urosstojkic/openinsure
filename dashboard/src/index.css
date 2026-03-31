@@ -164,3 +164,40 @@ body {
   stroke-linecap: round;
   stroke-linejoin: round;
 }
+
+/* ── Enterprise Table Styling ── */
+table tbody tr:nth-child(even) {
+  background-color: rgba(248, 250, 252, 0.5);
+}
+table tbody tr {
+  transition: background-color 150ms var(--ease-out-expo);
+}
+
+/* ── Smooth page transitions ── */
+.page-transition {
+  animation: fadeIn 0.25s var(--ease-out-expo) both;
+}
+
+/* ── Pulse animation for live indicators ── */
+@keyframes livePulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+.live-pulse {
+  animation: livePulse 2s ease-in-out infinite;
+}
+
+/* ── Gauge animation ── */
+@keyframes gaugeAppear {
+  from { stroke-dashoffset: var(--gauge-circumference); }
+}
+.gauge-animate {
+  animation: gaugeAppear 1s var(--ease-out-expo) both;
+}
+
+/* ── Improved empty state ── */
+.empty-state-illustration {
+  background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 50%, #f1f5f9 100%);
+  background-size: 200% 200%;
+  animation: shimmer 3s ease-in-out infinite;
+}
