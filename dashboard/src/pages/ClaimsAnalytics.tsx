@@ -135,7 +135,7 @@ const ClaimsAnalytics: React.FC = () => {
                 tick={{ fontSize: 10, fill: '#94a3b8' }}
                 tickFormatter={(v) => `${(v * 10).toFixed(0)}`}
               />
-              <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} />
+              <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} allowDecimals={false} />
               <Tooltip
                 content={<ChartTooltipContent formatter={(v) => `${v} claims`} />}
                 labelFormatter={(v) => `Score ${v}–${(parseFloat(String(v)) + 0.1).toFixed(1)}`}

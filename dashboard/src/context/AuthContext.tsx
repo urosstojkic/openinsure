@@ -60,9 +60,9 @@ export const DEFAULT_ROUTES: Record<UserRole, string> = {
 
 export const NAV_ACCESS: Record<string, UserRole[]> = {
   '/':                       ['ceo', 'cuo', 'senior_uw', 'uw_analyst', 'claims_manager', 'adjuster', 'cfo', 'compliance', 'product_mgr', 'operations'],
-  '/submissions':            ['cuo', 'senior_uw', 'uw_analyst', 'product_mgr', 'operations'],
-  '/policies':               ['cuo', 'senior_uw', 'uw_analyst', 'claims_manager', 'cfo', 'compliance'],
-  '/claims':                 ['cuo', 'claims_manager', 'adjuster', 'compliance'],
+  '/submissions':            ['cuo', 'senior_uw', 'uw_analyst', 'product_mgr', 'operations', 'ceo'],
+  '/policies':               ['cuo', 'senior_uw', 'uw_analyst', 'claims_manager', 'cfo', 'compliance', 'ceo'],
+  '/claims':                 ['cuo', 'claims_manager', 'adjuster', 'compliance', 'ceo'],
   '/decisions':              ['cuo', 'compliance', 'product_mgr', 'ceo'],
   '/escalations':            ['cuo', 'senior_uw', 'claims_manager', 'adjuster', 'cfo', 'ceo'],
   '/compliance':             ['compliance', 'cuo', 'ceo'],

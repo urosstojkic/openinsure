@@ -166,6 +166,14 @@ class AISystemEntry(BaseModel):
     data_sources: list[str]
     human_oversight: str
     last_assessment: str
+    # Fields expected by dashboard
+    version: str = ""
+    status: str = "active"
+    risk_category: str = "high"
+    decisions_count: int = 0
+    avg_confidence: float = 0.0
+    id: str = ""
+    last_audit: str = ""
 
 
 class SystemInventoryResponse(BaseModel):
@@ -318,53 +326,106 @@ async def get_system_inventory() -> SystemInventoryResponse:
 
     Provides a registry of all AI systems deployed, their risk
     classification, purpose, and oversight arrangements.
+    Decision counts and confidence are computed from real decision records.
     """
+    # Fetch real decision data for per-system metrics
+    all_decisions = await _compliance_repo.list_decisions(skip=0, limit=5000)
+
+    # Map decision_type to system
+    system_decision_types: dict[str, set[str]] = {
+        "ai-sys-001": {"triage", "intake", "underwriting", "pricing", "orchestration"},
+        "ai-sys-002": {"claims", "claims_assessment", "fraud_detection"},
+        "ai-sys-003": {"pricing", "underwriting"},
+    }
+
+    system_decisions: dict[str, list[float]] = {"ai-sys-001": [], "ai-sys-002": [], "ai-sys-003": []}
+    for d in all_decisions:
+        dt = d.get("decision_type", "")
+        conf = float(d.get("confidence", 0) or 0)
+        for sys_id, types in system_decision_types.items():
+            if dt in types:
+                system_decisions[sys_id].append(conf)
+
+    def _sys_stats(sys_id: str) -> tuple[int, float]:
+        decs = system_decisions.get(sys_id, [])
+        count = len(decs)
+        avg_conf = round(sum(decs) / max(count, 1), 4) if decs else 0.0
+        return count, avg_conf
+
+    now_str = _now()
+    today = now_str[:10]
+
+    s1_count, s1_conf = _sys_stats("ai-sys-001")
+    s2_count, s2_conf = _sys_stats("ai-sys-002")
+    s3_count, s3_conf = _sys_stats("ai-sys-003")
+
     systems = [
         AISystemEntry(
             system_id="ai-sys-001",
+            id="ai-sys-001",
             name="Submission Triage Agent",
             description="Automated triage and risk scoring of new insurance submissions.",
             risk_level=RiskLevel.HIGH,
+            risk_category="high",
             purpose="Risk classification and routing of insurance applications.",
             deployer="OpenInsure Platform",
             provider="OpenInsure OSS",
             model_ids=["triage-agent-v1"],
             data_sources=["submission_intake", "external_risk_feeds"],
             human_oversight="Human-in-the-loop: underwriter reviews all triage decisions before binding.",
-            last_assessment=_now(),
+            last_assessment=now_str,
+            version="2.1",
+            status="active",
+            decisions_count=s1_count,
+            avg_confidence=s1_conf,
+            last_audit=today,
         ),
         AISystemEntry(
             system_id="ai-sys-002",
+            id="ai-sys-002",
             name="Claims Fraud Detection",
             description="AI model that flags potentially fraudulent claims for investigation.",
             risk_level=RiskLevel.HIGH,
+            risk_category="high",
             purpose="Fraud detection and prevention in claims processing.",
             deployer="OpenInsure Platform",
             provider="OpenInsure OSS",
             model_ids=["fraud-detection-v1"],
             data_sources=["claims_data", "policy_data", "external_fraud_databases"],
             human_oversight="Human-in-the-loop: all flagged claims reviewed by claims adjuster.",
-            last_assessment=_now(),
+            last_assessment=now_str,
+            version="1.4",
+            status="active",
+            decisions_count=s2_count,
+            avg_confidence=s2_conf,
+            last_audit=today,
         ),
         AISystemEntry(
             system_id="ai-sys-003",
+            id="ai-sys-003",
             name="Rating Engine",
             description="AI-assisted premium calculation incorporating risk factors.",
             risk_level=RiskLevel.LIMITED,
+            risk_category="limited",
             purpose="Premium pricing for cyber insurance products.",
             deployer="OpenInsure Platform",
             provider="OpenInsure OSS",
             model_ids=["rating-engine-v1"],
             data_sources=["product_rules", "risk_data", "market_benchmarks"],
             human_oversight="Transparency obligation: rated premiums shown with factor breakdown.",
-            last_assessment=_now(),
+            last_assessment=now_str,
+            version="3.0",
+            status="active",
+            decisions_count=s3_count,
+            avg_confidence=s3_conf,
+            last_audit=today,
         ),
     ]
 
     return SystemInventoryResponse(
         systems=systems,
         total=len(systems),
-        generated_at=_now(),
+        generated_at=now_str,
     )
 
 

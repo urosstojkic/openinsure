@@ -143,6 +143,12 @@ def _from_sql_row(row: dict[str, Any]) -> dict[str, Any]:
         "assigned_to": triage.get("assigned_to") if triage else None,
         "decision_history": [],
         "row_version": rv.hex() if isinstance(rv, (bytes, bytearray)) else None,
+        # Stage timestamps for processing-time metrics
+        "received_at": _str(row.get("received_at")),
+        "triaged_at": _str(row.get("triaged_at")),
+        "quoted_at": _str(row.get("quoted_at")),
+        "bound_at": _str(row.get("bound_at")),
+        "declined_at": _str(row.get("declined_at")),
     }
 
 

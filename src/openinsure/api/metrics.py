@@ -3,6 +3,9 @@
 Computes KPIs from Azure SQL data for CEO, CUO, and operations views.
 """
 
+from __future__ import annotations
+
+from datetime import UTC, date, datetime
 from typing import Any, Literal
 
 from fastapi import APIRouter
@@ -16,6 +19,57 @@ from openinsure.infrastructure.factory import (
 )
 
 router = APIRouter()
+
+
+# ---------------------------------------------------------------------------
+# Helpers — shared premium / processing-time logic
+# ---------------------------------------------------------------------------
+
+
+def _policy_premium(p: dict[str, Any]) -> float:
+    """Extract written premium from a policy dict."""
+    return float(p.get("written_premium") or p.get("premium") or p.get("total_premium") or 0)
+
+
+def _earned_premium(p: dict[str, Any], as_of: date) -> float:
+    """Compute the pro-rata earned portion of a policy's premium."""
+    prem = _policy_premium(p)
+    try:
+        eff = date.fromisoformat(str(p.get("effective_date", ""))[:10])
+        exp = date.fromisoformat(str(p.get("expiration_date", ""))[:10])
+        term_days = max((exp - eff).days, 1)
+        elapsed = min(max((as_of - eff).days, 0), term_days)
+        return prem * (elapsed / term_days)
+    except (ValueError, TypeError):
+        return prem
+
+
+def _parse_ts(val: Any) -> datetime | None:
+    """Parse a timestamp value from the database into a datetime."""
+    if val is None or val == "":
+        return None
+    if isinstance(val, datetime):
+        return val
+    try:
+        return datetime.fromisoformat(str(val).replace("Z", "+00:00"))
+    except (ValueError, TypeError):
+        return None
+
+
+def _avg_processing_hours(submissions: list[dict[str, Any]]) -> float:
+    """Compute AVG(triaged_at - received_at) in hours from submissions."""
+    hours: list[float] = []
+    for s in submissions:
+        t0 = _parse_ts(s.get("triaged_at") or s.get("received_at"))
+        t1_field = s.get("triaged_at") or s.get("updated_at")
+        t1 = _parse_ts(t1_field)
+        t0_field = s.get("received_at") or s.get("created_at")
+        t0 = _parse_ts(t0_field)
+        if t0 and t1 and t1 > t0:
+            diff_h = (t1 - t0).total_seconds() / 3600
+            if diff_h > 0:
+                hours.append(diff_h)
+    return round(sum(hours) / len(hours), 1) if hours else 0.0
 
 
 # ---------------------------------------------------------------------------
@@ -58,6 +112,7 @@ class KPIMetrics(BaseModel):
     active_policies: int = 0
     open_claims: int = 0
     pending_escalations: int = 0
+    avg_processing_time_hours: float = 0.0
 
 
 class SummaryMetricsResponse(BaseModel):
@@ -188,6 +243,11 @@ async def get_summary_metrics() -> dict[str, Any]:
     bind_rate = round(status_counts.get("bound", 0) / total_subs * 100, 1) if total_subs > 0 else 0
     decline_rate = round(status_counts.get("declined", 0) / total_subs * 100, 1) if total_subs > 0 else 0
 
+    # Count decisions needing oversight
+    comp_repo = get_compliance_repository()
+    comp_stats = await comp_repo.get_stats()
+    oversight_recommended = comp_stats.get("oversight_recommended_count", 0)
+
     return {
         "submissions": {
             "total": total_subs,
@@ -213,8 +273,12 @@ async def get_summary_metrics() -> dict[str, Any]:
             "loss_ratio": loss_ratio,
             "bind_rate": bind_rate,
             "active_policies": active_pols,
-            "open_claims": total_claims - claim_status.get("closed", 0),
+            "open_claims": total_claims
+            - claim_status.get("closed", 0)
+            - claim_status.get("denied", 0)
+            - claim_status.get("settled", 0),
             "pending_escalations": await count_pending(),
+            "pending_decisions": oversight_recommended,
         },
     }
 
@@ -223,13 +287,14 @@ async def get_summary_metrics() -> dict[str, Any]:
 async def get_pipeline_metrics() -> dict[str, Any]:
     """Submission pipeline funnel."""
     repo = get_submission_repository()
-    subs = await repo.list_all(limit=5000)
+    total_count = await repo.count()
+    subs = await repo.list_all(limit=10000)
     pipeline = {"received": 0, "triaging": 0, "underwriting": 0, "quoted": 0, "bound": 0, "declined": 0}
     for s in subs:
         st = s.get("status", "unknown")
         if st in pipeline:
             pipeline[st] += 1
-    return {"pipeline": pipeline, "total": len(subs)}
+    return {"pipeline": pipeline, "total": total_count}
 
 
 @router.get("/agents", response_model=AgentMetricsResponse)
@@ -261,7 +326,7 @@ async def get_agent_status() -> AgentStatusResponse:
     active/idle status) for the dashboard Agent Status tile.
     All 10 Foundry agents are always included even if they have no decisions.
     """
-    from datetime import UTC, datetime
+    from datetime import datetime
 
     # Canonical list of all 10 Foundry agents
     foundry_agents: dict[str, str] = {
@@ -400,7 +465,7 @@ async def get_executive_dashboard() -> dict[str, Any]:
     nwp = gwp * 0.85
 
     # Compute growth rate from year-over-year premium change
-    from datetime import UTC, datetime
+    from datetime import datetime
 
     now = datetime.now(UTC)
     pol_repo2 = get_policy_repository()
@@ -461,7 +526,7 @@ async def get_executive_dashboard() -> dict[str, Any]:
         ],
         key=lambda x: x["exposure"],
         reverse=True,
-    )[:10]
+    )[:5]
 
     # --- Pipeline as array of {stage, count} ----------------------------------
     pipeline_array = [

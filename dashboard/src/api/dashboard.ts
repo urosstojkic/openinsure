@@ -76,7 +76,7 @@ export async function getDashboardStats(): Promise<DashboardStats> {
       open_claims: openClaims,
       pending_decisions: data.kpis?.pending_escalations || 0,
       approval_rate: data.submissions?.bind_rate ? data.submissions.bind_rate / 100 : 0,
-      avg_processing_time_hours: 0,
+      avg_processing_time_hours: data.kpis?.avg_processing_time_hours || 0,
       escalation_rate: data.submissions?.bind_rate ? (100 - data.submissions.bind_rate - (data.submissions.decline_rate ?? 0)) / 100 : 0,
       recent_activity: recentActivity.slice(0, 10),
       agent_statuses: agentStatuses,

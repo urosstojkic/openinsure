@@ -511,3 +511,74 @@ async def get_ledger(account_id: str) -> LedgerResponse:
         for e in raw_entries
     ]
     return LedgerResponse(account_id=account_id, entries=entries, total=len(entries))
+
+
+# ---------------------------------------------------------------------------
+# Summary endpoints (#192)
+# ---------------------------------------------------------------------------
+
+
+class BillingSummaryResponse(BaseModel):
+    """Aggregate billing summary."""
+
+    total_accounts: int = 0
+    total_premium: float = 0.0
+    total_paid: float = 0.0
+    total_outstanding: float = 0.0
+    accounts_by_status: dict[str, int] = Field(default_factory=dict)
+
+
+class PremiumSummaryResponse(BaseModel):
+    """Premium collection summary."""
+
+    total_written_premium: float = 0.0
+    total_collected: float = 0.0
+    collection_rate: float = 0.0
+    outstanding_premium: float = 0.0
+    by_currency: dict[str, float] = Field(default_factory=dict)
+
+
+@router.get("/summary", response_model=BillingSummaryResponse)
+async def get_billing_summary() -> BillingSummaryResponse:
+    """Aggregate billing summary across all accounts."""
+    accounts = await _repo.list_all(limit=5000)
+    total_premium = 0.0
+    total_paid = 0.0
+    status_counts: dict[str, int] = {}
+    for a in accounts:
+        total_premium += float(a.get("total_premium", 0) or 0)
+        total_paid += float(a.get("total_paid", 0) or 0)
+        st = a.get("status", "active")
+        status_counts[st] = status_counts.get(st, 0) + 1
+    return BillingSummaryResponse(
+        total_accounts=len(accounts),
+        total_premium=round(total_premium, 2),
+        total_paid=round(total_paid, 2),
+        total_outstanding=round(total_premium - total_paid, 2),
+        accounts_by_status=status_counts,
+    )
+
+
+@router.get("/premium-summary", response_model=PremiumSummaryResponse)
+async def get_premium_summary() -> PremiumSummaryResponse:
+    """Premium collection summary."""
+    from openinsure.infrastructure.factory import get_policy_repository
+
+    pol_repo = get_policy_repository()
+    policies = await pol_repo.list_all(limit=5000)
+    total_written = sum(float(p.get("premium", 0) or p.get("total_premium", 0) or 0) for p in policies)
+
+    accounts = await _repo.list_all(limit=5000)
+    total_collected = sum(float(a.get("total_paid", 0) or 0) for a in accounts)
+    by_currency: dict[str, float] = {}
+    for a in accounts:
+        curr = a.get("currency", "USD")
+        by_currency[curr] = by_currency.get(curr, 0) + float(a.get("total_premium", 0) or 0)
+
+    return PremiumSummaryResponse(
+        total_written_premium=round(total_written, 2),
+        total_collected=round(total_collected, 2),
+        collection_rate=round(total_collected / max(total_written, 1), 4),
+        outstanding_premium=round(total_written - total_collected, 2),
+        by_currency=by_currency,
+    )

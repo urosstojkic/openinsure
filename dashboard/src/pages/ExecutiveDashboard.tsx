@@ -151,7 +151,8 @@ const ExecutiveDashboard: React.FC = () => {
     );
   }
 
-  const { kpis, premium_trend, loss_ratio_by_lob, exposure_concentrations, pipeline, agent_impact } = data;
+  const { kpis, premium_trend, loss_ratio_by_lob, exposure_concentrations: rawExposures, pipeline, agent_impact } = data;
+  const exposure_concentrations = rawExposures.slice(0, 5);
 
   return (
     <div className="space-y-6">
