@@ -604,13 +604,24 @@ async def create_version(
 async def get_product_performance(product_id: str) -> ProductPerformance:
     """Return aggregated performance metrics for a product.
 
-    In production this would query the policy/claims data stores. For now
-    we return realistic stub data so the UI has something to render.
+    Queries real submissions, policies, and claims data from SQL.
+    Falls back to deterministic seeded stub data when no real data
+    exists (demo mode).
     """
     record = await _get_product(product_id)
     _ensure_extended_fields(record)
+    product_line = record.get("product_line", "")
 
-    # Stub performance data — seeded products get realistic numbers
+    # Attempt to query real data from SQL
+    real_data = await _query_real_performance(product_id, product_line)
+    if real_data is not None:
+        return ProductPerformance(
+            product_id=product_id,
+            product_name=record["name"],
+            **real_data,
+        )
+
+    # Fallback: deterministic seeded stub data for demo / empty DB
     import hashlib
 
     seed = int(hashlib.md5(product_id.encode()).hexdigest()[:8], 16)  # noqa: S324
@@ -638,6 +649,106 @@ async def get_product_performance(product_id: str) -> ProductPerformance:
         declined_count=max(declined, 0),
         premium_trend=trend,
     )
+
+
+async def _query_real_performance(product_id: str, product_line: str) -> dict[str, Any] | None:
+    """Query real performance data from SQL tables.
+
+    Returns ``None`` when SQL is unavailable or no real data exists,
+    signalling the caller to fall back to stub data.
+    """
+    try:
+        from openinsure.infrastructure.factory import get_database_adapter, get_settings
+
+        settings = get_settings()
+        if settings.storage_mode != "azure" or not settings.sql_connection_string:
+            return None
+
+        db = get_database_adapter()
+
+        # Count submissions by status for this product
+        sub_row = await db.fetch_one(
+            """SELECT
+                 COUNT(*) AS total,
+                 SUM(CASE WHEN status = 'bound' THEN 1 ELSE 0 END) AS bound,
+                 SUM(CASE WHEN status = 'declined' THEN 1 ELSE 0 END) AS declined
+               FROM submissions
+               WHERE product_id = ? OR line_of_business = ?""",
+            [product_id, product_line],
+        )
+
+        total_subs = int((sub_row or {}).get("total", 0))
+        if total_subs == 0:
+            return None  # no real data — use stub
+
+        bound_count = int((sub_row or {}).get("bound", 0))
+        declined_count = int((sub_row or {}).get("declined", 0))
+
+        # Policies and GWP
+        pol_row = await db.fetch_one(
+            """SELECT
+                 COUNT(*) AS policies_in_force,
+                 COALESCE(SUM(total_premium), 0) AS total_gwp
+               FROM policies
+               WHERE product_id = ?
+                 AND status IN ('active', 'pending')""",
+            [product_id],
+        )
+        policies_in_force = int((pol_row or {}).get("policies_in_force", 0))
+        total_gwp = float((pol_row or {}).get("total_gwp", 0))
+
+        # Loss ratio: incurred losses / earned premium
+        loss_row = await db.fetch_one(
+            """SELECT
+                 COALESCE(SUM(p.earned_premium), 0) AS earned,
+                 COALESCE(SUM(cr.total_incurred), 0) AS incurred
+               FROM policies p
+               LEFT JOIN (
+                 SELECT c.policy_id,
+                        SUM(COALESCE(cr.paid_amount, 0) + COALESCE(cr.reserve_amount, 0)) AS total_incurred
+                 FROM claims c
+                 LEFT JOIN claim_reserves cr ON cr.claim_id = c.id
+                 GROUP BY c.policy_id
+               ) cr ON cr.policy_id = p.id
+               WHERE p.product_id = ?""",
+            [product_id],
+        )
+        earned = float((loss_row or {}).get("earned", 0))
+        incurred = float((loss_row or {}).get("incurred", 0))
+        loss_ratio = round(incurred / earned, 2) if earned > 0 else 0.0
+
+        bind_rate = round(bound_count / max(total_subs, 1), 2)
+        avg_premium = round(total_gwp / max(policies_in_force, 1), 2)
+
+        # Premium trend: monthly written premium for the last 12 months
+        trend_rows = await db.fetch_all(
+            """SELECT
+                 FORMAT(p.effective_date, 'MMM') AS month,
+                 SUM(p.total_premium) AS premium
+               FROM policies p
+               WHERE p.product_id = ?
+                 AND p.effective_date >= DATEADD(YEAR, -1, GETUTCDATE())
+               GROUP BY FORMAT(p.effective_date, 'MMM'),
+                        MONTH(p.effective_date)
+               ORDER BY MONTH(p.effective_date)""",
+            [product_id],
+        )
+        premium_trend = [{"month": str(r.get("month", "")), "premium": float(r.get("premium", 0))} for r in trend_rows]
+
+        return {
+            "policies_in_force": policies_in_force,
+            "total_gwp": total_gwp,
+            "loss_ratio": loss_ratio,
+            "bind_rate": bind_rate,
+            "avg_premium": avg_premium,
+            "submissions_count": total_subs,
+            "bound_count": bound_count,
+            "declined_count": declined_count,
+            "premium_trend": premium_trend,
+        }
+    except Exception:
+        logger.debug("product.performance_real_query_failed", product_id=product_id, exc_info=True)
+        return None
 
 
 @router.post("/{product_id}/rate", response_model=RateResponse)

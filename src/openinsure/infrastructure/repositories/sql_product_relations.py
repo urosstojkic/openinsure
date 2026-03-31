@@ -75,20 +75,29 @@ class ProductRelationsRepository:
         return [self._row_to_dict(r) for r in rows]
 
     async def get_rating_factor_tables(self, product_id: str) -> list[dict[str, Any]]:
-        """Get rating factor lookup tables from relational table."""
+        """Get rating factor lookup tables grouped by category.
+
+        The SQL table stores one row per factor_key.  The API model
+        expects ``{name, description, entries: [{key, multiplier, description}]}``
+        grouped by ``factor_category``.
+        """
         rows = await self.db.fetch_all(
             "SELECT * FROM rating_factor_tables WHERE product_id = ? ORDER BY factor_category, sort_order",
             [product_id],
         )
-        return [self._row_to_dict(r) for r in rows]
+        return self._group_rating_factors(rows)
 
     async def get_appetite_rules(self, product_id: str) -> list[dict[str, Any]]:
-        """Get appetite rules from relational table."""
+        """Get appetite rules mapped to the API model shape.
+
+        SQL columns ``field_name``, ``rule_name``, ``numeric_value``, etc.
+        are mapped to the API model fields ``field``, ``name``, ``value``.
+        """
         rows = await self.db.fetch_all(
             "SELECT * FROM product_appetite_rules WHERE product_id = ? ORDER BY sort_order",
             [product_id],
         )
-        return [self._row_to_dict(r) for r in rows]
+        return [self._appetite_rule_to_api(r) for r in rows]
 
     async def get_authority_limits(self, product_id: str) -> dict[str, Any] | None:
         """Get authority limits from relational table, mapped to API shape."""
@@ -350,7 +359,7 @@ class ProductRelationsRepository:
         """
         try:
             rows = await self.db.fetch_all(
-                """SELECT factor_category, factor_key, factor_value
+                """SELECT factor_category, factor_key, multiplier
                    FROM rating_factor_tables
                    WHERE product_id = ?
                    ORDER BY factor_category, sort_order""",
@@ -361,7 +370,7 @@ class ProductRelationsRepository:
                 cat = str(r.get("factor_category", ""))
                 if cat not in result:
                     result[cat] = {}
-                result[cat][str(r.get("factor_key", ""))] = float(r.get("factor_value", 1.0))
+                result[cat][str(r.get("factor_key", ""))] = float(r.get("multiplier", 1.0))
             return result
         except Exception:
             logger.debug(
@@ -371,9 +380,7 @@ class ProductRelationsRepository:
             )
             return {}
 
-    async def get_rating_factors_as_of(
-        self, product_id: str, as_of_date: str
-    ) -> dict[str, dict[str, float]]:
+    async def get_rating_factors_as_of(self, product_id: str, as_of_date: str) -> dict[str, dict[str, float]]:
         """Return rating factors effective at a specific date.
 
         Filters ``rating_factor_tables`` to rows where:
@@ -384,7 +391,7 @@ class ProductRelationsRepository:
         """
         try:
             rows = await self.db.fetch_all(
-                """SELECT factor_category, factor_key, factor_value
+                """SELECT factor_category, factor_key, multiplier
                    FROM rating_factor_tables
                    WHERE product_id = ?
                      AND (effective_date IS NULL OR effective_date <= ?)
@@ -397,7 +404,7 @@ class ProductRelationsRepository:
                 cat = str(r.get("factor_category", ""))
                 if cat not in result:
                     result[cat] = {}
-                result[cat][str(r.get("factor_key", ""))] = float(r.get("factor_value", 1.0))
+                result[cat][str(r.get("factor_key", ""))] = float(r.get("multiplier", 1.0))
             return result
         except Exception:
             logger.debug(
@@ -636,4 +643,70 @@ class ProductRelationsRepository:
             "max_auto_bind_limit": float(row.get("auto_bind_limit_max") or 0),
             "requires_senior_review_above": float(row.get("requires_senior_review_above") or 0),
             "requires_cuo_review_above": float(row.get("requires_cuo_review_above") or 0),
+        }
+
+    @staticmethod
+    def _group_rating_factors(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Group flat SQL rows into ``RatingFactorTable``-shaped dicts.
+
+        SQL stores one row per (factor_category, factor_key).  The API
+        model expects ``{name, description, entries: [{key, multiplier, description}]}``
+        grouped by ``factor_category``.
+        """
+        from collections import OrderedDict
+
+        groups: OrderedDict[str, dict[str, Any]] = OrderedDict()
+        for r in rows:
+            cat = str(r.get("factor_category") or r.get("name") or "unknown")
+            if cat not in groups:
+                groups[cat] = {
+                    "name": cat,
+                    "description": str(r.get("description") or ""),
+                    "entries": [],
+                }
+            groups[cat]["entries"].append(
+                {
+                    "key": str(r.get("factor_key") or ""),
+                    "multiplier": float(r.get("multiplier") or r.get("factor_value") or 1.0),
+                    "description": str(r.get("description") or ""),
+                }
+            )
+        return list(groups.values())
+
+    @staticmethod
+    def _appetite_rule_to_api(row: dict[str, Any]) -> dict[str, Any]:
+        """Map a relational appetite rule row to ``AppetiteRule`` API shape.
+
+        SQL columns: ``rule_name``, ``field_name``, ``operator``,
+        ``value_type``, ``numeric_value``, ``numeric_min``, ``numeric_max``,
+        ``string_value``, ``description``.
+
+        API model: ``name``, ``field``, ``operator``, ``value``, ``description``.
+        """
+        operator = str(row.get("operator") or "eq")
+        value_type = str(row.get("value_type") or "numeric")
+
+        # Determine value based on operator and value_type
+        if operator == "between":
+            num_min = row.get("numeric_min")
+            num_max = row.get("numeric_max")
+            value: Any = {
+                "min": float(num_min) if num_min is not None else 0,
+                "max": float(num_max) if num_max is not None else 0,
+            }
+        elif operator in ("in", "not_in"):
+            sv = row.get("string_value") or ""
+            value = [v.strip() for v in str(sv).split(",") if v.strip()]
+        elif value_type == "numeric" or row.get("numeric_value") is not None:
+            nv = row.get("numeric_value")
+            value = float(nv) if nv is not None else 0
+        else:
+            value = row.get("string_value") or ""
+
+        return {
+            "name": str(row.get("rule_name") or row.get("name") or ""),
+            "field": str(row.get("field_name") or row.get("field") or ""),
+            "operator": operator,
+            "value": value,
+            "description": str(row.get("description") or ""),
         }
