@@ -440,8 +440,45 @@ async def list_products(
 
     total = await _repo.count(filters)
     page = await _repo.list_all(filters=filters, skip=skip, limit=limit)
+
+    # Enrich items from relational tables when available
+    items: list[ProductResponse] = []
+    relations = None
+    try:
+        from openinsure.infrastructure.factory import get_product_relations_repository
+
+        relations = get_product_relations_repository()
+    except Exception:
+        logger.debug("product.list_relations_unavailable", exc_info=True)
+
+    for r in page:
+        _ensure_extended_fields(r)
+        if relations is not None:
+            try:
+                pid = str(r["id"])
+                rel_coverages = await relations.get_coverages(pid)
+                if rel_coverages:
+                    r["coverages"] = rel_coverages
+                rel_factors = await relations.get_rating_factor_tables(pid)
+                if rel_factors:
+                    r["rating_factor_tables"] = rel_factors
+                rel_rules = await relations.get_appetite_rules(pid)
+                if rel_rules:
+                    r["appetite_rules"] = rel_rules
+                rel_authority = await relations.get_authority_limits(pid)
+                if rel_authority:
+                    r["authority_limits"] = rel_authority
+                rel_territories = await relations.get_territories(pid)
+                if rel_territories:
+                    r["territories"] = [
+                        t.get("territory_code", t) if isinstance(t, dict) else str(t) for t in rel_territories
+                    ]
+            except Exception:
+                logger.debug("product.list_enrich_failed", product_id=r.get("id"), exc_info=True)
+        items.append(ProductResponse(**r))
+
     return ProductList(
-        items=[ProductResponse(**_ensure_extended_fields(r)) for r in page],
+        items=items,
         total=total,
         skip=skip,
         limit=limit,
@@ -709,9 +746,9 @@ async def _query_real_performance(product_id: str, product_line: str) -> dict[st
                  COUNT(*) AS policies_in_force,
                  COALESCE(SUM(total_premium), 0) AS total_gwp
                FROM policies
-               WHERE product_id = ?
+               WHERE (product_id = ? OR line_of_business = ?)
                  AND status IN ('active', 'pending')""",
-            [product_id],
+            [product_id, product_line],
         )
         policies_in_force = int((pol_row or {}).get("policies_in_force", 0))
         total_gwp = float((pol_row or {}).get("total_gwp", 0))
@@ -729,8 +766,8 @@ async def _query_real_performance(product_id: str, product_line: str) -> dict[st
                  LEFT JOIN claim_reserves cr ON cr.claim_id = c.id
                  GROUP BY c.policy_id
                ) cr ON cr.policy_id = p.id
-               WHERE p.product_id = ?""",
-            [product_id],
+               WHERE p.product_id = ? OR p.line_of_business = ?""",
+            [product_id, product_line],
         )
         earned = float((loss_row or {}).get("earned", 0))
         incurred = float((loss_row or {}).get("incurred", 0))
@@ -745,12 +782,12 @@ async def _query_real_performance(product_id: str, product_line: str) -> dict[st
                  FORMAT(p.effective_date, 'MMM') AS month,
                  SUM(p.total_premium) AS premium
                FROM policies p
-               WHERE p.product_id = ?
+               WHERE (p.product_id = ? OR p.line_of_business = ?)
                  AND p.effective_date >= DATEADD(YEAR, -1, GETUTCDATE())
                GROUP BY FORMAT(p.effective_date, 'MMM'),
                         MONTH(p.effective_date)
                ORDER BY MONTH(p.effective_date)""",
-            [product_id],
+            [product_id, product_line],
         )
         premium_trend = [{"month": str(r.get("month", "")), "premium": float(r.get("premium", 0))} for r in trend_rows]
 

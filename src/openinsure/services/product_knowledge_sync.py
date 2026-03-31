@@ -87,7 +87,6 @@ def _product_to_knowledge_document(
     appetite_rules = relational_rules if relational_rules else product.get("appetite_rules", [])
 
     # Build a rich text representation for keyword search
-    coverages = product.get("coverages", [])
     coverage_text = ""
     if coverages:
         lines = []
@@ -98,7 +97,6 @@ def _product_to_knowledge_document(
             lines.append(f"  - {cname}: limit ${limit:,.0f}, deductible ${deductible:,.0f}")
         coverage_text = "Coverages:\n" + "\n".join(lines)
 
-    rating_factors = product.get("rating_factors", [])
     rating_text = ""
     if rating_factors:
         lines = []
@@ -109,7 +107,6 @@ def _product_to_knowledge_document(
             lines.append(f"  - {fname} ({ftype}, weight={weight})")
         rating_text = "Rating Factors:\n" + "\n".join(lines)
 
-    appetite_rules = product.get("appetite_rules", [])
     appetite_text = ""
     if appetite_rules:
         lines = []
