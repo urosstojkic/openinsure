@@ -74,6 +74,8 @@ class DecisionRecord(BaseModel):
     decision_type: DecisionType
     entity_id: str = Field(..., description="ID of the submission, policy, or claim")
     entity_type: str = Field(..., description="submission | policy | claim")
+    agent_id: str = Field("", description="Foundry agent key (e.g. openinsure-submission)")
+    agent_name: str = Field("", description="Human-readable agent display name")
     model_id: str
     model_version: str
     input_summary: dict[str, Any]
