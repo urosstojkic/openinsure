@@ -15,7 +15,7 @@ import structlog
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
 from pydantic import BaseModel, Field
 
-from openinsure.infrastructure.factory import get_blob_storage, get_submission_repository
+from openinsure.infrastructure.factory import get_audit_service, get_blob_storage, get_submission_repository
 from openinsure.rate_limit import limiter
 from openinsure.rbac.auth import CurrentUser, get_current_user
 from openinsure.services.party_resolution import get_party_resolution_service
@@ -367,6 +367,11 @@ async def update_submission(submission_id: str, body: SubmissionUpdate) -> Submi
 
     record["updated_at"] = _now()
     await _repo.update(submission_id, updates)
+
+    # Audit trail
+    audit = get_audit_service()
+    await audit.log_change("submission", submission_id, "update", "system", changes=updates)
+
     return SubmissionResponse(**record)
 
 
@@ -385,6 +390,21 @@ async def triage_submission(request: Request, submission_id: str) -> TriageResul
 
     svc = SubmissionService()
     result = await svc.run_triage(submission_id, record)
+
+    # Audit trail
+    audit = get_audit_service()
+    await audit.log_change(
+        "submission",
+        submission_id,
+        "triage",
+        "ai-agent",
+        changes={
+            "status": result["status"],
+            "risk_score": result["risk_score"],
+            "recommendation": result["recommendation"],
+        },
+    )
+
     return TriageResult(
         submission_id=submission_id,
         status=SubmissionStatus(result["status"]),
@@ -462,6 +482,27 @@ async def bind_submission(submission_id: str, user: CurrentUser = Depends(get_cu
                 "message": f"Action requires approval from {result['required_role']}",
             },
         )
+
+    # Audit trail
+    audit = get_audit_service()
+    await audit.log_change(
+        "submission",
+        submission_id,
+        "bind",
+        user.display_name,
+        changes={"policy_id": result["policy_id"], "premium": result.get("premium")},
+    )
+    await audit.log_change(
+        "policy",
+        result["policy_id"],
+        "create",
+        user.display_name,
+        changes={
+            "submission_id": submission_id,
+            "policy_number": result.get("policy_number"),
+            "premium": result.get("premium"),
+        },
+    )
 
     return BindResponse(
         submission_id=submission_id,

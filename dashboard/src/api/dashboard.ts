@@ -82,7 +82,19 @@ export async function getDashboardStats(): Promise<DashboardStats> {
       agent_statuses: agentStatuses,
     };
   } catch (error) {
-    console.warn('[API] Metrics fallback:', error);
-    return mockDashboardStats;
+    console.warn('[API] Metrics error:', error);
+    if (USE_MOCK) return mockDashboardStats;
+    // In live mode, return empty data structure instead of mock fallback
+    return {
+      total_submissions: 0,
+      active_policies: 0,
+      open_claims: 0,
+      pending_decisions: 0,
+      approval_rate: 0,
+      avg_processing_time_hours: 0,
+      escalation_rate: 0,
+      recent_activity: [],
+      agent_statuses: [],
+    };
   }
 }

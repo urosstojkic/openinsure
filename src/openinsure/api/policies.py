@@ -15,7 +15,7 @@ import structlog
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from openinsure.infrastructure.factory import get_policy_repository
+from openinsure.infrastructure.factory import get_audit_service, get_policy_repository
 
 router = APIRouter()
 _logger = structlog.get_logger()
@@ -390,6 +390,16 @@ async def endorse_policy(policy_id: str, body: EndorsementRequest) -> Endorsemen
         )
     except Exception:
         _logger.debug("event.publish_skipped", event="policy.endorsed")
+
+    # Audit trail
+    audit = get_audit_service()
+    await audit.log_change(
+        "policy",
+        policy_id,
+        "endorse",
+        "system",
+        changes={"endorsement_id": eid, "description": body.description, "premium_delta": body.premium_delta},
+    )
 
     return EndorsementResponse(policy_id=policy_id, **endorsement)
 

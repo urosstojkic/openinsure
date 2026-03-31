@@ -202,8 +202,9 @@ export async function getUnderwriterQueue(): Promise<UnderwriterQueueItem[]> {
     const items = Array.isArray(data) ? data : (data.items || []);
     return items.map(mapToUWQueueItem);
   } catch (error) {
-    console.warn('[API] UW queue fallback:', error);
-    return mockUnderwriterQueue;
+    console.warn('[API] UW queue error:', error);
+    if (USE_MOCK) return mockUnderwriterQueue;
+    throw error;
   }
 }
 
@@ -214,8 +215,9 @@ export async function getClaimsQueue(): Promise<ClaimsQueueItem[]> {
     const items = Array.isArray(data) ? data : (data.items || []);
     return items.map(mapToClaimsQueueItem);
   } catch (error) {
-    console.warn('[API] Claims queue fallback:', error);
-    return mockClaimsQueue;
+    console.warn('[API] Claims queue error:', error);
+    if (USE_MOCK) return mockClaimsQueue;
+    throw error;
   }
 }
 
@@ -226,8 +228,9 @@ export async function getDecisionAudit(): Promise<DecisionAuditItem[]> {
     const items = Array.isArray(data) ? data : (data.items || []);
     return items.map(mapToDecisionAuditItem);
   } catch (error) {
-    console.warn('[API] Decision audit fallback:', error);
-    return mockDecisionAudit;
+    console.warn('[API] Decision audit error:', error);
+    if (USE_MOCK) return mockDecisionAudit;
+    throw error;
   }
 }
 
@@ -238,8 +241,9 @@ export async function getOverrideLog(): Promise<OverrideLogEntry[]> {
     const items = Array.isArray(data) ? data : (data.items || []);
     return items.map(mapToOverrideLogEntry);
   } catch (error) {
-    console.warn('[API] Override log fallback:', error);
-    return mockOverrideLog;
+    console.warn('[API] Override log error:', error);
+    if (USE_MOCK) return mockOverrideLog;
+    throw error;
   }
 }
 
@@ -263,8 +267,9 @@ export async function getBiasChartData(): Promise<BiasChartData> {
       })),
     };
   } catch (error) {
-    console.warn('[API] Bias chart fallback:', error);
-    return mockBiasChartData;
+    console.warn('[API] Bias chart error:', error);
+    if (USE_MOCK) return mockBiasChartData;
+    throw error;
   }
 }
 
@@ -343,8 +348,9 @@ export async function getComplianceWorkbenchData(): Promise<ComplianceSummary> {
       ai_systems: systemItems,
     };
   } catch (error) {
-    console.warn('[API] Compliance workbench fallback:', error);
-    return mockCompliance;
+    console.warn('[API] Compliance workbench error:', error);
+    if (USE_MOCK) return mockCompliance;
+    throw error;
   }
 }
 
@@ -354,8 +360,9 @@ export async function getExecutiveDashboard(): Promise<ExecutiveDashboardData> {
     const { data } = await client.get<ExecutiveDashboardData>('/metrics/executive');
     return data;
   } catch (error) {
-    console.warn('[API] Executive dashboard fallback:', error);
-    return mockExecutiveData;
+    console.warn('[API] Executive dashboard error:', error);
+    if (USE_MOCK) return mockExecutiveData;
+    throw error;
   }
 }
 
@@ -366,8 +373,9 @@ export async function getBrokerSubmissions(): Promise<BrokerSubmission[]> {
     const items = Array.isArray(data) ? data : (data.items || []);
     return items.map(mapToBrokerSubmission);
   } catch (error) {
-    console.warn('[API] Broker submissions fallback:', error);
-    return mockBrokerSubmissions;
+    console.warn('[API] Broker submissions error:', error);
+    if (USE_MOCK) return mockBrokerSubmissions;
+    throw error;
   }
 }
 
@@ -378,8 +386,9 @@ export async function getBrokerPolicies(): Promise<BrokerPolicy[]> {
     const items = Array.isArray(data) ? data : (data.items || []);
     return items.map(mapToBrokerPolicy);
   } catch (error) {
-    console.warn('[API] Broker policies fallback:', error);
-    return mockBrokerPolicies;
+    console.warn('[API] Broker policies error:', error);
+    if (USE_MOCK) return mockBrokerPolicies;
+    throw error;
   }
 }
 
@@ -390,8 +399,9 @@ export async function getBrokerClaims(): Promise<BrokerClaim[]> {
     const items = Array.isArray(data) ? data : (data.items || []);
     return items.map(mapToBrokerClaim);
   } catch (error) {
-    console.warn('[API] Broker claims fallback:', error);
-    return mockBrokerClaims;
+    console.warn('[API] Broker claims error:', error);
+    if (USE_MOCK) return mockBrokerClaims;
+    throw error;
   }
 }
 
@@ -404,8 +414,9 @@ export async function getActuarialReserves(): Promise<ActuarialReserve[]> {
     const items = Array.isArray(data) ? data : (data.items || []);
     return items.map(mapToActuarialReserve);
   } catch (error) {
-    console.warn('[API] Actuarial reserves fallback:', error);
-    return mockActuarialReserves;
+    console.warn('[API] Actuarial reserves error:', error);
+    if (USE_MOCK) return mockActuarialReserves;
+    throw error;
   }
 }
 
@@ -415,8 +426,9 @@ export async function getTriangleData(lob = 'cyber'): Promise<TriangleData> {
     const { data } = await client.get<TriangleData>(`/actuarial/triangles/${lob}`);
     return data;
   } catch (error) {
-    console.warn('[API] Triangle data fallback:', error);
-    return mockTriangleData;
+    console.warn('[API] Triangle data error:', error);
+    if (USE_MOCK) return mockTriangleData;
+    throw error;
   }
 }
 
@@ -426,8 +438,9 @@ export async function getIBNR(lob = 'cyber'): Promise<IBNRResult> {
     const { data } = await client.get<IBNRResult>(`/actuarial/ibnr/${lob}`);
     return data;
   } catch (error) {
-    console.warn('[API] IBNR fallback:', error);
-    return mockIBNR;
+    console.warn('[API] IBNR error:', error);
+    if (USE_MOCK) return mockIBNR;
+    throw error;
   }
 }
 
@@ -438,7 +451,8 @@ export async function getRateAdequacy(): Promise<RateAdequacyItem[]> {
     const items = Array.isArray(data) ? data : (data.items || []);
     return items.map(mapToRateAdequacyItem);
   } catch (error) {
-    console.warn('[API] Rate adequacy fallback:', error);
-    return mockRateAdequacy;
+    console.warn('[API] Rate adequacy error:', error);
+    if (USE_MOCK) return mockRateAdequacy;
+    throw error;
   }
 }

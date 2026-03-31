@@ -259,8 +259,23 @@ async def get_agent_status() -> AgentStatusResponse:
 
     Returns per-agent activity stats (decisions today, last action,
     active/idle status) for the dashboard Agent Status tile.
+    All 10 Foundry agents are always included even if they have no decisions.
     """
     from datetime import UTC, datetime
+
+    # Canonical list of all 10 Foundry agents
+    foundry_agents: dict[str, str] = {
+        "openinsure-orchestrator": "Orchestrator Agent",
+        "openinsure-submission": "Submission Intake Agent",
+        "openinsure-underwriting": "Underwriting Agent",
+        "openinsure-policy": "Policy Management Agent",
+        "openinsure-claims": "Claims Assessment Agent",
+        "openinsure-compliance": "Compliance Agent",
+        "openinsure-billing": "Billing Agent",
+        "openinsure-document": "Document Agent",
+        "openinsure-analytics": "Analytics Agent",
+        "openinsure-enrichment": "Enrichment Agent",
+    }
 
     repo = get_compliance_repository()
     all_rows = await repo.list_decisions(skip=0, limit=5000)
@@ -275,8 +290,17 @@ async def get_agent_status() -> AgentStatusResponse:
     agent_display: dict[str, str] = {}
 
     for row in all_rows:
-        aid = row.get("model_id", row.get("agent_id", "unknown"))
-        display = row.get("agent_name", "") or aid.replace("-", " ").replace("_", " ").title()
+        raw_aid = row.get("model_id", row.get("agent_id", "unknown"))
+        # Normalise to canonical agent key when possible
+        aid = raw_aid
+        for key in foundry_agents:
+            if key in str(raw_aid).lower() or raw_aid.lower().replace(" ", "-") == key:
+                aid = key
+                break
+
+        display = (
+            foundry_agents.get(aid, "") or row.get("agent_name", "") or aid.replace("-", " ").replace("_", " ").title()
+        )
         decision_type = row.get("decision_type", "")
 
         agent_totals[aid] = agent_totals.get(aid, 0) + 1
@@ -297,19 +321,37 @@ async def get_agent_status() -> AgentStatusResponse:
                 else decision_type.replace("_", " ").capitalize()
             )
 
+    # Build response: start with agents that have decisions, then add remaining
     agents: list[AgentStatusItem] = []
+    seen: set[str] = set()
+
     for aid in sorted(agent_totals, key=lambda k: agent_totals[k], reverse=True):
         today_count = agent_today.get(aid, 0)
         agents.append(
             AgentStatusItem(
                 name=aid,
-                display_name=agent_display[aid],
+                display_name=agent_display.get(aid, aid),
                 status="active" if today_count > 0 else "idle",
                 last_action=agent_last_action.get(aid, "Ready"),
                 decisions_today=today_count,
                 total_decisions=agent_totals[aid],
             )
         )
+        seen.add(aid)
+
+    # Ensure all 10 canonical agents appear
+    for aid, display in foundry_agents.items():
+        if aid not in seen:
+            agents.append(
+                AgentStatusItem(
+                    name=aid,
+                    display_name=display,
+                    status="idle",
+                    last_action="Ready",
+                    decisions_today=0,
+                    total_decisions=0,
+                )
+            )
 
     return AgentStatusResponse(
         agents=agents,

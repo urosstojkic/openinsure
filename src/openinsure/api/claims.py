@@ -17,7 +17,12 @@ import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from openinsure.infrastructure.factory import get_claim_repository, get_compliance_repository, get_policy_repository
+from openinsure.infrastructure.factory import (
+    get_audit_service,
+    get_claim_repository,
+    get_compliance_repository,
+    get_policy_repository,
+)
 from openinsure.rbac.auth import CurrentUser, get_current_user
 from openinsure.rbac.authority import AuthorityDecision, AuthorityEngine
 
@@ -426,6 +431,22 @@ async def create_claim(body: ClaimCreate) -> ClaimResponse:
     record["notification_sent_at"] = None
 
     await _repo.create(record)
+
+    # Audit trail
+    audit = get_audit_service()
+    await audit.log_change(
+        "claim",
+        cid,
+        "create",
+        body.reported_by or "system",
+        changes={
+            "claim_number": record["claim_number"],
+            "policy_id": body.policy_id,
+            "claim_type": body.claim_type,
+            "date_of_loss": body.date_of_loss,
+        },
+    )
+
     return ClaimResponse(**record)
 
 
@@ -629,9 +650,22 @@ async def set_reserve(
         record["updated_at"] = now
         total_reserved = record["total_reserved"]
 
+    # Audit trail for reserve
+    audit = get_audit_service()
+    await audit.log_change(
+        "claim",
+        claim_id,
+        "reserve_set",
+        user.display_name,
+        changes={
+            "reserve_id": rid,
+            "category": body.category,
+            "amount": float(body.amount),
+            "total_reserved": float(total_reserved),
+        },
+    )
+
     return ReserveResponse(
-        claim_id=claim_id,
-        reserve_id=rid,
         category=body.category,
         amount=body.amount,
         currency=body.currency,
