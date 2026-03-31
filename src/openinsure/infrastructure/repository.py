@@ -17,8 +17,30 @@ if TYPE_CHECKING:
 def safe_pagination_clause(order_by: str, skip: int, limit: int) -> tuple[str, list[int]]:
     """Return a safe OFFSET/FETCH clause with validated pagination parameters."""
     skip = max(0, int(skip))
-    limit = max(1, min(int(limit), 1000))
+    limit = max(1, min(int(limit), 10000))
     return f" ORDER BY {order_by} OFFSET ? ROWS FETCH NEXT ? ROWS ONLY", [skip, limit]
+
+
+async def fetch_all_pages(
+    repo: BaseRepository,
+    filters: dict[str, Any] | None = None,
+    page_size: int = 1000,
+) -> list[dict[str, Any]]:
+    """Fetch every record from a repository by paging through all results.
+
+    The safe_pagination_clause caps a single page at 1000 rows for API
+    safety.  For internal analytics / metrics that need the full dataset
+    this helper iterates until all pages are consumed.
+    """
+    all_records: list[dict[str, Any]] = []
+    skip = 0
+    while True:
+        page = await repo.list_all(filters=filters, skip=skip, limit=page_size)
+        all_records.extend(page)
+        if len(page) < page_size:
+            break
+        skip += page_size
+    return all_records
 
 
 class IntegrityConstraintError(Exception):

@@ -149,6 +149,9 @@ class ProductRelationsRepository:
                 continue
             code = cov.get("code") or cov.get("coverage_code")
             name = cov.get("name") or cov.get("coverage_name") or code
+            # Auto-generate coverage code from name when not provided (API-created products)
+            if not code and name:
+                code = name.upper().replace(" ", "-").replace("/", "-")[:50]
             if not code:
                 continue
             await self.db.execute_query(
@@ -221,7 +224,7 @@ class ProductRelationsRepository:
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 [
                     product_id,
-                    ar.get("rule_name"),
+                    ar.get("rule_name") or ar.get("name"),
                     str(field),
                     str(ar.get("operator", "=")),
                     str(ar.get("value_type", "numeric")),
@@ -242,6 +245,10 @@ class ProductRelationsRepository:
         # Use MERGE-style: delete then insert (only one row per product)
         await self.db.execute_query("DELETE FROM product_authority_limits WHERE product_id = ?", [product_id])
 
+        # Accept both SQL column names and API model names
+        auto_bind_premium = self._dec(limits.get("auto_bind_premium_max") or limits.get("max_auto_bind_premium"))
+        auto_bind_limit = self._dec(limits.get("auto_bind_limit_max") or limits.get("max_auto_bind_limit"))
+
         await self.db.execute_query(
             """INSERT INTO product_authority_limits
                (product_id, auto_bind_premium_max, auto_bind_limit_max,
@@ -249,8 +256,8 @@ class ProductRelationsRepository:
                VALUES (?, ?, ?, ?, ?)""",
             [
                 product_id,
-                self._dec(limits.get("auto_bind_premium_max")),
-                self._dec(limits.get("auto_bind_limit_max")),
+                auto_bind_premium,
+                auto_bind_limit,
                 self._dec(limits.get("requires_senior_review_above")),
                 self._dec(limits.get("requires_cuo_review_above")),
             ],
