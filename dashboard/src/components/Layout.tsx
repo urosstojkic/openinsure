@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { NavLink, Outlet, useLocation } from 'react-router-dom';
+import { NavLink, Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
   LayoutDashboard,
@@ -184,6 +184,11 @@ const Layout: React.FC = () => {
   const { useMock, toggleMock } = useMockMode();
   const location = useLocation();
   const isBroker = user.role === 'broker';
+
+  // Defense-in-depth: broker must stay within /portal/broker (#243)
+  if (isBroker && !location.pathname.startsWith('/portal/broker')) {
+    return <Navigate to="/portal/broker" replace />;
+  }
 
   // Escalation badge count (#76)
   const { data: escalationCount = 0 } = useQuery({
