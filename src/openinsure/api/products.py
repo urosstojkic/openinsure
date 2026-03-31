@@ -75,6 +75,7 @@ class ProductLine(StrEnum):
     MPL = "mpl"
     PROFESSIONAL_INDEMNITY = "professional_indemnity"
     DIRECTORS_OFFICERS = "directors_officers"
+    COMMERCIAL_PROPERTY = "commercial_property"
 
 
 # ---------------------------------------------------------------------------

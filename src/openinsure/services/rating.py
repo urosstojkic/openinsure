@@ -1,16 +1,18 @@
-"""Cyber insurance rating engine.
+"""Insurance rating engines — LOB-agnostic architecture.
 
-Implements configurable premium calculation for cyber insurance products.
-The rating engine uses a factor-based approach where:
-  base_premium = base_rate * revenue_factor
-  adjusted_premium = base_premium * product(all_factors)
-  final_premium = max(min_premium, min(max_premium, adjusted_premium))
+Implements configurable premium calculation for multiple lines of business.
+Each LOB has its own rating engine with LOB-specific factors:
+
+- **CyberRatingEngine**: factor-based cyber insurance pricing
+- **PropertyRatingEngine**: commercial property pricing by building risk
+
+The generic :class:`RatingEngine` loads factors from the relational DB and
+dispatches to the appropriate LOB engine.
 
 **v106 — Relational factor loading (issue #164)**:
 When a ``product_id`` is supplied, :class:`RatingEngine` loads factors
 from the ``rating_factor_tables`` SQL table first.  Hardcoded dicts
-(``INDUSTRY_RISK_FACTORS``, ``REVENUE_BANDS``) serve as the fallback
-when no relational data exists — backward compatibility is preserved.
+serve as the fallback when no relational data exists.
 """
 
 from __future__ import annotations
@@ -156,9 +158,7 @@ class RatingEngine:
         When *as_of_date* is provided, loads factors effective at that
         date for historical rating (regulatory audit support, #181).
         """
-        factors_from_db = await self.load_factors_for_product(
-            product_id, as_of_date=as_of_date
-        )
+        factors_from_db = await self.load_factors_for_product(product_id, as_of_date=as_of_date)
 
         engine = CyberRatingEngine()
         if factors_from_db:
@@ -386,4 +386,274 @@ class CyberRatingEngine:
         lines.append(f"Revenue: ${ri.annual_revenue:,.0f}, Employees: {ri.employee_count}")
         lines.append(f"Security maturity: {ri.security_maturity_score}/10")
         lines.append("Factors applied: " + ", ".join(f"{k}={v}" for k, v in factors.items()))
+        return ". ".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# Property rating input / engine — completely different factor model
+# ---------------------------------------------------------------------------
+
+
+class PropertyRatingInput(BaseModel):
+    """Input data required for commercial property insurance rating."""
+
+    building_value: Decimal = Field(ge=0)
+    construction_type: str = Field(
+        default="masonry",
+        description="frame, joisted_masonry, masonry, fire_resistive, modified_fire_resistive",
+    )
+    year_built: int = Field(ge=1800, le=2100)
+    square_footage: int = Field(ge=0, default=0)
+    fire_protection_class: int = Field(ge=1, le=10, default=5)
+    sprinkler_system: bool = False
+    occupancy_type: str = Field(
+        default="office",
+        description="office, retail, restaurant, manufacturing, warehouse",
+    )
+    distance_to_fire_station_miles: Decimal = Field(ge=0, default=Decimal("5"))
+    roof_type: str = Field(default="standard")
+    prior_property_losses: Decimal = Field(ge=0, default=Decimal("0"))
+    contents_value: Decimal = Field(ge=0, default=Decimal("0"))
+    business_income_limit: Decimal = Field(ge=0, default=Decimal("0"))
+
+
+# Hardcoded fallback factors for property rating
+CONSTRUCTION_TYPE_FACTORS: dict[str, Decimal] = {
+    "frame": Decimal("1.8"),
+    "joisted_masonry": Decimal("1.2"),
+    "masonry": Decimal("1.0"),
+    "fire_resistive": Decimal("0.7"),
+    "modified_fire_resistive": Decimal("0.8"),
+}
+
+FIRE_PROTECTION_CLASS_FACTORS: dict[str, Decimal] = {
+    "1-3": Decimal("0.8"),
+    "4-6": Decimal("1.0"),
+    "7-8": Decimal("1.3"),
+    "9-10": Decimal("2.0"),
+}
+
+BUILDING_AGE_FACTORS: dict[str, Decimal] = {
+    "0-10": Decimal("0.9"),
+    "10-30": Decimal("1.0"),
+    "30-50": Decimal("1.2"),
+    "50+": Decimal("1.5"),
+}
+
+OCCUPANCY_TYPE_FACTORS: dict[str, Decimal] = {
+    "office": Decimal("0.8"),
+    "retail": Decimal("1.0"),
+    "restaurant": Decimal("1.5"),
+    "manufacturing": Decimal("1.3"),
+    "warehouse": Decimal("1.1"),
+}
+
+
+class PropertyRatingEngine:
+    """Rate commercial property submissions using DB-configured factors.
+
+    Base rate: $0.50 per $100 of building value.
+    Factors applied: construction × fire_class × age × occupancy × sprinkler.
+    """
+
+    BASE_RATE_PER_HUNDRED = Decimal("0.50")
+    MIN_PREMIUM = Decimal("2500")
+    MAX_PREMIUM = Decimal("1000000")
+
+    def __init__(
+        self,
+        base_rate_per_hundred: Decimal | None = None,
+        min_premium: Decimal | None = None,
+        max_premium: Decimal | None = None,
+    ):
+        self.base_rate = base_rate_per_hundred or self.BASE_RATE_PER_HUNDRED
+        self.min_premium = min_premium or self.MIN_PREMIUM
+        self.max_premium = max_premium or self.MAX_PREMIUM
+        # DB-loaded factor overrides
+        self._db_construction_factors: dict[str, Decimal] | None = None
+        self._db_fire_class_factors: dict[str, Decimal] | None = None
+        self._db_age_factors: dict[str, Decimal] | None = None
+        self._db_occupancy_factors: dict[str, Decimal] | None = None
+        self._db_sprinkler_factors: dict[str, Decimal] | None = None
+
+    def set_db_factors(self, factors: dict[str, dict[str, Decimal]]) -> None:
+        """Inject relational factors loaded from DB."""
+        if "construction_type" in factors:
+            self._db_construction_factors = factors["construction_type"]
+        if "fire_protection_class" in factors:
+            self._db_fire_class_factors = factors["fire_protection_class"]
+        if "building_age" in factors:
+            self._db_age_factors = factors["building_age"]
+        if "occupancy_type" in factors:
+            self._db_occupancy_factors = factors["occupancy_type"]
+        if "sprinkler_system" in factors:
+            self._db_sprinkler_factors = factors["sprinkler_system"]
+
+    def calculate_premium(self, ri: PropertyRatingInput) -> RatingResult:
+        """Calculate commercial property premium based on building risk factors."""
+        factors: dict[str, Decimal] = {}
+        warnings: list[str] = []
+
+        # Base premium: $0.50 per $100 of building value
+        base_premium = (ri.building_value / Decimal("100")) * self.base_rate
+        factors["base_rate"] = self.base_rate
+
+        # Construction type factor
+        construction_factor = self._get_construction_factor(ri.construction_type)
+        factors["construction_type"] = construction_factor
+        if ri.construction_type == "frame":
+            warnings.append("Frame construction carries highest fire risk — consider protective safeguards")
+
+        # Fire protection class factor
+        fire_class_factor = self._get_fire_class_factor(ri.fire_protection_class)
+        factors["fire_protection_class"] = fire_class_factor
+        if ri.fire_protection_class >= 9:
+            warnings.append("Poor fire protection class — consider referral to specialist underwriter")
+
+        # Building age factor
+        current_year = 2026  # Platform reference year
+        building_age = current_year - ri.year_built
+        age_factor = self._get_age_factor(building_age)
+        factors["building_age"] = age_factor
+        if building_age > 50:
+            warnings.append("Building over 50 years old — recommend updated building inspection")
+
+        # Occupancy type factor
+        occupancy_factor = self._get_occupancy_factor(ri.occupancy_type)
+        factors["occupancy_type"] = occupancy_factor
+        if ri.occupancy_type == "restaurant":
+            warnings.append("Restaurant occupancy — verify cooking equipment fire suppression")
+
+        # Sprinkler system factor
+        sprinkler_factor = self._get_sprinkler_factor(ri.sprinkler_system)
+        factors["sprinkler_system"] = sprinkler_factor
+
+        # Calculate adjusted premium
+        adjustment = Decimal("1.0")
+        for factor_value in [
+            construction_factor,
+            fire_class_factor,
+            age_factor,
+            occupancy_factor,
+            sprinkler_factor,
+        ]:
+            adjustment *= factor_value
+
+        adjusted_premium = (base_premium * adjustment).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+        # Apply min/max bounds
+        final_premium = max(self.min_premium, min(self.max_premium, adjusted_premium))
+        final_premium = final_premium.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+        confidence = self._calculate_confidence(ri)
+        explanation = self._generate_explanation(ri, factors, final_premium, building_age)
+
+        logger.info(
+            "property_rating.calculated",
+            building_value=str(ri.building_value),
+            construction=ri.construction_type,
+            final_premium=str(final_premium),
+            confidence=confidence,
+        )
+
+        return RatingResult(
+            base_premium=base_premium.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP),
+            adjusted_premium=adjusted_premium,
+            final_premium=final_premium,
+            factors_applied=factors,
+            confidence=confidence,
+            explanation=explanation,
+            warnings=warnings,
+        )
+
+    def _get_construction_factor(self, construction_type: str) -> Decimal:
+        source = self._db_construction_factors or CONSTRUCTION_TYPE_FACTORS
+        return source.get(construction_type, Decimal("1.0"))
+
+    def _get_fire_class_factor(self, fire_class: int) -> Decimal:
+        if self._db_fire_class_factors:
+            for key, factor in self._db_fire_class_factors.items():
+                if self._value_in_range_key(fire_class, key):
+                    return Decimal(str(factor))
+            return Decimal("1.0")
+        # Hardcoded fallback
+        if fire_class <= 3:
+            return FIRE_PROTECTION_CLASS_FACTORS["1-3"]
+        if fire_class <= 6:
+            return FIRE_PROTECTION_CLASS_FACTORS["4-6"]
+        if fire_class <= 8:
+            return FIRE_PROTECTION_CLASS_FACTORS["7-8"]
+        return FIRE_PROTECTION_CLASS_FACTORS["9-10"]
+
+    def _get_age_factor(self, building_age: int) -> Decimal:
+        if self._db_age_factors:
+            for key, factor in self._db_age_factors.items():
+                if self._value_in_range_key(building_age, key):
+                    return Decimal(str(factor))
+            return Decimal("1.0")
+        # Hardcoded fallback
+        if building_age < 10:
+            return BUILDING_AGE_FACTORS["0-10"]
+        if building_age < 30:
+            return BUILDING_AGE_FACTORS["10-30"]
+        if building_age < 50:
+            return BUILDING_AGE_FACTORS["30-50"]
+        return BUILDING_AGE_FACTORS["50+"]
+
+    def _get_occupancy_factor(self, occupancy_type: str) -> Decimal:
+        source = self._db_occupancy_factors or OCCUPANCY_TYPE_FACTORS
+        return source.get(occupancy_type, Decimal("1.0"))
+
+    def _get_sprinkler_factor(self, has_sprinkler: bool) -> Decimal:
+        if self._db_sprinkler_factors:
+            key = "yes" if has_sprinkler else "no"
+            if key in self._db_sprinkler_factors:
+                return Decimal(str(self._db_sprinkler_factors[key]))
+            return Decimal("1.0")
+        return Decimal("0.7") if has_sprinkler else Decimal("1.0")
+
+    @staticmethod
+    def _value_in_range_key(value: int, key: str) -> bool:
+        """Check if an integer value falls within a range key like '1-3', '50+'."""
+        try:
+            if key.endswith("+"):
+                return value >= int(key[:-1])
+            if "-" in key:
+                parts = key.split("-")
+                return int(parts[0]) <= value <= int(parts[1])
+            return value == int(key)
+        except (ValueError, IndexError):
+            return False
+
+    def _calculate_confidence(self, ri: PropertyRatingInput) -> float:
+        score = 0.5
+        if ri.building_value > 0:
+            score += 0.15
+        if ri.construction_type in CONSTRUCTION_TYPE_FACTORS:
+            score += 0.1
+        if ri.year_built > 0:
+            score += 0.05
+        if ri.fire_protection_class > 0:
+            score += 0.1
+        if ri.occupancy_type in OCCUPANCY_TYPE_FACTORS:
+            score += 0.05
+        if ri.square_footage > 0:
+            score += 0.05
+        return min(1.0, score)
+
+    def _generate_explanation(
+        self,
+        ri: PropertyRatingInput,
+        factors: dict[str, Any],
+        premium: Decimal,
+        building_age: int,
+    ) -> str:
+        lines = [
+            f"Premium of ${premium:,.2f} calculated for {ri.occupancy_type} occupancy",
+            f"Building value: ${ri.building_value:,.0f}, "
+            f"Construction: {ri.construction_type}, "
+            f"Age: {building_age} years",
+            f"Fire protection class: {ri.fire_protection_class}, Sprinkler: {'Yes' if ri.sprinkler_system else 'No'}",
+            "Factors applied: " + ", ".join(f"{k}={v}" for k, v in factors.items()),
+        ]
         return ". ".join(lines)

@@ -5,6 +5,46 @@ All notable changes to OpenInsure will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## v111 — Commercial Property LOB (2026-04-01)
+
+### Summary
+Proves LOB-agnostic architecture by adding a **Commercial Property** insurance product — a completely
+different line of business from Cyber. New rating engine, 6 coverages, 5 rating factor categories,
+appetite rules, authority limits, and 73 new tests. 1 new migration (026), 1 new rating engine class.
+
+### New LOB: Commercial Property
+- **Product code:** `PROP-COMM-001` — all-risk commercial property coverage
+- **6 coverages:** Building ($5M), Business Personal Property ($1M), Business Income / Extra Expense ($500K),
+  Equipment Breakdown ($500K), Ordinance or Law ($250K), Flood (optional, $1M)
+- **5 rating factors** (completely different from Cyber): construction type, fire protection class,
+  building age, occupancy type, sprinkler system
+- **Appetite rules:** Building value $100K–$50M, fire protection class ≤ 8, no prior losses > $500K
+- **Authority limits:** Auto-bind $15K, Senior UW $50K, CUO $200K
+- **Territories:** US
+- **Base rate:** $0.50 per $100 of building value
+
+### New Capabilities
+- **`PropertyRatingEngine`** in `services/rating.py` — factor-based property rating with construction,
+  fire class, age, occupancy, and sprinkler multipliers. DB-factor overrides supported.
+- **`PropertyRatingInput`** model — building_value, construction_type, year_built, square_footage,
+  fire_protection_class, sprinkler_system, occupancy_type, distance_to_fire_station, roof_type, prior_losses
+- **`COMMERCIAL_PROPERTY`** added to `ProductLine` enum and `LineOfBusiness` enum
+- **ACORD parser** recognizes property/prop/commprop/cp LOB codes
+
+### Database — Migration 026
+- Seeds product, 6 coverages, 5 rating factor definitions + 20 factor lookup values,
+  3 appetite rules, authority limits, territory, pricing, and workflow template
+
+### Metrics
+- 73 new tests (property rating: 47, updated ACORD parser: 1, existing tests: 25 remain green)
+- 969 unit tests pass (up from 896)
+- 46 database tables across 26 migrations (up from 45/25)
+
+### Agents
+- Insurance (LOB architecture validation)
+
+---
+
 ## v110 — Policy Transactions, Polymorphic Documents, Work Items (2026-04-01)
 
 ### Summary

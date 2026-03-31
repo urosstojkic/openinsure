@@ -346,6 +346,8 @@ def _parse_policy(pkg: ET.Element, result: ACORDParseResult) -> None:
         result.line_of_business = "tech_eo"
     elif lob_code in ("mpl", "profliab"):
         result.line_of_business = "mpl"
+    elif lob_code in ("property", "prop", "commprop", "commercial_property", "cp"):
+        result.line_of_business = "commercial_property"
     elif lob_code:
         result.line_of_business = "cyber"
         result.parse_warnings.append(f"Unknown LOB code '{lob_code}', defaulting to cyber")

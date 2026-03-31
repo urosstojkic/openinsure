@@ -66,6 +66,7 @@ class LineOfBusiness(StrEnum):
     CYBER = "cyber"
     TECH_EO = "tech_eo"
     MPL = "mpl"
+    COMMERCIAL_PROPERTY = "commercial_property"
 
 
 # ---------------------------------------------------------------------------

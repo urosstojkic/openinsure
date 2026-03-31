@@ -196,7 +196,12 @@ class TestACORDParser:
         assert result.applicant_name == "NovaTech Solutions"
 
     def test_unknown_lob_defaults_to_cyber(self) -> None:
-        xml = ACORD_SIMPLE.replace("<LOBCd>cyber</LOBCd>", "<LOBCd>PROPERTY</LOBCd>")
+        xml = ACORD_SIMPLE.replace("<LOBCd>cyber</LOBCd>", "<LOBCd>MARINE_HULL</LOBCd>")
         result = parse_acord_xml(xml)
         assert result.line_of_business == "cyber"
         assert any("Unknown LOB" in w for w in result.parse_warnings)
+
+    def test_property_lob_recognized(self) -> None:
+        xml = ACORD_SIMPLE.replace("<LOBCd>cyber</LOBCd>", "<LOBCd>property</LOBCd>")
+        result = parse_acord_xml(xml)
+        assert result.line_of_business == "commercial_property"
