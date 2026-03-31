@@ -18,6 +18,7 @@ from openinsure.infrastructure.factory import (
     get_policy_repository,
     get_submission_repository,
 )
+from openinsure.infrastructure.repository import fetch_all_pages
 
 router = APIRouter()
 logger = structlog.get_logger()
@@ -178,7 +179,7 @@ async def get_uw_analytics(
     months: int = Query(12, ge=1, le=36, description="Look-back period in months"),
 ) -> UWAnalyticsResponse:
     """Underwriting performance analytics computed from submissions data."""
-    submissions = await _sub_repo.list_all(limit=5000)
+    submissions = await fetch_all_pages(_sub_repo)
     period = f"last_{months}_months"
 
     # Count by status
@@ -227,27 +228,46 @@ async def get_uw_analytics(
             )
         )
 
-    # Processing time — compute from real submission timestamps where available
+    # Processing time — compute from real submission stage timestamps
+    def _parse_ts(val: Any) -> datetime | None:
+        if val is None or val == "":
+            return None
+        if isinstance(val, datetime):
+            return val
+        try:
+            return datetime.fromisoformat(str(val).replace("Z", "+00:00"))
+        except (ValueError, TypeError):
+            return None
+
     intake_hours: list[float] = []
     quote_hours: list[float] = []
+    bind_hours: list[float] = []
     for s in submissions:
-        created = s.get("created_at")
-        updated = s.get("updated_at")
-        if created and updated and created != updated:
-            try:
-                t0 = (
-                    datetime.fromisoformat(str(created).replace("Z", "+00:00")) if isinstance(created, str) else created
-                )
-                t1 = (
-                    datetime.fromisoformat(str(updated).replace("Z", "+00:00")) if isinstance(updated, str) else updated
-                )
-                diff_h = max(0, (t1 - t0).total_seconds() / 3600)
-                if s.get("status") in ("underwriting", "quoted", "bound"):
-                    intake_hours.append(diff_h)
-                if s.get("status") in ("quoted", "bound"):
-                    quote_hours.append(diff_h)
-            except (ValueError, TypeError):
-                pass
+        received = _parse_ts(s.get("received_at") or s.get("created_at"))
+        triaged = _parse_ts(s.get("triaged_at"))
+        quoted = _parse_ts(s.get("quoted_at"))
+        bound = _parse_ts(s.get("bound_at"))
+        updated = _parse_ts(s.get("updated_at"))
+
+        # intake_to_triage
+        if received and s.get("status") in ("triaging", "underwriting", "quoted", "bound"):
+            t_end = triaged or updated
+            if t_end and t_end > received:
+                intake_hours.append((t_end - received).total_seconds() / 3600)
+
+        # triage_to_quote
+        if s.get("status") in ("quoted", "bound"):
+            t_start = triaged or received
+            t_end = quoted or updated
+            if t_start and t_end and t_end > t_start:
+                quote_hours.append((t_end - t_start).total_seconds() / 3600)
+
+        # quote_to_bind
+        if s.get("status") == "bound":
+            t_start = quoted or triaged or received
+            t_end = bound or updated
+            if t_start and t_end and t_end > t_start:
+                bind_hours.append((t_end - t_start).total_seconds() / 3600)
 
     def _percentile(vals: list[float], p: float) -> float:
         if not vals:
@@ -271,9 +291,9 @@ async def get_uw_analytics(
         ),
         ProcessingTimeMetric(
             stage="quote_to_bind",
-            avg_hours=round(sum(quote_hours) / max(len(quote_hours), 1) * 1.5, 1),
-            p50_hours=round(_percentile(quote_hours, 0.5) * 1.5, 1),
-            p90_hours=round(_percentile(quote_hours, 0.9) * 1.5, 1),
+            avg_hours=round(sum(bind_hours) / max(len(bind_hours), 1), 1),
+            p50_hours=_percentile(bind_hours, 0.5),
+            p90_hours=_percentile(bind_hours, 0.9),
         ),
     ]
 
@@ -326,7 +346,7 @@ async def get_claims_analytics(
     months: int = Query(12, ge=1, le=36, description="Look-back period in months"),
 ) -> ClaimsAnalyticsResponse:
     """Claims analytics computed from claims data."""
-    claims = await _claim_repo.list_all(limit=5000)
+    claims = await fetch_all_pages(_claim_repo)
     period = f"last_{months}_months"
 
     total = len(claims)
@@ -480,9 +500,9 @@ async def get_ai_insights(
     from openinsure.agents.foundry_client import get_foundry_client
 
     # Gather metrics
-    submissions = await _sub_repo.list_all(limit=5000)
-    claims = await _claim_repo.list_all(limit=5000)
-    policies = await _policy_repo.list_all(limit=5000)
+    submissions = await fetch_all_pages(_sub_repo)
+    claims = await fetch_all_pages(_claim_repo)
+    policies = await fetch_all_pages(_policy_repo)
 
     total_subs = len(submissions)
     total_claims = len(claims)

@@ -17,6 +17,7 @@ from openinsure.infrastructure.factory import (
     get_policy_repository,
     get_submission_repository,
 )
+from openinsure.infrastructure.repository import fetch_all_pages
 
 router = APIRouter()
 
@@ -211,26 +212,31 @@ async def get_summary_metrics() -> dict[str, Any]:
     total_pols = await pol_repo.count()
     total_claims = await clm_repo.count()
 
+    # Fetch ALL records (paging past the 1000-row safety cap)
+    subs = await fetch_all_pages(sub_repo)
+    pols = await fetch_all_pages(pol_repo)
+    claims = await fetch_all_pages(clm_repo)
+
     # Count submissions by status
-    subs = await sub_repo.list_all(limit=5000)
     status_counts: dict[str, int] = {}
     for s in subs:
         st = s.get("status", "unknown")
         status_counts[st] = status_counts.get(st, 0) + 1
 
-    # Policies by status and total premium
-    pols = await pol_repo.list_all(limit=5000)
+    # Policies by status and premium
     pol_status: dict[str, int] = {}
     total_premium = 0.0
+    today = datetime.now(UTC).date()
+    earned_premium_total = 0.0
     for p in pols:
         st = p.get("status", "unknown")
         pol_status[st] = pol_status.get(st, 0) + 1
-        total_premium += float(p.get("premium", 0) or p.get("total_premium", 0) or 0)
+        total_premium += _policy_premium(p)
+        earned_premium_total += _earned_premium(p, today)
 
     active_pols = pol_status.get("active", 0)
 
     # Claims by status and total incurred
-    claims = await clm_repo.list_all(limit=5000)
     claim_status: dict[str, int] = {}
     total_incurred = 0.0
     for c in claims:
@@ -238,10 +244,13 @@ async def get_summary_metrics() -> dict[str, Any]:
         claim_status[st] = claim_status.get(st, 0) + 1
         total_incurred += float(c.get("total_incurred", 0) or 0)
 
-    # Compute ratios
-    loss_ratio = round(total_incurred / total_premium * 100, 1) if total_premium > 0 else 0
+    # Loss ratio = total_incurred / earned_premium (NOT GWP)
+    loss_ratio = round(total_incurred / earned_premium_total * 100, 1) if earned_premium_total > 0 else 0
     bind_rate = round(status_counts.get("bound", 0) / total_subs * 100, 1) if total_subs > 0 else 0
     decline_rate = round(status_counts.get("declined", 0) / total_subs * 100, 1) if total_subs > 0 else 0
+
+    # Processing time from submission stage timestamps
+    avg_proc_hours = _avg_processing_hours(subs)
 
     # Count decisions needing oversight
     comp_repo = get_compliance_repository()
@@ -279,6 +288,7 @@ async def get_summary_metrics() -> dict[str, Any]:
             - claim_status.get("settled", 0),
             "pending_escalations": await count_pending(),
             "pending_decisions": oversight_recommended,
+            "avg_processing_time_hours": avg_proc_hours,
         },
     }
 
@@ -287,14 +297,12 @@ async def get_summary_metrics() -> dict[str, Any]:
 async def get_pipeline_metrics() -> dict[str, Any]:
     """Submission pipeline funnel."""
     repo = get_submission_repository()
-    total_count = await repo.count()
-    subs = await repo.list_all(limit=10000)
-    pipeline = {"received": 0, "triaging": 0, "underwriting": 0, "quoted": 0, "bound": 0, "declined": 0}
+    subs = await fetch_all_pages(repo)
+    pipeline: dict[str, int] = {}
     for s in subs:
         st = s.get("status", "unknown")
-        if st in pipeline:
-            pipeline[st] += 1
-    return {"pipeline": pipeline, "total": total_count}
+        pipeline[st] = pipeline.get(st, 0) + 1
+    return {"pipeline": pipeline, "total": len(subs)}
 
 
 @router.get("/agents", response_model=AgentMetricsResponse)
@@ -428,13 +436,13 @@ async def get_agent_status() -> AgentStatusResponse:
 async def get_premium_trend() -> dict[str, Any]:
     """Monthly premium trend from policies."""
     repo = get_policy_repository()
-    pols = await repo.list_all(limit=5000)
+    pols = await fetch_all_pages(repo)
 
     monthly: dict[str, float] = {}
     for p in pols:
         eff = str(p.get("effective_date", ""))[:7]  # "2025-06"
         if eff:
-            premium = float(p.get("premium", 0) or p.get("total_premium", 0) or 0)
+            premium = _policy_premium(p)
             monthly[eff] = monthly.get(eff, 0) + premium
 
     # Sort by month
@@ -456,8 +464,20 @@ async def get_executive_dashboard() -> dict[str, Any]:
     trend = await get_premium_trend()
 
     gwp = summary["policies"]["total_premium"]
-    total_incurred = summary["claims"]["total_incurred"]
-    loss_ratio = total_incurred / gwp if gwp > 0 else 0
+
+    # Use earned premium for loss ratio (not GWP)
+    pol_repo = get_policy_repository()
+    clm_repo = get_claim_repository()
+    sub_repo = get_submission_repository()
+
+    pols = await fetch_all_pages(pol_repo)
+    claims = await fetch_all_pages(clm_repo)
+    subs = await fetch_all_pages(sub_repo)
+
+    today = datetime.now(UTC).date()
+    earned_prem = sum(_earned_premium(p, today) for p in pols)
+    total_incurred = sum(float(c.get("total_incurred", 0) or 0) for c in claims)
+    loss_ratio = total_incurred / earned_prem if earned_prem > 0 else 0
     expense_ratio = 0.34
     combined_ratio = min(loss_ratio + expense_ratio, 1.5)
 
@@ -465,16 +485,12 @@ async def get_executive_dashboard() -> dict[str, Any]:
     nwp = gwp * 0.85
 
     # Compute growth rate from year-over-year premium change
-    from datetime import datetime
-
     now = datetime.now(UTC)
-    pol_repo2 = get_policy_repository()
-    all_pols = await pol_repo2.list_all(limit=5000)
     this_year_prem = 0.0
     last_year_prem = 0.0
-    for p in all_pols:
+    for p in pols:
         eff = str(p.get("effective_date", ""))[:4]
-        prem = float(p.get("premium", 0) or p.get("total_premium", 0) or 0)
+        prem = _policy_premium(p)
         if eff == str(now.year):
             this_year_prem += prem
         elif eff == str(now.year - 1):
@@ -482,23 +498,15 @@ async def get_executive_dashboard() -> dict[str, Any]:
     growth_rate = (this_year_prem - last_year_prem) / last_year_prem if last_year_prem > 0 else 0.0
 
     # --- Loss ratio by LOB ---------------------------------------------------
-    sub_repo = get_submission_repository()
-    pol_repo = get_policy_repository()
-    clm_repo = get_claim_repository()
-
-    pols = await pol_repo.list_all(limit=5000)
-    claims = await clm_repo.list_all(limit=5000)
-    subs = await sub_repo.list_all(limit=5000)
-
-    # Build policy→LOB mapping via linked submission
-    sub_lob = {s.get("id"): s.get("line_of_business", "cyber") for s in subs}
+    # Prefer submission line_of_business (most accurate); fall back to policy lob
+    sub_lob = {s.get("id"): s.get("line_of_business", "") for s in subs}
     pol_lob: dict[str, str] = {}
     pol_premium: dict[str, float] = {}
     for p in pols:
-        lob = p.get("lob") or sub_lob.get(p.get("submission_id"), "cyber")
+        lob = sub_lob.get(p.get("submission_id"), "") or p.get("lob") or "cyber"
         pol_lob[p["id"]] = lob
         pol_premium.setdefault(lob, 0)
-        pol_premium[lob] += float(p.get("premium", 0) or p.get("total_premium", 0) or 0)
+        pol_premium[lob] += _policy_premium(p)
 
     lob_incurred: dict[str, float] = {}
     for c in claims:
@@ -519,19 +527,23 @@ async def get_executive_dashboard() -> dict[str, Any]:
         [
             {
                 "name": p.get("policyholder_name") or p.get("insured_name") or "Unknown",
-                "exposure": float(p.get("premium", 0) or p.get("total_premium", 0) or 0),
+                "exposure": _policy_premium(p),
             }
             for p in pols
-            if float(p.get("premium", 0) or p.get("total_premium", 0) or 0) > 0
+            if _policy_premium(p) > 0
         ],
         key=lambda x: x["exposure"],
         reverse=True,
-    )[:5]
+    )[:10]
 
     # --- Pipeline as array of {stage, count} ----------------------------------
     pipeline_array = [
         {"stage": stage.capitalize(), "count": count} for stage, count in pipeline_raw["pipeline"].items()
     ]
+
+    # --- Agent impact — processing time from submission timestamps ------------
+    avg_proc = _avg_processing_hours(subs)
+    proc_reduction = round((1 - avg_proc / 72) * 100) if avg_proc > 0 else 0
 
     return {
         "kpis": {
@@ -546,7 +558,7 @@ async def get_executive_dashboard() -> dict[str, Any]:
         "exposure_concentrations": exposure_concentrations,
         "pipeline": pipeline_array,
         "agent_impact": {
-            "processing_time_reduction": 68,
+            "processing_time_reduction": proc_reduction,
             "auto_bind_rate": summary["submissions"].get("bind_rate", 0),
             "escalation_rate": round(
                 summary["kpis"].get("pending_escalations", 0) / max(summary["submissions"]["total"], 1) * 100,
