@@ -28,6 +28,45 @@ def get_recent_events(limit: int = 20) -> list[dict[str, Any]]:
     return list(reversed(_recent_events[-limit:]))
 
 
+async def get_recent_events_with_sql(limit: int = 20) -> list[dict[str, Any]]:
+    """Return recent domain events, preferring SQL store over in-memory buffer.
+
+    Falls back to the in-memory ring buffer when SQL is not configured.
+    """
+    db = get_database_adapter()
+    if db is not None:
+        try:
+            rows = await db.fetch_all(
+                "SELECT TOP(?) event_id, event_type, aggregate_type, aggregate_id, "
+                "version, payload, metadata, actor, occurred_at "
+                "FROM domain_events ORDER BY occurred_at DESC",
+                [limit],
+            )
+            results: list[dict[str, Any]] = []
+            for row in rows:
+                raw_payload = row.get("payload")
+                parsed_payload = (
+                    json.loads(raw_payload) if isinstance(raw_payload, str) and raw_payload else raw_payload
+                )
+                raw_occurred = row["occurred_at"]
+                occurred_str = raw_occurred.isoformat() if hasattr(raw_occurred, "isoformat") else str(raw_occurred)
+                results.append(
+                    {
+                        "event_type": row["event_type"],
+                        "subject": f"/{row['aggregate_type']}/{row['aggregate_id']}",
+                        "data": parsed_payload or {},
+                        "timestamp": occurred_str,
+                        "correlation_id": None,
+                    }
+                )
+            if results:
+                return results
+        except Exception:
+            logger.warning("event_store.recent_query_failed", exc_info=True)
+    # Fallback to in-memory ring buffer
+    return list(reversed(_recent_events[-limit:]))
+
+
 def _parse_aggregate(subject: str, data: dict[str, Any]) -> tuple[str, str | None]:
     """Derive aggregate_type and aggregate_id from the event subject/data.
 

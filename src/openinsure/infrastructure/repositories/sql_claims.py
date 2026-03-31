@@ -163,6 +163,58 @@ class SqlClaimRepository(BaseRepository):
     def __init__(self, db: DatabaseAdapter) -> None:
         self.db = db
 
+    async def _fetch_reserves(self, claim_ids: list[str]) -> dict[str, list[dict[str, Any]]]:
+        """Fetch individual reserve entries for a list of claim IDs."""
+        if not claim_ids:
+            return {}
+        placeholders = ", ".join("?" for _ in claim_ids)
+        rows = await self.db.fetch_all(
+            f"SELECT id, claim_id, reserve_type, amount, set_date, set_by, confidence "  # noqa: S608
+            f"FROM claim_reserves WHERE claim_id IN ({placeholders}) ORDER BY set_date DESC",
+            claim_ids,
+        )
+        result: dict[str, list[dict[str, Any]]] = {}
+        for r in rows:
+            cid = str(r["claim_id"])
+            entry = {
+                "reserve_id": str(r["id"]),
+                "category": str(r.get("reserve_type") or "indemnity"),
+                "amount": float(r["amount"]) if r.get("amount") is not None else 0.0,
+                "currency": "USD",
+                "created_at": r["set_date"].isoformat()
+                if hasattr(r.get("set_date"), "isoformat")
+                else str(r.get("set_date", "")),
+                "set_by": str(r.get("set_by") or ""),
+            }
+            result.setdefault(cid, []).append(entry)
+        return result
+
+    async def _fetch_payments(self, claim_ids: list[str]) -> dict[str, list[dict[str, Any]]]:
+        """Fetch individual payment entries for a list of claim IDs."""
+        if not claim_ids:
+            return {}
+        placeholders = ", ".join("?" for _ in claim_ids)
+        rows = await self.db.fetch_all(
+            f"SELECT id, claim_id, amount, payee_id, payment_date, payment_type "  # noqa: S608
+            f"FROM claim_payments WHERE claim_id IN ({placeholders}) ORDER BY payment_date DESC",
+            claim_ids,
+        )
+        result: dict[str, list[dict[str, Any]]] = {}
+        for r in rows:
+            cid = str(r["claim_id"])
+            entry = {
+                "payment_id": str(r["id"]),
+                "amount": float(r["amount"]) if r.get("amount") is not None else 0.0,
+                "currency": "USD",
+                "category": str(r.get("payment_type") or "indemnity"),
+                "payee": str(r.get("payee_id") or ""),
+                "created_at": r["payment_date"].isoformat()
+                if hasattr(r.get("payment_date"), "isoformat")
+                else str(r.get("payment_date", "")),
+            }
+            result.setdefault(cid, []).append(entry)
+        return result
+
     async def create(self, entity: dict[str, Any]) -> dict[str, Any]:
         now = datetime.now(UTC).isoformat()
         entity.setdefault("id", str(uuid4()))
@@ -245,7 +297,15 @@ class SqlClaimRepository(BaseRepository):
         if not include_deleted:
             sql += " AND c.deleted_at IS NULL"
         row = await self.db.fetch_one(sql, [str(entity_id)])
-        return _claim_from_sql_row(row) if row else None
+        if not row:
+            return None
+        claim = _claim_from_sql_row(row)
+        cid = claim["id"]
+        reserves_map = await self._fetch_reserves([cid])
+        payments_map = await self._fetch_payments([cid])
+        claim["reserves"] = reserves_map.get(cid, [])
+        claim["payments"] = payments_map.get(cid, [])
+        return claim
 
     async def list_all(
         self,
@@ -271,7 +331,16 @@ class SqlClaimRepository(BaseRepository):
         query += pag_clause
         params.extend(pag_params)
         rows = await self.db.fetch_all(query, params)
-        return [_claim_from_sql_row(r) for r in rows]
+        claims = [_claim_from_sql_row(r) for r in rows]
+        # Populate individual reserve and payment entries
+        claim_ids = [c["id"] for c in claims if c.get("id")]
+        reserves_map = await self._fetch_reserves(claim_ids)
+        payments_map = await self._fetch_payments(claim_ids)
+        for c in claims:
+            cid = c["id"]
+            c["reserves"] = reserves_map.get(cid, [])
+            c["payments"] = payments_map.get(cid, [])
+        return claims
 
     async def update(
         self, entity_id: UUID | str, updates: dict[str, Any], *, expected_version: str | None = None

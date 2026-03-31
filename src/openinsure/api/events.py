@@ -16,10 +16,10 @@ class RecentEventsResponse(BaseModel):
 
 @router.get("/recent", response_model=RecentEventsResponse)
 async def get_recent_events(limit: int = Query(20, ge=1, le=100)) -> dict[str, object]:
-    """Get recent domain events (from in-memory ring buffer)."""
-    from openinsure.services.event_publisher import get_recent_events
+    """Get recent domain events (from SQL event store, falling back to in-memory)."""
+    from openinsure.services.event_publisher import get_recent_events_with_sql
 
-    return {"items": get_recent_events(limit)}
+    return {"items": await get_recent_events_with_sql(limit)}
 
 
 class EventReplayResponse(BaseModel):

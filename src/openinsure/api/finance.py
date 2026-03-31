@@ -6,6 +6,7 @@ import uuid
 from datetime import UTC, date, datetime
 from typing import Any
 
+import structlog
 from fastapi import APIRouter
 from pydantic import BaseModel
 
@@ -14,8 +15,10 @@ from openinsure.infrastructure.factory import (
     get_policy_repository,
     get_submission_repository,
 )
+from openinsure.infrastructure.repository import fetch_all_pages
 
 router = APIRouter()
+logger = structlog.get_logger()
 
 
 # ---------------------------------------------------------------------------
@@ -133,8 +136,8 @@ async def financial_summary() -> FinancialSummary:
     pol_repo = get_policy_repository()
     clm_repo = get_claim_repository()
 
-    pols = await pol_repo.list_all(limit=5000)
-    claims = await clm_repo.list_all(limit=5000)
+    pols = await fetch_all_pages(pol_repo)
+    claims = await fetch_all_pages(clm_repo)
 
     today = datetime.now(UTC).date()
 
@@ -171,26 +174,52 @@ async def financial_summary() -> FinancialSummary:
 
 @router.get("/cashflow", response_model=CashFlowResponse)
 async def cash_flow() -> CashFlowResponse:
-    """Monthly cash-flow derived from policy premiums and claim payments."""
+    """Monthly cash-flow derived from billing invoices, policy premiums, and claim payments."""
+    from openinsure.infrastructure.factory import get_billing_repository
+
     pol_repo = get_policy_repository()
     clm_repo = get_claim_repository()
+    billing_repo = get_billing_repository()
 
-    pols = await pol_repo.list_all(limit=5000)
-    claims = await clm_repo.list_all(limit=5000)
+    pols = await fetch_all_pages(pol_repo)
+    claims = await fetch_all_pages(clm_repo)
 
-    # Monthly collections from policy premiums (by effective_date month)
+    # Monthly collections from policy premiums (by effective_date month, fallback to created_at)
     monthly_premium: dict[str, float] = {}
     for p in pols:
         month = str(p.get("effective_date", ""))[:7]
-        if month:
+        if not month or len(month) < 7:
+            month = str(p.get("created_at", ""))[:7]
+        if month and len(month) >= 7:
             monthly_premium[month] = monthly_premium.get(month, 0) + _policy_premium(p)
+
+    # Enhance with billing/invoice paid amounts if available
+    try:
+        billing_accounts = await billing_repo.list_all(limit=5000)
+        for ba in billing_accounts:
+            invoices = ba.get("invoices", [])
+            for inv in invoices:
+                paid_amt = float(inv.get("paid_amount", 0) or 0)
+                if paid_amt > 0:
+                    inv_month = str(inv.get("issue_date", ""))[:7]
+                    if inv_month and len(inv_month) >= 7:
+                        monthly_premium[inv_month] = monthly_premium.get(inv_month, 0) + paid_amt
+    except Exception:
+        logger.debug("cashflow: billing data unavailable — using policy premium baseline")
 
     # Monthly disbursements from claim payments (by loss-date month)
     monthly_paid: dict[str, float] = {}
     for c in claims:
         dol = str(c.get("date_of_loss", "") or c.get("loss_date", ""))[:7]
-        if dol:
-            monthly_paid[dol] = monthly_paid.get(dol, 0) + float(c.get("total_paid", 0) or 0)
+        total_paid = float(c.get("total_paid", 0) or 0)
+        if dol and len(dol) >= 7 and total_paid > 0:
+            monthly_paid[dol] = monthly_paid.get(dol, 0) + total_paid
+        # Also include individual payment entries if available
+        for pmt in c.get("payments", []):
+            pmt_month = str(pmt.get("created_at", ""))[:7]
+            pmt_amt = float(pmt.get("amount", 0) or 0)
+            if pmt_month and len(pmt_month) >= 7 and pmt_amt > 0:
+                monthly_paid[pmt_month] = monthly_paid.get(pmt_month, 0) + pmt_amt
 
     all_months = sorted(set(list(monthly_premium.keys()) + list(monthly_paid.keys())))
     recent = all_months[-12:] if len(all_months) > 12 else all_months
@@ -217,8 +246,8 @@ async def commissions() -> CommissionSummary:
     pol_repo = get_policy_repository()
     sub_repo = get_submission_repository()
 
-    pols = await pol_repo.list_all(limit=5000)
-    subs = await sub_repo.list_all(limit=5000)
+    pols = await fetch_all_pages(pol_repo)
+    subs = await fetch_all_pages(sub_repo)
 
     # Map submission_id → broker / channel label
     sub_broker: dict[str, str] = {}
@@ -272,8 +301,8 @@ async def reconciliation() -> ReconciliationList:
     pol_repo = get_policy_repository()
     clm_repo = get_claim_repository()
 
-    pols = await pol_repo.list_all(limit=5000)
-    claims = await clm_repo.list_all(limit=5000)
+    pols = await fetch_all_pages(pol_repo)
+    claims = await fetch_all_pages(clm_repo)
 
     today = datetime.now(UTC).date()
 
@@ -332,8 +361,8 @@ async def generate_bordereau(body: BordereauGenerateRequest) -> BordereauGenerat
     pol_repo = get_policy_repository()
     clm_repo = get_claim_repository()
 
-    pols = await pol_repo.list_all(limit=5000)
-    claims = await clm_repo.list_all(limit=5000)
+    pols = await fetch_all_pages(pol_repo)
+    claims = await fetch_all_pages(clm_repo)
 
     premium_total = sum(_policy_premium(p) for p in pols)
     claims_total = sum(float(c.get("total_incurred", 0) or 0) for c in claims)

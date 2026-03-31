@@ -50,6 +50,19 @@ def _safe_uuid(val: Any) -> str | None:
 
 def _policy_to_sql_row(entity: dict[str, Any]) -> dict[str, Any]:
     """Map API policy dict keys to SQL column names for INSERT."""
+    from datetime import UTC, datetime, timedelta
+
+    today = datetime.now(UTC).strftime("%Y-%m-%d")
+    one_year = (datetime.now(UTC) + timedelta(days=365)).strftime("%Y-%m-%d")
+
+    eff = entity.get("effective_date")
+    exp = entity.get("expiration_date")
+    # Ensure effective/expiration dates are never NULL or empty
+    if not eff:
+        eff = today
+    if not exp:
+        exp = one_year
+
     return {
         "id": entity.get("id"),
         "policy_number": entity.get("policy_number"),
@@ -57,8 +70,8 @@ def _policy_to_sql_row(entity: dict[str, Any]) -> dict[str, Any]:
         "product_id": entity.get("product_id"),
         "submission_id": _safe_uuid(entity.get("submission_id")),
         "insured_id": entity.get("insured_id") or str(uuid4()),  # auto-generate if no party linked
-        "effective_date": entity.get("effective_date"),
-        "expiration_date": entity.get("expiration_date"),
+        "effective_date": eff,
+        "expiration_date": exp,
         "total_premium": entity.get("premium", entity.get("total_premium")),
         "written_premium": entity.get("written_premium", 0),
         "earned_premium": entity.get("earned_premium", 0),
@@ -99,9 +112,39 @@ def _policy_from_sql_row(row: dict[str, Any]) -> dict[str, Any]:
             return {}
 
     premium = float(row["total_premium"]) if row.get("total_premium") else None
+    written_premium = float(row["written_premium"]) if row.get("written_premium") is not None else premium
     policyholder = _str(row.get("party_name")) or _str(row.get("insured_name")) or ""
     lob = _str(row.get("product_lob")) or _str(row.get("line_of_business")) or "cyber"
     rv = row.get("row_version")
+
+    # Compute earned/unearned premium dynamically from dates and written premium
+    db_earned = row.get("earned_premium")
+    db_unearned = row.get("unearned_premium")
+    if written_premium and written_premium > 0:
+        try:
+            from datetime import date as date_type
+
+            eff_str = _str(row.get("effective_date"))[:10]
+            exp_str = _str(row.get("expiration_date"))[:10]
+            if eff_str and exp_str:
+                eff_d = date_type.fromisoformat(eff_str)
+                exp_d = date_type.fromisoformat(exp_str)
+                today = date_type.today()
+                term_days = max((exp_d - eff_d).days, 1)
+                elapsed = min(max((today - eff_d).days, 0), term_days)
+                earned_premium = round(written_premium * (elapsed / term_days), 2)
+                unearned_premium = round(written_premium - earned_premium, 2)
+            else:
+                # No valid dates — assume fully earned
+                earned_premium = written_premium
+                unearned_premium = 0.0
+        except (ValueError, TypeError):
+            earned_premium = float(db_earned) if db_earned else (written_premium or 0.0)
+            unearned_premium = float(db_unearned) if db_unearned else 0.0
+    else:
+        earned_premium = float(db_earned) if db_earned else None
+        unearned_premium = float(db_unearned) if db_unearned else None
+
     return {
         "id": _str(row.get("id")),
         "policy_number": _str(row.get("policy_number")),
@@ -113,13 +156,13 @@ def _policy_from_sql_row(row: dict[str, Any]) -> dict[str, Any]:
         "status": _str(row.get("status")) or "active",
         "product_id": _str(row.get("product_id")),
         "submission_id": _str(row.get("submission_id")),
-        "effective_date": _str(row.get("effective_date")),
-        "expiration_date": _str(row.get("expiration_date")),
+        "effective_date": _str(row.get("effective_date")) or _str(row.get("created_at"))[:10],
+        "expiration_date": _str(row.get("expiration_date")) or "",
         "premium": premium,
         "total_premium": premium,
-        "written_premium": float(row["written_premium"]) if row.get("written_premium") else None,
-        "earned_premium": float(row["earned_premium"]) if row.get("earned_premium") else None,
-        "unearned_premium": float(row["unearned_premium"]) if row.get("unearned_premium") else None,
+        "written_premium": written_premium,
+        "earned_premium": earned_premium,
+        "unearned_premium": unearned_premium,
         "coverages": [],
         "endorsements": [],
         "metadata": {},
