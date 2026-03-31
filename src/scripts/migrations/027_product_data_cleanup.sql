@@ -270,6 +270,11 @@ BEGIN
     IF NOT EXISTS (SELECT 1 FROM product_authority_limits WHERE product_id = @teo_id)
     INSERT INTO product_authority_limits (product_id, auto_bind_premium_max, auto_bind_limit_max, requires_senior_review_above, requires_cuo_review_above)
     VALUES (@teo_id, 20000.00, 5000000.00, 60000.00, 200000.00);
+    ELSE
+    UPDATE product_authority_limits
+    SET auto_bind_premium_max = 20000.00, auto_bind_limit_max = 5000000.00,
+        requires_senior_review_above = 60000.00, requires_cuo_review_above = 200000.00
+    WHERE product_id = @teo_id AND (auto_bind_premium_max = 0 OR auto_bind_premium_max IS NULL);
 
     -- Territory
     IF NOT EXISTS (SELECT 1 FROM product_territories WHERE product_id = @teo_id AND territory_code = 'US')
@@ -389,6 +394,11 @@ BEGIN
     IF NOT EXISTS (SELECT 1 FROM product_authority_limits WHERE product_id = @do_id)
     INSERT INTO product_authority_limits (product_id, auto_bind_premium_max, auto_bind_limit_max, requires_senior_review_above, requires_cuo_review_above)
     VALUES (@do_id, 30000.00, 10000000.00, 100000.00, 500000.00);
+    ELSE
+    UPDATE product_authority_limits
+    SET auto_bind_premium_max = 30000.00, auto_bind_limit_max = 10000000.00,
+        requires_senior_review_above = 100000.00, requires_cuo_review_above = 500000.00
+    WHERE product_id = @do_id AND (auto_bind_premium_max = 0 OR auto_bind_premium_max IS NULL);
 
     -- Territory
     IF NOT EXISTS (SELECT 1 FROM product_territories WHERE product_id = @do_id AND territory_code = 'US')
@@ -500,6 +510,11 @@ BEGIN
     IF NOT EXISTS (SELECT 1 FROM product_authority_limits WHERE product_id = @pi_id)
     INSERT INTO product_authority_limits (product_id, auto_bind_premium_max, auto_bind_limit_max, requires_senior_review_above, requires_cuo_review_above)
     VALUES (@pi_id, 15000.00, 5000000.00, 50000.00, 200000.00);
+    ELSE
+    UPDATE product_authority_limits
+    SET auto_bind_premium_max = 15000.00, auto_bind_limit_max = 5000000.00,
+        requires_senior_review_above = 50000.00, requires_cuo_review_above = 200000.00
+    WHERE product_id = @pi_id AND (auto_bind_premium_max = 0 OR auto_bind_premium_max IS NULL);
 
     -- Territory
     IF NOT EXISTS (SELECT 1 FROM product_territories WHERE product_id = @pi_id AND territory_code = 'US')
