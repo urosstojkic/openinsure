@@ -191,8 +191,8 @@ const Submissions: React.FC = () => {
 
       {/* AI processing overlay (#127) */}
       {actionLoading && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm">
-          <div className="flex flex-col items-center gap-4 rounded-2xl border border-slate-200/60 bg-white px-10 py-8 shadow-xl animate-pulse">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm" role="alertdialog" aria-label="AI agent is processing" aria-busy="true">
+          <div className="flex flex-col items-center gap-4 rounded-2xl border border-slate-200/60 bg-white px-10 py-8 shadow-xl">
             <Loader2 size={36} className="animate-spin text-indigo-600" />
             <div className="text-center">
               <p className="text-base font-semibold text-slate-900">AI agent processing…</p>
@@ -214,19 +214,21 @@ const Submissions: React.FC = () => {
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-3">
         <div className="relative">
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" aria-hidden="true" />
           <input
             type="text"
             placeholder="Search applicant, submission #…"
             value={searchQuery}
             onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
             className="rounded-lg border border-slate-200/60 bg-white pl-9 pr-3 py-2 text-sm text-slate-600 placeholder:text-slate-400 focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400 outline-none transition w-64"
+            aria-label="Search submissions"
           />
         </div>
         <select
           className="rounded-lg border border-slate-200/60 bg-white px-3 py-2 text-sm text-slate-600"
           value={statusFilter}
           onChange={(e) => { setStatusFilter(e.target.value); setCurrentPage(1); }}
+          aria-label="Filter by status"
         >
           <option value="all">All Statuses</option>
           {Object.keys(statusVariant).map((s) => (
@@ -237,6 +239,7 @@ const Submissions: React.FC = () => {
           className="rounded-lg border border-slate-200/60 bg-white px-3 py-2 text-sm text-slate-600"
           value={lobFilter}
           onChange={(e) => { setLobFilter(e.target.value); setCurrentPage(1); }}
+          aria-label="Filter by line of business"
         >
           <option value="all">All LOBs</option>
           {[...new Set(submissions.map((s) => s.lob))].sort().map((k) => (

@@ -237,6 +237,9 @@ const Layout: React.FC = () => {
       <button
         onClick={() => setMenuOpen(!menuOpen)}
         className="flex items-center gap-2.5 rounded-xl px-2 py-1.5 transition-all hover:bg-slate-100/80"
+        aria-expanded={menuOpen}
+        aria-haspopup="true"
+        aria-label={`User menu for ${user.name}`}
       >
         <div className="text-right leading-tight hidden sm:block">
           <p className="text-[13px] font-semibold text-slate-700">{user.name}</p>
@@ -249,7 +252,7 @@ const Layout: React.FC = () => {
       </button>
 
       {menuOpen && (
-        <div className="absolute right-0 top-full mt-2 w-56 rounded-xl border border-slate-200/60 bg-white/95 py-1 shadow-xl shadow-slate-200/40 backdrop-blur-sm z-50">
+        <div className="absolute right-0 top-full mt-2 w-56 rounded-xl border border-slate-200/60 bg-white/95 py-1 shadow-xl shadow-slate-200/40 backdrop-blur-sm z-50" role="menu" aria-label="User menu">
           <div className="px-4 py-2.5 border-b border-slate-100">
             <p className="text-sm font-semibold text-slate-700">{user.name}</p>
             <p className="text-[11px] text-slate-400">{user.email}</p>
@@ -257,6 +260,7 @@ const Layout: React.FC = () => {
           <button
             onClick={() => { setMenuOpen(false); logout(); }}
             className="flex w-full items-center gap-2.5 px-4 py-2.5 text-[13px] text-slate-600 hover:bg-slate-50 transition-colors"
+            role="menuitem"
           >
             <ArrowLeftRight size={14} className="text-slate-400" />
             Switch Account
@@ -264,6 +268,7 @@ const Layout: React.FC = () => {
           <button
             onClick={() => { setMenuOpen(false); logout(); }}
             className="flex w-full items-center gap-2.5 px-4 py-2.5 text-[13px] text-red-600 hover:bg-red-50 transition-colors"
+            role="menuitem"
           >
             <LogOut size={14} className="text-red-400" />
             Sign Out
@@ -285,9 +290,9 @@ const Layout: React.FC = () => {
             <span className="text-sm font-bold text-slate-900">OpenInsure</span>
           </div>
           <div className="flex items-center gap-3">
-            <button className="relative rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600">
+            <button className="relative rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600" aria-label="Notifications — 3 unread">
               <Bell size={18} />
-              <span className="absolute -top-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white">
+              <span className="absolute -top-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white" aria-hidden="true">
                 3
               </span>
             </button>
@@ -305,6 +310,7 @@ const Layout: React.FC = () => {
 
   return (
     <div className="flex h-screen flex-col overflow-hidden" style={{ background: 'var(--color-surface)' }}>
+      <a href="#main-content" className="skip-link">Skip to main content</a>
       <div className="flex flex-1 overflow-hidden">
         {/* ── Mobile overlay ── */}
         {mobileOpen && (
@@ -335,6 +341,7 @@ const Layout: React.FC = () => {
             <button
               onClick={() => setMobileOpen(false)}
               className="ml-auto rounded-lg p-1 text-slate-400 hover:bg-slate-100 md:hidden"
+              aria-label="Close navigation menu"
             >
               <X size={16} />
             </button>
@@ -354,7 +361,7 @@ const Layout: React.FC = () => {
           )}
 
           {/* Nav */}
-          <nav className="flex-1 space-y-0.5 overflow-y-auto custom-scrollbar px-2 py-2">
+          <nav className="flex-1 space-y-0.5 overflow-y-auto custom-scrollbar px-2 py-2" aria-label="Main navigation">
             <NavSection items={navItems} role={user.role} collapsed={collapsed} escalationCount={escalationCount} />
             <NavSection items={workbenchItems} role={user.role} sectionLabel="Workbenches" collapsed={collapsed} />
             <NavSection items={extraItems} role={user.role} sectionLabel="Views" collapsed={collapsed} />
@@ -406,6 +413,7 @@ const Layout: React.FC = () => {
               <button
                 onClick={() => setMobileOpen(true)}
                 className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 md:hidden"
+                aria-label="Open navigation menu"
               >
                 <Menu size={18} />
               </button>
@@ -417,9 +425,9 @@ const Layout: React.FC = () => {
             {/* Right: bell + user menu */}
             <div className="flex items-center gap-2">
               {/* Notification bell */}
-              <button className="relative rounded-lg p-1.5 text-slate-400 transition-all hover:bg-slate-100 hover:text-slate-600">
+              <button className="relative rounded-lg p-1.5 text-slate-400 transition-all hover:bg-slate-100 hover:text-slate-600" aria-label="Notifications — 3 unread">
                 <Bell size={17} />
-                <span className="absolute -top-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[9px] font-bold text-white ring-2 ring-white">
+                <span className="absolute -top-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[9px] font-bold text-white ring-2 ring-white" aria-hidden="true">
                   3
                 </span>
               </button>
@@ -433,7 +441,7 @@ const Layout: React.FC = () => {
           </header>
 
           {/* Content */}
-          <main className="flex-1 overflow-y-auto custom-scrollbar p-6">
+          <main id="main-content" className="flex-1 overflow-y-auto custom-scrollbar p-6">
             <div className="page-enter">
               <Outlet />
             </div>

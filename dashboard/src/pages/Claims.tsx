@@ -239,19 +239,21 @@ const Claims: React.FC = () => {
 
       <div className="flex flex-wrap items-center gap-3">
         <div className="relative">
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" aria-hidden="true" />
           <input
             type="text"
             placeholder="Search claim #, policy #…"
             value={searchQuery}
             onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
             className="rounded-lg border border-slate-200/60 bg-white pl-9 pr-3 py-2 text-sm text-slate-600 placeholder:text-slate-400 focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400 outline-none transition w-64"
+            aria-label="Search claims"
           />
         </div>
         <select
           className="rounded-lg border border-slate-200/60 bg-white px-3 py-2 text-sm text-slate-600 focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400 outline-none transition"
           value={statusFilter}
           onChange={(e) => { setStatusFilter(e.target.value); setCurrentPage(1); }}
+          aria-label="Filter by status"
         >
           <option value="all">All Statuses</option>
           {Object.keys(statusVariant).map((s) => (
@@ -262,6 +264,7 @@ const Claims: React.FC = () => {
           className="rounded-lg border border-slate-200/60 bg-white px-3 py-2 text-sm text-slate-600 focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400 outline-none transition"
           value={severityFilter}
           onChange={(e) => { setSeverityFilter(e.target.value); setCurrentPage(1); }}
+          aria-label="Filter by severity"
         >
           <option value="all">All Severities</option>
           {Object.keys(severityVariant).map((s) => (

@@ -57,7 +57,15 @@ function DataTable<T>({ columns, data, onRowClick, keyExtractor, emptyMessage = 
   if (data.length === 0) {
     return (
       <div className="rounded-xl border border-slate-200/60 bg-white p-12 text-center">
-        <p className="text-sm text-slate-400">{emptyMessage}</p>
+        <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-slate-100 text-slate-400">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+            <polyline points="14 2 14 8 20 8" />
+            <line x1="9" y1="15" x2="15" y2="15" />
+          </svg>
+        </div>
+        <p className="text-sm font-medium text-slate-600">{emptyMessage}</p>
+        <p className="mt-1 text-xs text-slate-400">Try adjusting your filters or search criteria</p>
       </div>
     );
   }

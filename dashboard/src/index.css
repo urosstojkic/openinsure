@@ -137,10 +137,7 @@ body {
 
 /* ── Gradient text utility ── */
 .text-gradient {
-  background: linear-gradient(135deg, #6366f1, #8b5cf6);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  color: var(--color-primary-600);
 }
 
 /* ── Card hover lift ── */
@@ -200,4 +197,42 @@ table tbody tr {
   background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 50%, #f1f5f9 100%);
   background-size: 200% 200%;
   animation: shimmer 3s ease-in-out infinite;
+}
+
+/* ── Reduced motion ── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ── Smooth content transitions ── */
+.content-fade {
+  animation: fadeIn 0.15s var(--ease-out-expo) both;
+}
+
+/* ── Focus visible for keyboard users ── */
+:focus-visible {
+  outline: 2px solid var(--color-primary-400);
+  outline-offset: 2px;
+}
+
+/* ── Skip link for accessibility ── */
+.skip-link {
+  position: absolute;
+  top: -40px;
+  left: 0;
+  background: var(--color-primary-600);
+  color: white;
+  padding: 8px 16px;
+  z-index: 100;
+  font-size: 14px;
+  font-weight: 500;
+  border-radius: 0 0 8px 0;
+  transition: top 0.2s var(--ease-out-expo);
+}
+.skip-link:focus {
+  top: 0;
 }

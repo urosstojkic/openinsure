@@ -26,6 +26,9 @@ interface Props {
 
 const StatusBadge: React.FC<Props> = ({ label, variant, className = '', size = 'md', showDot = true }) => {
   const s = styles[variant] ?? styles.gray;
+  const displayLabel = label
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (c) => c.toUpperCase());
   return (
     <span
       className={`inline-flex items-center gap-1.5 rounded-full font-medium ${s.badge} ${
@@ -35,7 +38,7 @@ const StatusBadge: React.FC<Props> = ({ label, variant, className = '', size = '
       {showDot && (
         <span className={`h-1.5 w-1.5 rounded-full ${s.dot}`} />
       )}
-      {label}
+      {displayLabel}
     </span>
   );
 };
