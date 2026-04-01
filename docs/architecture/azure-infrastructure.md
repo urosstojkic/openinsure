@@ -1,68 +1,68 @@
-# OpenInsure Azure Infrastructure — `openinsure-dev-sc`
+# OpenInsure Azure Reference Architecture
 
-> **Region:** Sweden Central · **Subscription:** `d20aaf79-…` · **Generated:** Auto by Infra Squad Agent
+> **White-label template** — deploy into any Azure tenant. All resource names and IDs are tenant-specific.
 
 ## Summary
 
-OpenInsure runs on **Azure Container Apps** with a VNet-integrated architecture. Two container apps (`openinsure-backend` and `openinsure-dashboard`) run in a managed environment (`openinsure-env-vnet`) delegated to a dedicated subnet. Data services — **Azure SQL**, **Cosmos DB**, **AI Search** — are accessed via private endpoints where available. Three **Azure OpenAI** accounts (Sweden Central, East US, East US 2) provide AI capabilities. **Event Grid** and **Service Bus** handle async messaging. **Application Insights** + **Log Analytics** provide observability.
+OpenInsure runs on **Azure Container Apps** with a VNet-integrated architecture. Two container apps (backend API and dashboard) run in a managed environment delegated to a dedicated subnet. Data services — **Azure SQL**, **Cosmos DB**, **AI Search** — are accessed via private endpoints where available. **Azure OpenAI** (multi-region for failover) provides AI capabilities. **Event Grid** and **Service Bus** handle async messaging. **Application Insights** + **Log Analytics** provide observability.
 
-The network is secured with a single VNet (`10.0.0.0/16`) split into two subnets: one for container apps (`10.0.0.0/23`) and one for private endpoints (`10.0.2.0/24`). Both subnets have NSGs with default deny-all-inbound rules. SQL and Cosmos DB have public access **disabled** and are reachable only via private endpoints. AI Search currently does **not** have a private endpoint.
+The network is secured with a single VNet split into two subnets: one for container apps and one for private endpoints. Both subnets have NSGs. SQL and Cosmos DB have public access **disabled** and are reachable only via private endpoints.
 
 ## Architecture Diagram
 
 ```mermaid
 graph TB
     subgraph "Internet"
-        USER["👤 Users"]
+        USER["👤 Users / Brokers"]
     end
 
-    subgraph "openinsure-dev-sc — Sweden Central"
+    subgraph "Azure Tenant — Customer Resource Group"
         subgraph "Identity & Security"
-            MI["openinsure-dev-identity<br/>User Assigned Managed Identity"]
+            MI["User Assigned<br/>Managed Identity"]
+            KV["Azure Key Vault<br/>(recommended)"]
         end
 
-        subgraph "openinsure-vnet  10.0.0.0/16"
-            subgraph "container-apps-subnet  10.0.0.0/23"
-                NSG_CA["NSG<br/>container-apps-subnet<br/>Default deny inbound"]
-                subgraph "openinsure-env-vnet  (Managed Environment)"
-                    BACKEND["openinsure-backend<br/>Container App<br/>Rev 70 · 1 replica · Healthy"]
-                    DASHBOARD["openinsure-dashboard<br/>Container App<br/>Rev 43 · 1 replica · Healthy"]
+        subgraph "VNet (10.x.x.x/16)"
+            subgraph "Container Apps Subnet (/23)"
+                NSG_CA["NSG"]
+                subgraph "Container Apps Environment"
+                    BACKEND["Backend API<br/>Container App<br/>(Python / FastAPI)"]
+                    DASHBOARD["Dashboard<br/>Container App<br/>(React / nginx)"]
                 end
             end
 
-            subgraph "private-endpoints-subnet  10.0.2.0/24"
-                NSG_PE["NSG<br/>private-endpoints-subnet<br/>Default deny inbound"]
-                SQL_PE["openinsure-sql-pe<br/>Private Endpoint<br/>10.0.2.4"]
-                COSMOS_PE["openinsure-cosmos-pe<br/>Private Endpoint<br/>10.0.2.5 / 10.0.2.6"]
+            subgraph "Private Endpoints Subnet (/24)"
+                NSG_PE["NSG"]
+                SQL_PE["SQL Private Endpoint"]
+                COSMOS_PE["Cosmos DB Private Endpoint"]
             end
         end
 
         subgraph "Data Services"
-            SQL["openinsure-dev-sql<br/>Azure SQL Server v12<br/>DB: openinsure-db (Standard)<br/>Public access: Disabled"]
-            COSMOS["openinsure-dev-cosmos<br/>Cosmos DB (GlobalDocumentDB)<br/>Public access: Disabled"]
-            SEARCH["openinsure-dev-search<br/>AI Search (Standard)<br/>1 replica · 1 partition<br/>⚠️ No private endpoint"]
-            STORAGE["openinsuredevknshtzbu<br/>Storage (StorageV2, LRS)"]
+            SQL["Azure SQL Server<br/>Database<br/>Public access: Disabled"]
+            COSMOS["Cosmos DB<br/>(NoSQL API)<br/>Public access: Disabled"]
+            SEARCH["Azure AI Search<br/>(Basic or Standard)"]
+            STORAGE["Azure Blob Storage<br/>(StorageV2, LRS)"]
         end
 
-        subgraph "AI / Cognitive Services"
-            AI_SC["openinsure-dev-ai<br/>Azure OpenAI (S0)<br/>Sweden Central"]
-            AI_EUS2["openinsure-ai<br/>Azure OpenAI (S0)<br/>East US 2"]
-            AI_EUS["openinsure-ai-eastus<br/>Azure OpenAI (S0)<br/>East US"]
+        subgraph "AI Services"
+            AI_PRIMARY["Azure OpenAI<br/>(Primary Region)"]
+            AI_FAILOVER["Azure OpenAI<br/>(Failover Region)"]
+            FOUNDRY["Microsoft Foundry<br/>10 AI Agents (GPT-5.2)"]
         end
 
         subgraph "Messaging"
-            EVENTGRID["openinsure-dev-events<br/>Event Grid Topic (Basic)"]
-            SYSEVENTS["openinsure-dev-system-events<br/>Event Grid System Topic"]
-            SERVICEBUS["openinsure-dev-servicebus<br/>Service Bus (Standard)"]
+            EVENTGRID["Event Grid Topic"]
+            SERVICEBUS["Service Bus<br/>(Standard)"]
         end
 
         subgraph "Observability"
-            INSIGHTS["openinsure-dev-insights<br/>Application Insights (web)"]
-            LOGS["openinsure-dev-logs<br/>Log Analytics Workspace"]
+            INSIGHTS["Application Insights"]
+            LOGS["Log Analytics<br/>Workspace"]
         end
 
         subgraph "Container Registry"
-            ACR["openinsuredevacr<br/>ACR (Basic)"]
+            ACR["Azure Container Registry<br/>(Basic)"]
         end
 
         subgraph "Private DNS Zones"
@@ -82,34 +82,32 @@ graph TB
     COSMOS_PE ==>|"Private Link"| COSMOS
 
     %% Container App → Data (public / RBAC)
-    BACKEND -->|"HTTPS (no PE)"| SEARCH
+    BACKEND -->|"HTTPS"| SEARCH
     BACKEND -->|"Blob Storage"| STORAGE
 
     %% Container App → AI
-    BACKEND -->|"OpenAI API"| AI_SC
-    BACKEND -.->|"Failover"| AI_EUS2
-    BACKEND -.->|"Failover"| AI_EUS
+    BACKEND -->|"OpenAI API"| AI_PRIMARY
+    BACKEND -.->|"Failover"| AI_FAILOVER
+    BACKEND -->|"Agent Invocation"| FOUNDRY
 
     %% Messaging
     BACKEND -->|"Publish events"| EVENTGRID
     BACKEND -->|"Queue messages"| SERVICEBUS
 
     %% Observability
-    BACKEND -.->|"OpenTelemetry traces"| INSIGHTS
+    BACKEND -.->|"OpenTelemetry"| INSIGHTS
     DASHBOARD -.->|"Logs"| INSIGHTS
     INSIGHTS -->|"Ingest"| LOGS
 
     %% DNS resolution
     SQL_PE -.->|"DNS"| DNS_SQL
     COSMOS_PE -.->|"DNS"| DNS_COSMOS
-    DNS_SQL -.->|"VNet link"| SQL
-    DNS_COSMOS -.->|"VNet link"| COSMOS
 
     %% Identity
     MI -.->|"RBAC auth"| BACKEND
     MI -.->|"RBAC auth"| SQL
     MI -.->|"RBAC auth"| COSMOS
-    MI -.->|"RBAC auth"| AI_SC
+    MI -.->|"RBAC auth"| AI_PRIMARY
 
     %% ACR
     ACR -->|"Image pull"| BACKEND
@@ -118,6 +116,43 @@ graph TB
     %% Styling
     classDef healthy fill:#d4edda,stroke:#28a745
     classDef warning fill:#fff3cd,stroke:#ffc107
+    class BACKEND,DASHBOARD,SQL,COSMOS healthy
+    class SEARCH warning
+```
+
+## Required Azure Services
+
+| Service | SKU / Tier | Purpose |
+|---------|-----------|---------|
+| Container Apps | Consumption | Backend API + Dashboard hosting |
+| Azure SQL | Basic (dev) / Standard (prod) | Transactional data (45 tables) |
+| Cosmos DB | Serverless | Knowledge base, agent context |
+| Azure AI Search | Basic (dev) / Standard (prod) | Agent knowledge retrieval |
+| Azure OpenAI | S0 (multi-region) | GPT model deployments |
+| Microsoft Foundry | — | 10 AI agent definitions |
+| Blob Storage | Standard LRS | Document storage |
+| Event Grid | Basic | Domain event publishing |
+| Service Bus | Standard | Async message processing |
+| Application Insights | — | Telemetry and tracing |
+| Container Registry | Basic | Docker image storage |
+| Virtual Network | — | Network isolation |
+| Key Vault | Standard (recommended) | Secret management |
+
+## Network Architecture
+
+- **VNet**: Single VNet with `/16` CIDR
+- **Container Apps Subnet**: `/23` — delegated to Container Apps managed environment
+- **Private Endpoints Subnet**: `/24` — SQL and Cosmos DB private endpoints
+- **NSGs**: Applied to both subnets
+- **Private DNS Zones**: `privatelink.database.windows.net`, `privatelink.documents.azure.com`
+- **Public Access**: Disabled on SQL and Cosmos DB; AI Search should be moved to private endpoint for production
+
+## Security Model
+
+- **Authentication**: Managed Identity (RBAC) for all service-to-service communication
+- **No local auth**: SQL uses Entra-only, Cosmos DB uses `disableLocalAuth=true`
+- **Encryption**: TDE on SQL, Azure-managed keys, TLS 1.2 minimum
+- **Secrets**: Should be stored in Key Vault (not plain env vars) for production
     classDef secure fill:#d1ecf1,stroke:#17a2b8
     class BACKEND,DASHBOARD healthy
     class SEARCH warning
