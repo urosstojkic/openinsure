@@ -59,6 +59,7 @@ def _to_sql_row(entity: dict[str, Any]) -> dict[str, Any]:
     metadata = dict(entity.get("metadata", {}))
     metadata["applicant_name"] = entity.get("applicant_name", "")
     metadata["applicant_email"] = entity.get("applicant_email", "")
+    metadata["product_id"] = entity.get("product_id", "")
 
     return {
         "id": entity.get("id"),
@@ -122,6 +123,7 @@ def _from_sql_row(row: dict[str, Any]) -> dict[str, Any]:
         "submission_number": sub_num,
         "applicant_name": metadata.pop("applicant_name", "") if isinstance(metadata, dict) else "",
         "applicant_email": metadata.pop("applicant_email", None) if isinstance(metadata, dict) else None,
+        "product_id": metadata.pop("product_id", "") if isinstance(metadata, dict) else "",
         "status": _str(row.get("status")) or "received",
         "channel": _sql_channel_to_api(_str(row.get("channel")) or "api"),
         "line_of_business": lob,
