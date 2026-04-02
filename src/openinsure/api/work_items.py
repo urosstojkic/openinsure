@@ -65,6 +65,8 @@ class WorkItemList(BaseModel):
 
     items: list[WorkItemResponse]
     total: int
+    skip: int = 0
+    limit: int = 100
 
 
 # ---------------------------------------------------------------------------
@@ -96,6 +98,8 @@ async def list_work_items(
     entity_type: str | None = Query(None, description="Filter by entity type"),
     entity_id: str | None = Query(None, description="Filter by entity ID"),
     status: str | None = Query(None, description="Filter by status"),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=500),
 ) -> WorkItemList:
     """List work items with optional filters."""
     # If assigned_to is provided without status, return inbox (open/in_progress)
@@ -108,7 +112,9 @@ async def list_work_items(
             status=status,
             assigned_to=assigned_to,
         )
-    return WorkItemList(items=[WorkItemResponse(**i) for i in items], total=len(items))
+    total = len(items)
+    page = [WorkItemResponse(**i) for i in items[skip : skip + limit]]
+    return WorkItemList(items=page, total=total, skip=skip, limit=limit)
 
 
 @router.get("/{item_id}", response_model=WorkItemResponse)

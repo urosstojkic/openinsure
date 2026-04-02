@@ -54,6 +54,8 @@ class PartySearchResponse(BaseModel):
 
     items: list[PartyResponse]
     total: int
+    skip: int = 0
+    limit: int = 20
 
 
 # ---------------------------------------------------------------------------

@@ -187,18 +187,31 @@ async def upload_document(
     }
 
 
-@router.get("/list")
+class BlobDocumentList(BaseModel):
+    """Paginated list of blob storage documents."""
+
+    items: list[dict[str, Any]]
+    total: int
+    skip: int
+    limit: int
+    storage: str
+
+
+@router.get("/list", response_model=BlobDocumentList)
 async def list_documents(
     prefix: str | None = Query(None),
+    skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
-) -> dict[str, object]:
+) -> BlobDocumentList:
     """List documents in storage."""
     storage = get_blob_storage()
     if not storage:
-        return {"items": [], "storage": "memory"}
+        return BlobDocumentList(items=[], total=0, skip=skip, limit=limit, storage="memory")
 
-    docs = await storage.list_documents(prefix=prefix, limit=limit)
-    return {"items": docs, "storage": "azure"}
+    docs = await storage.list_documents(prefix=prefix, limit=limit + skip)
+    total = len(docs)
+    page = docs[skip : skip + limit]
+    return BlobDocumentList(items=page, total=total, skip=skip, limit=limit, storage="azure")
 
 
 @router.get("/download/{blob_name:path}")

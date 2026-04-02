@@ -11,6 +11,7 @@ import json
 from typing import Any
 
 from fastapi import APIRouter, Query
+from pydantic import BaseModel
 
 from openinsure.infrastructure.factory import get_submission_repository
 
@@ -31,11 +32,21 @@ def _parse_json_field(value: Any) -> dict[str, Any]:
     return {}
 
 
-@router.get("/queue")
+class UnderwriterQueueResponse(BaseModel):
+    """Paginated underwriter queue response."""
+
+    items: list[dict[str, Any]]
+    total: int
+    skip: int
+    limit: int
+
+
+@router.get("/queue", response_model=UnderwriterQueueResponse)
 async def get_underwriter_queue(
     status: str | None = Query(None, description="Filter by submission status"),
+    skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
-) -> dict[str, Any]:
+) -> UnderwriterQueueResponse:
     """Get the underwriter's submission queue.
 
     Returns submissions in received/triaging/underwriting/quoted statuses,
@@ -135,7 +146,9 @@ async def get_underwriter_queue(
     if status:
         queue = [q for q in queue if q.get("status") == status]
 
-    return {"items": queue[:limit], "total": len(queue)}
+    total = len(queue)
+    page = queue[skip : skip + limit]
+    return UnderwriterQueueResponse(items=page, total=total, skip=skip, limit=limit)
 
 
 # ---------------------------------------------------------------------------

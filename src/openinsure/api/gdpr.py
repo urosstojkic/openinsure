@@ -90,6 +90,24 @@ class RetentionPolicyResponse(BaseModel):
     auto_anonymize: bool = True
 
 
+class ConsentListResponse(BaseModel):
+    """Paginated list of consent records."""
+
+    items: list[ConsentResponse]
+    total: int
+    skip: int
+    limit: int
+
+
+class RetentionPolicyListResponse(BaseModel):
+    """Paginated list of retention policies."""
+
+    items: list[RetentionPolicyResponse]
+    total: int
+    skip: int
+    limit: int
+
+
 class ConsentWithdrawResponse(BaseModel):
     """Result of a consent withdrawal."""
 
@@ -142,14 +160,15 @@ async def export_personal_data(party_id: str) -> ExportResponse:
 
 @router.get(
     "/consent/{party_id}",
-    response_model=list[ConsentResponse],
+    response_model=ConsentListResponse,
     summary="Art 7: Get consent status",
 )
-async def get_consent_status(party_id: str) -> list[ConsentResponse]:
+async def get_consent_status(party_id: str) -> ConsentListResponse:
     """Get all consent records for a party."""
     svc = get_gdpr_service()
     records = await svc.get_consent_status(party_id)
-    return [ConsentResponse(**r) for r in records]
+    items = [ConsentResponse(**r) for r in records]
+    return ConsentListResponse(items=items, total=len(items), skip=0, limit=len(items))
 
 
 @router.post(
@@ -186,11 +205,12 @@ async def withdraw_consent(party_id: str, purpose: str) -> ConsentWithdrawRespon
 
 @router.get(
     "/retention-policies",
-    response_model=list[RetentionPolicyResponse],
+    response_model=RetentionPolicyListResponse,
     summary="List retention policies",
 )
-async def list_retention_policies() -> list[RetentionPolicyResponse]:
+async def list_retention_policies() -> RetentionPolicyListResponse:
     """List all data retention policies."""
     svc = get_gdpr_service()
     policies = await svc.list_retention_policies()
-    return [RetentionPolicyResponse(**p) for p in policies]
+    items = [RetentionPolicyResponse(**p) for p in policies]
+    return RetentionPolicyListResponse(items=items, total=len(items), skip=0, limit=len(items))

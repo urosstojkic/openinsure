@@ -257,5 +257,5 @@ class TestEventsAPI:
         assert resp.status_code == 200
         body = resp.json()
         assert body["aggregate_id"] == uid
-        assert body["count"] == 1
-        assert body["events"][0]["event_type"] == "test.created"
+        assert body["total"] == 1
+        assert body["items"][0]["event_type"] == "test.created"

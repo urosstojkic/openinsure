@@ -209,6 +209,8 @@ class PolicyTransactionList(BaseModel):
     policy_id: str
     items: list[PolicyTransactionResponse]
     total: int
+    skip: int = 0
+    limit: int = 100
 
 
 # ---------------------------------------------------------------------------

@@ -41,6 +41,8 @@ class RiskAttributeList(BaseModel):
 
     items: list[RiskAttributeResponse]
     total: int
+    skip: int = 0
+    limit: int = 50
 
 
 # ---------------------------------------------------------------------------

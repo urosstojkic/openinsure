@@ -9,6 +9,7 @@ from __future__ import annotations
 from typing import Any
 
 from fastapi import APIRouter, Query
+from pydantic import BaseModel
 
 from openinsure.infrastructure.factory import (
     get_claim_repository,
@@ -26,37 +27,52 @@ _POLICY_INTERNAL_FIELDS = frozenset({"metadata", "endorsements"})
 _CLAIM_INTERNAL_FIELDS = frozenset({"fraud_score", "reserves", "payments"})
 
 
-@router.get("/submissions")
-async def broker_submissions(limit: int = Query(20, ge=1, le=100)) -> dict[str, Any]:
+class BrokerListResponse(BaseModel):
+    """Standard paginated envelope for broker list endpoints."""
+
+    items: list[dict[str, Any]]
+    total: int
+    skip: int
+    limit: int
+
+
+@router.get("/submissions", response_model=BrokerListResponse)
+async def broker_submissions(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+) -> BrokerListResponse:
     """Broker's own submissions — internal scoring data stripped."""
     repo = get_submission_repository()
-    subs = await repo.list_all(limit=limit)
-    return {
-        "items": [_sanitize_for_broker(s) for s in subs],
-        "total": len(subs),
-    }
+    subs = await repo.list_all(limit=5000)
+    sanitized = [_sanitize_for_broker(s) for s in subs]
+    page = sanitized[skip : skip + limit]
+    return BrokerListResponse(items=page, total=len(sanitized), skip=skip, limit=limit)
 
 
-@router.get("/policies")
-async def broker_policies(limit: int = Query(20, ge=1, le=100)) -> dict[str, Any]:
+@router.get("/policies", response_model=BrokerListResponse)
+async def broker_policies(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+) -> BrokerListResponse:
     """Policies visible to broker — endorsement details excluded."""
     repo = get_policy_repository()
-    pols = await repo.list_all(limit=limit)
-    return {
-        "items": [_sanitize_policy(p) for p in pols],
-        "total": len(pols),
-    }
+    pols = await repo.list_all(limit=5000)
+    sanitized = [_sanitize_policy(p) for p in pols]
+    page = sanitized[skip : skip + limit]
+    return BrokerListResponse(items=page, total=len(sanitized), skip=skip, limit=limit)
 
 
-@router.get("/claims")
-async def broker_claims(limit: int = Query(20, ge=1, le=100)) -> dict[str, Any]:
+@router.get("/claims", response_model=BrokerListResponse)
+async def broker_claims(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+) -> BrokerListResponse:
     """Claims visible to broker — fraud and reserve details excluded."""
     repo = get_claim_repository()
-    claims = await repo.list_all(limit=limit)
-    return {
-        "items": [_sanitize_claim(c) for c in claims],
-        "total": len(claims),
-    }
+    claims = await repo.list_all(limit=5000)
+    sanitized = [_sanitize_claim(c) for c in claims]
+    page = sanitized[skip : skip + limit]
+    return BrokerListResponse(items=page, total=len(sanitized), skip=skip, limit=limit)
 
 
 # ---------------------------------------------------------------------------

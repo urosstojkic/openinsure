@@ -61,6 +61,8 @@ class WorkflowHistoryResponse(BaseModel):
 
     items: list[WorkflowExecutionResponse]
     total: int
+    skip: int = 0
+    limit: int = 20
 
 
 # ---------------------------------------------------------------------------
