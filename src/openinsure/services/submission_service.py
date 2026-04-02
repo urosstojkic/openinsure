@@ -668,7 +668,30 @@ class SubmissionService:
 
             triage_result = _parse_json_field(record.get("triage_result", {})) or None
             guidelines = await get_triage_context(record)
-            rating_breakdown = _get_rating_breakdown(record)
+
+            # When product_id is present, compute product-aware rating (#308)
+            product_id = record.get("product_id")
+            if product_id:
+                try:
+                    risk_data = _extract_risk_data(record)
+                    rating_input = _build_rating_input(risk_data)
+                    _re = RatingEngine()
+                    _rr = await _re.calculate(product_id, rating_input)
+                    rating_breakdown = {
+                        "base_premium": str(_rr.base_premium),
+                        "adjusted_premium": str(_rr.adjusted_premium),
+                        "final_premium": str(_rr.final_premium),
+                        "factors_applied": {k: str(v) for k, v in _rr.factors_applied.items()},
+                        "confidence": _rr.confidence,
+                        "explanation": _rr.explanation,
+                        "warnings": _rr.warnings,
+                    }
+                except Exception:
+                    logger.debug("submissions.product_rating_for_prompt_failed", exc_info=True)
+                    rating_breakdown = _get_rating_breakdown(record)
+            else:
+                rating_breakdown = _get_rating_breakdown(record)
+
             underwriting_prompt = build_underwriting_prompt(
                 record,
                 triage_result=triage_result,
@@ -682,6 +705,14 @@ class SubmissionService:
                 raw_premium = resp["recommended_premium"]
                 premium = float(raw_premium) if raw_premium is not None else 5000.0
                 premium = premium or 5000.0
+
+                # When product_id is set, prefer the product-aware engine premium
+                # over Foundry's (Foundry may not account for product base_rate) (#308)
+                if product_id and rating_breakdown and rating_breakdown.get("final_premium"):
+                    product_premium = float(rating_breakdown["final_premium"])
+                    if product_premium > 0:
+                        premium = product_premium
+
                 now = _now()
 
                 from openinsure.infrastructure.factory import get_database_adapter as _get_db_quote
