@@ -121,6 +121,7 @@ After completing a significant feature block (new process, major fix, architectu
 - Never merge on red CI. "Tests passed locally" is NOT sufficient.
 - Never hardcode credentials, connection strings, or API keys
 - Never store sensitive env vars (API keys, connection strings) as plain Container App environment variables in production — use Container App secrets (`secretRef`) or Key Vault references. See `docs/guides/enterprise-integration-guide.md` Appendix A.2.
+- Never store sensitive env vars (API keys, connection strings) as plain Container App environment variables in production — use Container App secrets (`secretRef`) or Key Vault references. See `docs/guides/enterprise-integration-guide.md` Appendix A.2.
 - Never skip feature documentation after a major block
 - Never implement a feature without documenting it in an existing doc (feature-guide, TECHNICAL_OVERVIEW, or CHANGELOG)
 - Every new feature, API endpoint, or UI page MUST be documented in `docs/guides/feature-guide.md` before the feature is considered done

@@ -24,6 +24,9 @@ COPY src/ src/
 COPY knowledge/ knowledge/
 RUN pip install --no-cache-dir --no-deps .
 
+RUN addgroup --system appuser && adduser --system --ingroup appuser appuser
+USER appuser
+
 EXPOSE 8000
 
 CMD ["uvicorn", "openinsure.main:app", "--host", "0.0.0.0", "--port", "8000"]

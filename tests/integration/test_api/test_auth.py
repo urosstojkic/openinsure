@@ -14,6 +14,7 @@ def _make_settings(*, require_auth: bool, api_key: str = _TEST_API_KEY) -> Setti
         debug=True,
         require_auth=require_auth,
         api_key=api_key,
+        jwt_validation_mode="dev",
     )
 
 

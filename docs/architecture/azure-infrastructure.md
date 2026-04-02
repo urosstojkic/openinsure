@@ -216,5 +216,59 @@ AI Search (`openinsure-dev-search-knshtzbusr734`) is accessed over the public in
 ### ⚠️ Application Insights — Missing `APPLICATIONINSIGHTS_CONNECTION_STRING` Env Var
 The backend container app does **not** have `APPLICATIONINSIGHTS_CONNECTION_STRING` or any `OTEL_*` environment variables configured. The code in `foundry_client.py` retrieves the connection string dynamically from the Foundry project endpoint, but this is best-effort and only instruments OpenAI calls. Full request/trace telemetry (HTTP requests, dependencies, exceptions) requires the connection string to be set as an environment variable on the container app.
 
+**Remediation:** Set `APPLICATIONINSIGHTS_CONNECTION_STRING` on both `openinsure-backend` and `openinsure-dashboard` Container Apps. See `docs/guides/enterprise-integration-guide.md` Appendix A.4 for step-by-step instructions.
+
 ### ✅ NSGs Use Default Rules Only
 Both NSGs have no custom security rules — only Azure defaults. This is acceptable for the dev environment but should be hardened for production with explicit allow-lists.
+
+### Recommended NSG Rules for Production (#268)
+
+For production deployments, add custom NSG rules to both subnets to enforce defense-in-depth:
+
+#### Container Apps Subnet NSG
+
+| Priority | Direction | Action | Source | Destination | Port | Protocol | Purpose |
+|----------|-----------|--------|--------|-------------|------|----------|---------|
+| 100 | Inbound | Allow | Internet | VirtualNetwork | 443 | TCP | HTTPS traffic to Container Apps |
+| 110 | Inbound | Allow | AzureLoadBalancer | * | * | * | Azure health probes |
+| 200 | Inbound | Allow | VirtualNetwork | VirtualNetwork | * | * | VNet-internal communication |
+| 4096 | Inbound | Deny | * | * | * | * | Deny all other inbound |
+| 100 | Outbound | Allow | VirtualNetwork | VirtualNetwork | * | * | VNet-internal (to private endpoints) |
+| 110 | Outbound | Allow | VirtualNetwork | AzureCloud | 443 | TCP | Azure service APIs (Foundry, Event Grid, etc.) |
+| 120 | Outbound | Allow | VirtualNetwork | Internet | 443 | TCP | External APIs (AI Search if no PE, HTTPS deps) |
+| 4096 | Outbound | Deny | * | * | * | * | Deny all other outbound |
+
+#### Private Endpoints Subnet NSG
+
+| Priority | Direction | Action | Source | Destination | Port | Protocol | Purpose |
+|----------|-----------|--------|--------|-------------|------|----------|---------|
+| 100 | Inbound | Allow | VirtualNetwork | VirtualNetwork | 1433 | TCP | SQL Server from Container Apps |
+| 110 | Inbound | Allow | VirtualNetwork | VirtualNetwork | 443 | TCP | Cosmos DB / AI Search from Container Apps |
+| 4096 | Inbound | Deny | * | * | * | * | Deny all other inbound |
+| 100 | Outbound | Allow | * | * | * | * | Allow outbound (PE traffic is Azure-managed) |
+
+```bash
+# Example: Add HTTPS-only inbound rule to Container Apps subnet NSG
+az network nsg rule create \
+  --resource-group "$RESOURCE_GROUP" \
+  --nsg-name "openinsure-vnet-container-apps-subnet-nsg-swedencentral" \
+  --name "AllowHTTPS" \
+  --priority 100 \
+  --direction Inbound \
+  --access Allow \
+  --protocol Tcp \
+  --source-address-prefixes Internet \
+  --destination-port-ranges 443
+
+# Add deny-all inbound rule
+az network nsg rule create \
+  --resource-group "$RESOURCE_GROUP" \
+  --nsg-name "openinsure-vnet-container-apps-subnet-nsg-swedencentral" \
+  --name "DenyAllInbound" \
+  --priority 4096 \
+  --direction Inbound \
+  --access Deny \
+  --protocol '*' \
+  --source-address-prefixes '*' \
+  --destination-port-ranges '*'
+```

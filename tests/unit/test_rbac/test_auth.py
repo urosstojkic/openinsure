@@ -65,7 +65,7 @@ def _make_app(*, require_auth: bool = False, api_key: str = "test-key") -> FastA
     ):
         return {"user": user.user_id}
 
-    settings = Settings(require_auth=require_auth, api_key=api_key, debug=True)
+    settings = Settings(require_auth=require_auth, api_key=api_key, debug=True, jwt_validation_mode="dev")
     app.dependency_overrides[get_settings] = lambda: settings
     return app
 
@@ -177,6 +177,7 @@ class TestJWTMode:
             require_auth=True,
             api_key=_KEY,
             debug=True,
+            jwt_validation_mode="dev",
             jwt_issuer="https://expected-issuer.example.com",
         )
         app.dependency_overrides[get_settings] = lambda: settings
@@ -193,6 +194,7 @@ class TestJWTMode:
             require_auth=True,
             api_key=_KEY,
             debug=True,
+            jwt_validation_mode="dev",
             jwt_issuer="https://login.microsoftonline.com/tenant/v2.0",
         )
         app.dependency_overrides[get_settings] = lambda: settings

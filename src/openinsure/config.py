@@ -24,20 +24,20 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
 
     # Azure SQL Database
-    sql_connection_string: str = ""
+    sql_connection_string: str = ""  # SENSITIVE — use Container App secrets (secretRef) in production
     sql_database_name: str = "openinsure"
 
     # Azure Cosmos DB (NoSQL API)
     cosmos_endpoint: str = ""
     cosmos_database_name: str = "openinsure-knowledge"
     cosmos_graph_name: str = "insurance-graph"
-    cosmos_key: str = ""  # Fallback key-based auth when RBAC is unavailable
+    cosmos_key: str = ""  # SENSITIVE — use Container App secrets (secretRef) in production
 
     # Azure AI Search
     search_endpoint: str = ""
     search_index_name: str = "openinsure-knowledge"
     search_connection_id: str = ""  # Foundry project connection ID for AI Search
-    search_admin_key: str = ""  # Fallback admin key for AI Search indexer setup
+    search_admin_key: str = ""  # SENSITIVE — use Container App secrets (secretRef) in production
 
     # Azure Blob Storage
     storage_account_url: str = ""
@@ -45,7 +45,7 @@ class Settings(BaseSettings):
 
     # Azure Event Grid / Service Bus
     eventgrid_endpoint: str = ""
-    servicebus_connection_string: str = ""
+    servicebus_connection_string: str = ""  # SENSITIVE — use Container App secrets (secretRef) in production
     servicebus_queue_name: str = "openinsure-events"
 
     # Azure AI / Foundry
@@ -59,9 +59,10 @@ class Settings(BaseSettings):
     cors_origins: str = ""
 
     # Authentication
-    api_key: str = ""
+    api_key: str = ""  # SENSITIVE — use Container App secrets (secretRef) in production
     require_auth: bool = False
-    jwt_validation_mode: str = "dev"  # "dev" = check expiry only; "production" = full JWKS validation
+    # "production" = full JWKS validation; set to "dev" explicitly for local dev only
+    jwt_validation_mode: str = "production"
     jwt_issuer: str = ""  # Expected issuer (iss) claim, e.g. https://login.microsoftonline.com/{tenant}/v2.0
     jwt_audience: str = ""  # Expected audience (aud) claim, e.g. api://<client-id>
 

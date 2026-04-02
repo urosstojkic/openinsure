@@ -1784,6 +1784,153 @@ After completing this integration guide:
 
 ---
 
+## Appendix A: Production Security Hardening
+
+### A.1 Dashboard Managed Identity (#266)
+
+The dashboard Container App should have a **SystemAssigned managed identity** enabled for production deployments. This allows the dashboard to authenticate to the backend API and Azure services without storing API keys as plain environment variables.
+
+**Current state:** The backend has `identity.type: SystemAssigned` ✅ but the dashboard has `identity.type: None` ❌.
+
+**Steps to enable:**
+
+```bash
+# Enable system-assigned managed identity on the dashboard
+az containerapp identity assign \
+  --name "openinsure-dashboard" \
+  --resource-group "$RESOURCE_GROUP" \
+  --system-assigned
+
+# Grant the identity the required role (e.g., to read secrets from Key Vault)
+DASHBOARD_IDENTITY=$(az containerapp show \
+  --name "openinsure-dashboard" \
+  --resource-group "$RESOURCE_GROUP" \
+  --query "identity.principalId" -o tsv)
+
+az role assignment create \
+  --role "Key Vault Secrets User" \
+  --assignee "$DASHBOARD_IDENTITY" \
+  --scope "/subscriptions/<sub-id>/resourceGroups/$RESOURCE_GROUP/providers/Microsoft.KeyVault/vaults/<keyvault-name>"
+```
+
+Once enabled, the dashboard can use managed identity to retrieve the backend API key from Key Vault instead of passing it as a plain environment variable.
+
+### A.2 Sensitive Environment Variables → Container App Secrets (#269)
+
+**Never store sensitive values as plain Container App environment variables in production.** Plain env vars can be exposed via process listings, crash dumps, and diagnostic endpoints.
+
+The following environment variables contain sensitive data and must be stored as Container App secrets:
+
+| Environment Variable | Sensitivity | Recommended Approach |
+|---------------------|------------|----------------------|
+| `OPENINSURE_API_KEY` | HIGH | Container App secret or Key Vault reference |
+| `OPENINSURE_SQL_CONNECTION_STRING` | HIGH | Replace with managed identity auth (no connection string needed) |
+| `OPENINSURE_SERVICEBUS_CONNECTION_STRING` | HIGH | Replace with managed identity auth |
+| `OPENINSURE_COSMOS_KEY` | HIGH | Replace with managed identity auth (RBAC) |
+| `OPENINSURE_SEARCH_ADMIN_KEY` | MEDIUM | Container App secret or Key Vault reference |
+
+**Migration steps:**
+
+```bash
+# 1. Create a Container App secret
+az containerapp secret set \
+  --name "openinsure-backend" \
+  --resource-group "$RESOURCE_GROUP" \
+  --secrets "api-key=<your-api-key>"
+
+# 2. Update the env var to reference the secret
+az containerapp update \
+  --name "openinsure-backend" \
+  --resource-group "$RESOURCE_GROUP" \
+  --set-env-vars "OPENINSURE_API_KEY=secretref:api-key"
+
+# 3. Better yet — use Key Vault references for centralized secret management
+az containerapp update \
+  --name "openinsure-backend" \
+  --resource-group "$RESOURCE_GROUP" \
+  --secrets "api-key=keyvaultref:<keyvault-uri>/secrets/openinsure-api-key,identityref:<managed-identity-id>"
+```
+
+**Preferred approach:** Use managed identity for SQL, Cosmos DB, Service Bus, and Storage instead of connection strings entirely. The codebase already uses `DefaultAzureCredential` — just ensure the managed identity has the required RBAC roles assigned on each resource.
+
+### A.3 AI Search Private Endpoint (#270)
+
+Azure AI Search should be accessed via a private endpoint for production deployments. Currently, SQL and Cosmos DB both use private endpoints in the `private-endpoints-subnet` (10.0.2.0/24), but AI Search is accessed over the public internet.
+
+**Steps to add a private endpoint for AI Search:**
+
+```bash
+# 1. Create a private endpoint for AI Search
+az network private-endpoint create \
+  --resource-group "$RESOURCE_GROUP" \
+  --name "openinsure-search-pe" \
+  --vnet-name "openinsure-vnet" \
+  --subnet "private-endpoints-subnet" \
+  --private-connection-resource-id "/subscriptions/<sub-id>/resourceGroups/$RESOURCE_GROUP/providers/Microsoft.Search/searchServices/<search-service-name>" \
+  --group-id "searchService" \
+  --connection-name "search-private-connection"
+
+# 2. Create the private DNS zone
+az network private-dns zone create \
+  --resource-group "$RESOURCE_GROUP" \
+  --name "privatelink.search.windows.net"
+
+# 3. Link the DNS zone to the VNet
+az network private-dns zone vnet-link create \
+  --resource-group "$RESOURCE_GROUP" \
+  --zone-name "privatelink.search.windows.net" \
+  --name "search-dns-link" \
+  --virtual-network "openinsure-vnet" \
+  --registration-enabled false
+
+# 4. Create the DNS zone group on the private endpoint
+az network private-endpoint dns-zone-group create \
+  --resource-group "$RESOURCE_GROUP" \
+  --endpoint-name "openinsure-search-pe" \
+  --name "search-dns-group" \
+  --private-dns-zone "privatelink.search.windows.net" \
+  --zone-name "searchServiceZone"
+
+# 5. Disable public network access on the search service
+az search service update \
+  --resource-group "$RESOURCE_GROUP" \
+  --name "<search-service-name>" \
+  --public-network-access disabled
+```
+
+### A.4 Application Insights Connection String (#271)
+
+Both Container Apps should have `APPLICATIONINSIGHTS_CONNECTION_STRING` set as an environment variable to enable full OpenTelemetry instrumentation (HTTP traces, dependency tracking, exception telemetry).
+
+```bash
+# Retrieve the connection string from Application Insights
+APP_INSIGHTS_CONN=$(az monitor app-insights component show \
+  --resource-group "$RESOURCE_GROUP" \
+  --app "<app-insights-name>" \
+  --query "connectionString" -o tsv)
+
+# Set on backend
+az containerapp update \
+  --name "openinsure-backend" \
+  --resource-group "$RESOURCE_GROUP" \
+  --set-env-vars "APPLICATIONINSIGHTS_CONNECTION_STRING=$APP_INSIGHTS_CONN"
+
+# Set on dashboard
+az containerapp update \
+  --name "openinsure-dashboard" \
+  --resource-group "$RESOURCE_GROUP" \
+  --set-env-vars "APPLICATIONINSIGHTS_CONNECTION_STRING=$APP_INSIGHTS_CONN"
+```
+
+For Python auto-instrumentation, consider adding `azure-monitor-opentelemetry` to your startup:
+
+```python
+from azure.monitor.opentelemetry import configure_azure_monitor
+configure_azure_monitor()
+```
+
+---
+
 **Document Version:** 1.0  
 **Last Updated:** 2025-01-27  
 **Maintained By:** OpenInsure Insurance + Infra Squads
