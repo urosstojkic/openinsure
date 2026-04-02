@@ -216,6 +216,34 @@ class ProductRelationsRepository:
             field = ar.get("field_name") or ar.get("field")
             if not field:
                 continue
+
+            operator = str(ar.get("operator", "="))
+            api_value = ar.get("value")  # API model uses 'value', not SQL column names
+
+            # Extract numeric_value / numeric_min / numeric_max from API 'value'
+            # when the SQL column names aren't present in the dict.
+            numeric_value = ar.get("numeric_value")
+            numeric_min = ar.get("numeric_min")
+            numeric_max = ar.get("numeric_max")
+            string_value = ar.get("string_value")
+
+            if api_value is not None and numeric_value is None and numeric_min is None and numeric_max is None and string_value is None:
+                if operator == "between" and isinstance(api_value, dict):
+                    numeric_min = api_value.get("min")
+                    numeric_max = api_value.get("max")
+                elif operator in ("in", "not_in"):
+                    if isinstance(api_value, list):
+                        string_value = ",".join(str(v) for v in api_value)
+                    else:
+                        string_value = str(api_value)
+                elif isinstance(api_value, (int, float)):
+                    numeric_value = api_value
+                elif isinstance(api_value, str):
+                    try:
+                        numeric_value = float(api_value)
+                    except (ValueError, TypeError):
+                        string_value = api_value
+
             await self.db.execute_query(
                 """INSERT INTO product_appetite_rules
                    (product_id, rule_name, field_name, operator, value_type,
@@ -226,12 +254,12 @@ class ProductRelationsRepository:
                     product_id,
                     ar.get("rule_name") or ar.get("name"),
                     str(field),
-                    str(ar.get("operator", "=")),
+                    operator,
                     str(ar.get("value_type", "numeric")),
-                    self._dec(ar.get("numeric_value")),
-                    self._dec(ar.get("numeric_min")),
-                    self._dec(ar.get("numeric_max")),
-                    ar.get("string_value"),
+                    self._dec(numeric_value),
+                    self._dec(numeric_min),
+                    self._dec(numeric_max),
+                    string_value,
                     ar.get("description"),
                     idx,
                 ],

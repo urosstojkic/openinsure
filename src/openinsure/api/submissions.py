@@ -202,7 +202,56 @@ async def _get_submission(submission_id: str) -> dict[str, Any]:
     sub = await _repo.get_by_id(submission_id)
     if sub is None:
         raise SubmissionNotFoundError(submission_id)
+
+    # Populate decision_history from audit trail (change_log)
+    try:
+        audit = get_audit_service()
+        history = await audit.get_history("submission", submission_id)
+        if history:
+            sub["decision_history"] = [
+                {
+                    "id": h.get("id", ""),
+                    "timestamp": h.get("changed_at", ""),
+                    "actor": h.get("changed_by", "system"),
+                    "action": (h.get("changes") or {}).get("_original_action", h.get("action", "")),
+                    "details": _format_decision_details(h),
+                    "is_agent": h.get("changed_by", "") in ("ai-agent", "system", "triage-agent", "underwriting-agent"),
+                }
+                for h in history
+            ]
+    except Exception:
+        pass  # fail-open: decision_history stays empty
+
     return sub
+
+
+def _format_decision_details(audit_entry: dict[str, Any]) -> str:
+    """Build a human-readable summary from an audit change_log entry."""
+    changes = audit_entry.get("changes") or {}
+    action = changes.get("_original_action", audit_entry.get("action", ""))
+    parts: list[str] = []
+    if action == "triage":
+        score = changes.get("risk_score")
+        rec = changes.get("recommendation", "")
+        if score is not None:
+            parts.append(f"Risk score: {score}")
+        if rec:
+            parts.append(f"Recommendation: {rec}")
+    elif action in ("quote", "update") and changes.get("premium"):
+        parts.append(f"Premium: ${changes['premium']:,.0f}" if isinstance(changes["premium"], (int, float)) else f"Premium: {changes['premium']}")
+    elif action == "bind":
+        pid = changes.get("policy_id", "")
+        if pid:
+            parts.append(f"Policy: {pid}")
+    elif action == "create":
+        name = changes.get("applicant_name", "")
+        if name:
+            parts.append(f"Applicant: {name}")
+    if not parts:
+        # Generic fallback
+        safe_keys = {"status", "risk_score", "recommendation", "premium", "policy_id"}
+        parts = [f"{k}: {v}" for k, v in changes.items() if k in safe_keys and v]
+    return "; ".join(parts) if parts else action
 
 
 def _now() -> str:

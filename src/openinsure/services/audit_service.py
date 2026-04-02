@@ -96,7 +96,7 @@ class AuditService:
             """SELECT id, entity_type, entity_id, action, changed_by,
                       changed_at, changes, reason, ip_address
                FROM change_log
-               WHERE changed_at >= DATEADD(HOUR, -?, GETUTCDATE())
+               WHERE CAST(changed_at AS DATETIMEOFFSET) >= DATEADD(HOUR, -?, GETUTCDATE())
                ORDER BY changed_at DESC""",
             [hours],
         )

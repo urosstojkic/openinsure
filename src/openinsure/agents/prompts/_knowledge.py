@@ -40,7 +40,7 @@ async def get_product_context(submission: dict[str, Any]) -> list[dict[str, Any]
     so agents have current coverages, appetite rules, rating factors, and authority
     limits — not hardcoded defaults.
 
-    Falls back to Cosmos DB, then to the in-memory knowledge store.
+    Falls back to Cosmos DB, then SQL product repo, then in-memory knowledge store.
     """
     lob = submission.get("line_of_business", "cyber")
     product_code = submission.get("product_code", "")
@@ -87,7 +87,60 @@ async def get_product_context(submission: dict[str, Any]) -> list[dict[str, Any]
     except Exception:
         logger.debug("prompts.product_cosmos_failed", exc_info=True)
 
-    # 3. Fall back to in-memory knowledge store (static defaults)
+    # 3. Fall back to SQL product repository (bypasses knowledge pipeline)
+    try:
+        from openinsure.infrastructure.factory import (
+            get_product_relations_repository,
+            get_product_repository,
+        )
+
+        repo = get_product_repository()
+        if repo is not None:
+            products = await repo.list_all(skip=0, limit=100)
+            # Find matching product by code or LOB
+            match = None
+            for p in products:
+                p_code = p.get("code", p.get("product_code", ""))
+                p_lob = p.get("line_of_business", p.get("product_line", ""))
+                p_status = p.get("status", "")
+                if product_code and p_code == product_code:
+                    match = p
+                    break
+                if p_lob == lob and p_status == "active" and match is None:
+                    match = p
+            if match:
+                # Load relational data for richer context
+                relations = get_product_relations_repository()
+                pid = str(match.get("id", ""))
+                appetite_rules = match.get("appetite_rules", [])
+                coverages = match.get("coverages", [])
+                if relations is not None and pid:
+                    rel_rules = await relations.get_appetite_rules(pid)
+                    if rel_rules:
+                        appetite_rules = rel_rules
+                    rel_covs = await relations.get_coverages(pid)
+                    if rel_covs:
+                        coverages = rel_covs
+
+                content_parts = [
+                    f"PRODUCT: {match.get('name', '')} ({match.get('code', '')})",
+                    f"Line of Business: {match.get('line_of_business', match.get('product_line', ''))}",
+                    f"Status: {match.get('status', '')}",
+                    f"Description: {match.get('description', '')}",
+                ]
+                if appetite_rules:
+                    lines = [f"  - {r.get('field', '')} {r.get('operator', '')} {r.get('value', '')}" for r in appetite_rules]
+                    content_parts.append("Appetite Rules:\n" + "\n".join(lines))
+                if coverages:
+                    lines = [f"  - {c.get('name', '')}: limit ${c.get('default_limit', 0):,.0f}" for c in coverages]
+                    content_parts.append("Coverages:\n" + "\n".join(lines))
+
+                content = "\n".join(p for p in content_parts if p)
+                return [{"title": f"Product: {match.get('code', '')}", "content": content}]
+    except Exception:
+        logger.debug("prompts.product_sql_failed", exc_info=True)
+
+    # 4. No product context available — agent will use defaults
     return []
 
 

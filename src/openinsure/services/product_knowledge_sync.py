@@ -313,25 +313,34 @@ class ProductKnowledgeSyncService:
         if self._search is not None:
             for attempt in range(_MAX_RETRIES + 1):
                 try:
+                    # Field names must match the AI Search index schema:
+                    # id, content, title, source, category, last_updated
                     search_doc = {
                         "id": doc["id"],
                         "content": doc["content"] + "\n\n" + json.dumps(doc["structured"], default=str),
+                        "title": f"{doc['structured'].get('name', '')} ({code})",
                         "category": "product",
                         "source": "product-management",
-                        "tags": ",".join(doc["tags"]),
+                        "last_updated": doc["last_updated"],
                     }
                     upload_result = self._search.upload_documents(documents=[search_doc])
                     result.search_ok = upload_result[0].succeeded if upload_result else False
+                    if not result.search_ok and upload_result:
+                        err_msg = getattr(upload_result[0], "error_message", None)
+                        logger.warning(
+                            "product_sync.search_upload_rejected",
+                            product_code=code,
+                            error=err_msg,
+                        )
                     if result.search_ok:
                         break
                 except Exception:
-                    if attempt == _MAX_RETRIES:
-                        logger.warning(
-                            "product_sync.search_write_failed",
-                            product_code=code,
-                            attempt=attempt,
-                            exc_info=True,
-                        )
+                    logger.warning(
+                        "product_sync.search_write_failed",
+                        product_code=code,
+                        attempt=attempt,
+                        exc_info=True,
+                    )
                     import asyncio
 
                     await asyncio.sleep(0.5 * (attempt + 1))

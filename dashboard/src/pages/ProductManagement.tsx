@@ -33,6 +33,10 @@ const statusVariant = (s: string) =>
 const lobLabel = (l: string) =>
   ({ cyber: 'Cyber', tech_eo: 'Tech E&O', mpl: 'MPL' }[l] ?? l);
 
+/** Strip spurious backslash-escaping from dollar signs (e.g. \$50M → $50M). */
+const unescDollar = (s: string | undefined | null): string =>
+  (s ?? '').replace(/\\\$/g, '$');
+
 type Tab = 'overview' | 'coverages' | 'rating' | 'appetite' | 'authority' | 'performance' | 'history';
 
 /* ── Main Component ── */
@@ -207,7 +211,7 @@ const ProductManagement: React.FC = () => {
                 <StatusBadge label={p.status} variant={statusVariant(p.status)} size="sm" />
               </div>
               <h3 className="mt-3 text-sm font-semibold text-slate-900">{p.name}</h3>
-              <p className="mt-1 text-xs text-slate-500 line-clamp-2">{p.description}</p>
+              <p className="mt-1 text-xs text-slate-500 line-clamp-2">{unescDollar(p.description)}</p>
               <div className="mt-auto flex items-center gap-3 pt-4 border-t border-slate-100">
                 <span className="text-[10px] font-medium uppercase tracking-wider text-slate-400">
                   {lobLabel(p.product_line)}
@@ -261,7 +265,7 @@ const ProductDetailView: React.FC<DetailProps> = ({
   product, performance, activeTab, onTabChange, onBack, onSave, onPublish, onNewVersion, isSaving,
 }) => {
   const [editName, setEditName] = useState(product.name);
-  const [editDesc, setEditDesc] = useState(product.description);
+  const [editDesc, setEditDesc] = useState(unescDollar(product.description));
   const [editCoverages, setEditCoverages] = useState<CoverageDefinition[]>(product.coverages ?? []);
   const [editFactors, setEditFactors] = useState<RatingFactorTable[]>(product.rating_factor_tables ?? []);
   const [editAppetite, setEditAppetite] = useState<AppetiteRule[]>(product.appetite_rules ?? []);
@@ -609,7 +613,7 @@ const CoveragesTab: React.FC<{
                       {c.is_optional && <StatusBadge label="Optional" variant="gray" size="sm" showDot={false} />}
                       <Pencil size={12} className="text-slate-300 ml-auto" />
                     </div>
-                    {c.description && <p className="mt-0.5 text-xs text-slate-500">{c.description}</p>}
+                    {c.description && <p className="mt-0.5 text-xs text-slate-500">{unescDollar(c.description)}</p>}
                     <div className="mt-3 space-y-2">
                       <div>
                         <div className="flex items-center justify-between mb-1">
@@ -852,7 +856,7 @@ const AppetiteTab: React.FC<{
                 />
               </div>
             </div>
-            <input value={rule.description} onChange={(e) => handleUpdate(i, 'description', e.target.value)}
+            <input value={unescDollar(rule.description)} onChange={(e) => handleUpdate(i, 'description', e.target.value)}
               placeholder="Rule description…"
               className="w-full rounded border border-transparent bg-transparent px-1 py-0.5 text-xs text-slate-500 outline-none hover:border-slate-200 focus:border-indigo-300" />
           </div>
