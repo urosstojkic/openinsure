@@ -92,9 +92,9 @@ type FormFieldProps =
   | SliderFieldProps;
 
 const inputBase =
-  'block w-full rounded-lg border border-slate-200/60 bg-white px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400 outline-none transition';
+  'block w-full rounded-[var(--radius-default)] border border-slate-200/60 bg-white px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:border-[var(--color-primary)] focus:ring-1 focus:ring-[var(--color-primary)] outline-none transition';
 const inputError =
-  'border-red-400 focus:border-red-500 focus:ring-red-500';
+  'border-[var(--color-danger)] focus:border-[var(--color-danger)] focus:ring-[var(--color-danger)]';
 
 const FormField: React.FC<FormFieldProps> = (props) => {
   const { label, name, error, required, className = '', onBlur } = props;

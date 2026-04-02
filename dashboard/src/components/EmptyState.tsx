@@ -28,7 +28,7 @@ export default function EmptyState({ icon: Icon, title, description, action, sec
         <p className="mt-2 max-w-sm text-sm leading-relaxed text-slate-500">{description}</p>
       )}
       {tips && tips.length > 0 && (
-        <div className="mt-4 max-w-sm rounded-lg bg-indigo-50/50 border border-indigo-100 p-4 text-left">
+        <div className="mt-[var(--spacing-md)] max-w-sm rounded-[var(--radius-default)] bg-indigo-50/50 border border-indigo-100 p-[var(--spacing-md)] text-left">
           <p className="text-xs font-semibold text-indigo-600 mb-2">💡 Getting Started</p>
           <ul className="space-y-1.5">
             {tips.map((tip, i) => (

@@ -34,7 +34,7 @@ function Sparkline({ data, positive }: { data: number[]; positive?: boolean }) {
 
 const StatCard: React.FC<Props> = ({ title, value, subtitle, icon, trend, sparklineData, onClick }) => (
   <div
-    className={`group relative overflow-hidden rounded-2xl border border-slate-200/60 bg-white p-5 shadow-[var(--shadow-card)] transition-all duration-200 hover:shadow-[var(--shadow-md)] hover:border-slate-200 ${
+    className={`group relative overflow-hidden rounded-[var(--radius-xl)] border border-slate-200/60 bg-white p-5 shadow-[var(--shadow-card)] transition-all duration-200 hover:shadow-[var(--shadow-md)] hover:border-slate-200 ${
       onClick ? 'cursor-pointer active:scale-[0.99]' : ''
     }`}
     onClick={onClick}

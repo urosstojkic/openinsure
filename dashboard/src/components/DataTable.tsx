@@ -108,7 +108,7 @@ function DataTable<T>({ columns, data, onRowClick, keyExtractor, emptyMessage = 
     align === 'right' ? 'text-right' : align === 'center' ? 'text-center' : 'text-left';
 
   return (
-    <div className="overflow-x-auto rounded-xl border border-slate-200/60 bg-white shadow-[var(--shadow-xs)]">
+    <div className="overflow-x-auto rounded-[var(--radius-xl)] border border-slate-200/60 bg-white shadow-[var(--shadow-xs)]">
       <table className="min-w-full">
         <thead>
           <tr className="border-b border-slate-100">
