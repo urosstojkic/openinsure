@@ -6,9 +6,11 @@ interface EmptyStateProps {
   title: string;
   description?: string;
   action?: { label: string; href: string };
+  secondaryAction?: { label: string; href: string };
+  tips?: string[];
 }
 
-export default function EmptyState({ icon: Icon, title, description, action }: EmptyStateProps) {
+export default function EmptyState({ icon: Icon, title, description, action, secondaryAction, tips }: EmptyStateProps) {
   return (
     <div className="flex flex-col items-center justify-center py-20 text-center">
       {/* Decorative illustration */}
@@ -25,14 +27,37 @@ export default function EmptyState({ icon: Icon, title, description, action }: E
       {description && (
         <p className="mt-2 max-w-sm text-sm leading-relaxed text-slate-500">{description}</p>
       )}
-      {action && (
-        <Link
-          to={action.href}
-          className="mt-6 inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-medium text-white shadow-sm shadow-indigo-500/20 transition-all hover:bg-indigo-700 hover:shadow-md hover:shadow-indigo-500/25 active:scale-[0.98]"
-        >
-          {action.label}
-        </Link>
+      {tips && tips.length > 0 && (
+        <div className="mt-4 max-w-sm rounded-lg bg-indigo-50/50 border border-indigo-100 p-4 text-left">
+          <p className="text-xs font-semibold text-indigo-600 mb-2">💡 Getting Started</p>
+          <ul className="space-y-1.5">
+            {tips.map((tip, i) => (
+              <li key={i} className="flex items-start gap-2 text-xs text-indigo-700/80">
+                <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-indigo-200/60 text-[10px] font-bold text-indigo-600">{i + 1}</span>
+                {tip}
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
+      <div className="mt-6 flex items-center gap-3">
+        {action && (
+          <Link
+            to={action.href}
+            className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-medium text-white shadow-sm shadow-indigo-500/20 transition-all hover:bg-indigo-700 hover:shadow-md hover:shadow-indigo-500/25 active:scale-[0.98]"
+          >
+            {action.label}
+          </Link>
+        )}
+        {secondaryAction && (
+          <Link
+            to={secondaryAction.href}
+            className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 px-5 py-2.5 text-sm font-medium text-slate-600 transition-all hover:bg-slate-50 hover:border-slate-300"
+          >
+            {secondaryAction.label}
+          </Link>
+        )}
+      </div>
     </div>
   );
 }

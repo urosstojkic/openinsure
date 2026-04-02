@@ -157,9 +157,9 @@ const ExecutiveDashboard: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Header with live indicator */}
-      <div className="flex items-start justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">Executive Dashboard</h1>
+          <h1 className="text-xl font-bold tracking-tight text-slate-900 sm:text-2xl">Executive Dashboard</h1>
           <p className="mt-0.5 text-sm text-slate-500">Strategic overview — CEO / CUO view</p>
         </div>
         <div className="flex items-center gap-3">
@@ -259,7 +259,7 @@ const ExecutiveDashboard: React.FC = () => {
       </div>
 
       {/* ── Row 3: Pipeline + Agent Impact ── */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 md:gap-6 lg:grid-cols-2">
         {/* Pipeline Funnel */}
         <div className="rounded-xl border border-slate-200/60 bg-white p-5 shadow-[var(--shadow-xs)]">
           <h2 className="mb-1 text-sm font-semibold text-slate-800">Submission Pipeline</h2>

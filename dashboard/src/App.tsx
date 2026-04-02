@@ -1,34 +1,48 @@
+import React, { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider, useAuth, NAV_ACCESS, DEFAULT_ROUTES } from './context/AuthContext';
 import { MockProvider } from './context/MockContext';
 import Layout from './components/Layout';
 import Login from './pages/Login';
-import Dashboard from './pages/Dashboard';
-import Submissions from './pages/Submissions';
-import SubmissionDetail from './pages/SubmissionDetail';
-import NewSubmission from './pages/NewSubmission';
-import Policies from './pages/Policies';
-import PolicyDetail from './pages/PolicyDetail';
-import NewPolicy from './pages/NewPolicy';
-import Claims from './pages/Claims';
-import ClaimDetail from './pages/ClaimDetail';
-import NewClaim from './pages/NewClaim';
-import AgentDecisions from './pages/AgentDecisions';
-import Compliance from './pages/Compliance';
-import UnderwriterWorkbench from './pages/UnderwriterWorkbench';
-import ClaimsWorkbench from './pages/ClaimsWorkbench';
-import ComplianceWorkbench from './pages/ComplianceWorkbench';
-import ExecutiveDashboard from './pages/ExecutiveDashboard';
-import BrokerPortal from './pages/BrokerPortal';
-import ReinsuranceDashboard from './pages/ReinsuranceDashboard';
-import ActuarialWorkbench from './pages/ActuarialWorkbench';
-import Escalations from './pages/Escalations';
-import FinanceDashboard from './pages/FinanceDashboard';
-import KnowledgePage from './pages/KnowledgePage';
-import UWAnalytics from './pages/UWAnalytics';
-import ClaimsAnalytics from './pages/ClaimsAnalytics';
-import ProductManagement from './pages/ProductManagement';
+
+// Route-level code splitting (#275)
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const Submissions = lazy(() => import('./pages/Submissions'));
+const SubmissionDetail = lazy(() => import('./pages/SubmissionDetail'));
+const NewSubmission = lazy(() => import('./pages/NewSubmission'));
+const Policies = lazy(() => import('./pages/Policies'));
+const PolicyDetail = lazy(() => import('./pages/PolicyDetail'));
+const NewPolicy = lazy(() => import('./pages/NewPolicy'));
+const Claims = lazy(() => import('./pages/Claims'));
+const ClaimDetail = lazy(() => import('./pages/ClaimDetail'));
+const NewClaim = lazy(() => import('./pages/NewClaim'));
+const AgentDecisions = lazy(() => import('./pages/AgentDecisions'));
+const Compliance = lazy(() => import('./pages/Compliance'));
+const UnderwriterWorkbench = lazy(() => import('./pages/UnderwriterWorkbench'));
+const ClaimsWorkbench = lazy(() => import('./pages/ClaimsWorkbench'));
+const ComplianceWorkbench = lazy(() => import('./pages/ComplianceWorkbench'));
+const ExecutiveDashboard = lazy(() => import('./pages/ExecutiveDashboard'));
+const BrokerPortal = lazy(() => import('./pages/BrokerPortal'));
+const ReinsuranceDashboard = lazy(() => import('./pages/ReinsuranceDashboard'));
+const ActuarialWorkbench = lazy(() => import('./pages/ActuarialWorkbench'));
+const Escalations = lazy(() => import('./pages/Escalations'));
+const FinanceDashboard = lazy(() => import('./pages/FinanceDashboard'));
+const KnowledgePage = lazy(() => import('./pages/KnowledgePage'));
+const UWAnalytics = lazy(() => import('./pages/UWAnalytics'));
+const ClaimsAnalytics = lazy(() => import('./pages/ClaimsAnalytics'));
+const ProductManagement = lazy(() => import('./pages/ProductManagement'));
+
+function LoadingSpinner() {
+  return (
+    <div className="flex items-center justify-center py-20">
+      <div className="flex flex-col items-center gap-3">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-indigo-200 border-t-indigo-600" />
+        <p className="text-sm text-slate-400">Loading…</p>
+      </div>
+    </div>
+  );
+}
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -73,8 +87,9 @@ function DefaultRedirect() {
 
 function AppRoutes() {
   return (
-    <Routes>
-      <Route element={<Layout />}>
+    <Suspense fallback={<LoadingSpinner />}>
+      <Routes>
+        <Route element={<Layout />}>
         <Route index element={<RouteGuard path=""><Dashboard /></RouteGuard>} />
         <Route path="submissions" element={<RouteGuard path="submissions"><Submissions /></RouteGuard>} />
         <Route path="submissions/new" element={<SubRouteGuard parentPath="/submissions"><NewSubmission /></SubRouteGuard>} />
@@ -103,6 +118,7 @@ function AppRoutes() {
         <Route path="*" element={<DefaultRedirect />} />
       </Route>
     </Routes>
+    </Suspense>
   );
 }
 

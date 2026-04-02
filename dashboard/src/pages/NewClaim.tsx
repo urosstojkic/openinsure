@@ -47,6 +47,52 @@ const NewClaim: React.FC = () => {
   const set = <K extends keyof FormData>(key: K, value: FormData[K]) =>
     setForm((prev) => ({ ...prev, [key]: value }));
 
+  // Real-time inline validation (#286)
+  const [touched, setTouched] = useState<Partial<Record<keyof FormData, boolean>>>({});
+
+  const markTouched = (key: keyof FormData) =>
+    setTouched((prev) => ({ ...prev, [key]: true }));
+
+  const validateField = (key: keyof FormData, value: unknown): string | undefined => {
+    switch (key) {
+      case 'policyId':
+        return !(value as string) ? 'Policy is required' : undefined;
+      case 'lossDate':
+        return !(value as string) ? 'Loss date is required' : undefined;
+      case 'claimType':
+        return !(value as string) ? 'Claim type is required' : undefined;
+      case 'description': {
+        const v = (value as string)?.trim();
+        if (!v) return 'Description is required';
+        if (v.length < 20) return 'Description must be at least 20 characters';
+        return undefined;
+      }
+      case 'reportedBy':
+        return !(value as string)?.trim() ? 'Reported by is required' : undefined;
+      default:
+        return undefined;
+    }
+  };
+
+  const getFieldError = (key: keyof FormData): string | undefined => {
+    if (errors[key]) return errors[key];
+    if (touched[key]) return validateField(key, form[key]);
+    return undefined;
+  };
+
+  const handleFieldChange = <K extends keyof FormData>(key: K, value: FormData[K]) => {
+    set(key, value);
+    if (touched[key] || errors[key]) {
+      const fieldError = validateField(key, value);
+      setErrors((prev) => {
+        const next = { ...prev };
+        if (fieldError) next[key] = fieldError;
+        else delete next[key];
+        return next;
+      });
+    }
+  };
+
   const policyOptions = policies.map((p) => ({
     value: p.id,
     label: `${p.policy_number} — ${p.insured_name}`,
@@ -121,12 +167,12 @@ const NewClaim: React.FC = () => {
         <section className="rounded-xl border border-slate-200/60 bg-white p-5 shadow-[var(--shadow-xs)]">
           <h2 className="mb-4 text-sm font-semibold text-slate-800">Claim Details</h2>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <FormField type="select" label="Policy" name="policyId" value={form.policyId} onChange={(v) => set('policyId', v)} options={policyOptions} placeholder="Select policy…" error={errors.policyId} required />
-            <FormField type="date" label="Date of Loss" name="lossDate" value={form.lossDate} onChange={(v) => set('lossDate', v)} error={errors.lossDate} required />
-            <FormField type="select" label="Claim Type" name="claimType" value={form.claimType} onChange={(v) => set('claimType', v)} options={CLAIM_TYPE_OPTIONS} placeholder="Select type…" error={errors.claimType} required />
+            <FormField type="select" label="Policy" name="policyId" value={form.policyId} onChange={(v) => handleFieldChange('policyId', v)} onBlur={() => markTouched('policyId')} options={policyOptions} placeholder="Select policy…" error={getFieldError('policyId')} required />
+            <FormField type="date" label="Date of Loss" name="lossDate" value={form.lossDate} onChange={(v) => handleFieldChange('lossDate', v)} onBlur={() => markTouched('lossDate')} error={getFieldError('lossDate')} required />
+            <FormField type="select" label="Claim Type" name="claimType" value={form.claimType} onChange={(v) => handleFieldChange('claimType', v)} onBlur={() => markTouched('claimType')} options={CLAIM_TYPE_OPTIONS} placeholder="Select type…" error={getFieldError('claimType')} required />
           </div>
           <div className="mt-4">
-            <FormField type="textarea" label="Description" name="description" value={form.description} onChange={(v) => set('description', v)} placeholder="Describe the loss event in detail…" rows={4} minLength={20} error={errors.description} required />
+            <FormField type="textarea" label="Description" name="description" value={form.description} onChange={(v) => handleFieldChange('description', v)} onBlur={() => markTouched('description')} placeholder="Describe the loss event in detail…" rows={4} minLength={20} error={getFieldError('description')} required />
           </div>
         </section>
 
@@ -134,7 +180,7 @@ const NewClaim: React.FC = () => {
         <section className="rounded-xl border border-slate-200/60 bg-white p-5 shadow-[var(--shadow-xs)]">
           <h2 className="mb-4 text-sm font-semibold text-slate-800">Reporter Information</h2>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <FormField type="text" label="Reported By" name="reportedBy" value={form.reportedBy} onChange={(v) => set('reportedBy', v)} error={errors.reportedBy} required />
+            <FormField type="text" label="Reported By" name="reportedBy" value={form.reportedBy} onChange={(v) => handleFieldChange('reportedBy', v)} onBlur={() => markTouched('reportedBy')} error={getFieldError('reportedBy')} required />
             <FormField type="email" label="Contact Email" name="contactEmail" value={form.contactEmail} onChange={(v) => set('contactEmail', v)} />
             <FormField type="tel" label="Contact Phone" name="contactPhone" value={form.contactPhone} onChange={(v) => set('contactPhone', v)} />
           </div>

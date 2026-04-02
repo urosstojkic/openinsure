@@ -8,6 +8,7 @@ interface BaseProps {
   error?: string;
   required?: boolean;
   className?: string;
+  onBlur?: () => void;
 }
 
 /* ── Text / Email / Phone ── */
@@ -96,7 +97,7 @@ const inputError =
   'border-red-400 focus:border-red-500 focus:ring-red-500';
 
 const FormField: React.FC<FormFieldProps> = (props) => {
-  const { label, name, error, required, className = '' } = props;
+  const { label, name, error, required, className = '', onBlur } = props;
 
   /* ── Checkbox layout ── */
   if (props.type === 'checkbox') {
@@ -132,8 +133,11 @@ const FormField: React.FC<FormFieldProps> = (props) => {
           type={props.type}
           value={props.value}
           onChange={(e) => props.onChange(e.target.value)}
+          onBlur={onBlur}
           placeholder={props.placeholder}
           required={required}
+          aria-invalid={!!error}
+          aria-describedby={error ? `${name}-error` : undefined}
           className={`${inputBase} ${error ? inputError : ''}`}
         />
       )}
@@ -146,11 +150,14 @@ const FormField: React.FC<FormFieldProps> = (props) => {
           type="number"
           value={props.value}
           onChange={(e) => props.onChange(e.target.value === '' ? '' : Number(e.target.value))}
+          onBlur={onBlur}
           placeholder={props.placeholder}
           min={props.min}
           max={props.max}
           step={props.step}
           required={required}
+          aria-invalid={!!error}
+          aria-describedby={error ? `${name}-error` : undefined}
           className={`${inputBase} ${error ? inputError : ''}`}
         />
       )}
@@ -167,9 +174,12 @@ const FormField: React.FC<FormFieldProps> = (props) => {
             type="number"
             value={props.value}
             onChange={(e) => props.onChange(e.target.value === '' ? '' : Number(e.target.value))}
+            onBlur={onBlur}
             placeholder={props.placeholder}
             required={required}
             min={0}
+            aria-invalid={!!error}
+            aria-describedby={error ? `${name}-error` : undefined}
             className={`${inputBase} pl-7 ${error ? inputError : ''}`}
           />
         </div>
@@ -182,7 +192,10 @@ const FormField: React.FC<FormFieldProps> = (props) => {
           name={name}
           value={props.value}
           onChange={(e) => props.onChange(e.target.value)}
+          onBlur={onBlur}
           required={required}
+          aria-invalid={!!error}
+          aria-describedby={error ? `${name}-error` : undefined}
           className={`${inputBase} ${error ? inputError : ''}`}
         >
           {props.placeholder && <option value="">{props.placeholder}</option>}
@@ -202,7 +215,10 @@ const FormField: React.FC<FormFieldProps> = (props) => {
           type="date"
           value={props.value}
           onChange={(e) => props.onChange(e.target.value)}
+          onBlur={onBlur}
           required={required}
+          aria-invalid={!!error}
+          aria-describedby={error ? `${name}-error` : undefined}
           className={`${inputBase} ${error ? inputError : ''}`}
         />
       )}
@@ -214,10 +230,13 @@ const FormField: React.FC<FormFieldProps> = (props) => {
           name={name}
           value={props.value}
           onChange={(e) => props.onChange(e.target.value)}
+          onBlur={onBlur}
           placeholder={props.placeholder}
           rows={props.rows ?? 4}
           minLength={props.minLength}
           required={required}
+          aria-invalid={!!error}
+          aria-describedby={error ? `${name}-error` : undefined}
           className={`${inputBase} ${error ? inputError : ''}`}
         />
       )}
@@ -242,7 +261,7 @@ const FormField: React.FC<FormFieldProps> = (props) => {
         </div>
       )}
 
-      {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
+      {error && <p id={`${name}-error`} className="mt-1 text-xs text-red-600" role="alert">{error}</p>}
     </div>
   );
 };

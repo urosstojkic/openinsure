@@ -84,6 +84,48 @@ const NewSubmission: React.FC = () => {
   const set = <K extends keyof FormData>(key: K, value: FormData[K]) =>
     setForm((prev) => ({ ...prev, [key]: value }));
 
+  // Real-time inline validation (#286)
+  const [touched, setTouched] = useState<Partial<Record<keyof FormData, boolean>>>({});
+
+  const markTouched = (key: keyof FormData) =>
+    setTouched((prev) => ({ ...prev, [key]: true }));
+
+  const validateField = (key: keyof FormData, value: unknown): string | undefined => {
+    switch (key) {
+      case 'companyName':
+        return !(value as string)?.trim() ? 'Company name is required' : undefined;
+      case 'contactName':
+        return !(value as string)?.trim() ? 'Contact name is required' : undefined;
+      case 'contactEmail':
+        if (!(value as string)?.trim()) return 'Email is required';
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value as string)) return 'Invalid email format';
+        return undefined;
+      case 'lob':
+        return !(value as string) ? 'Line of business is required' : undefined;
+      default:
+        return undefined;
+    }
+  };
+
+  const getFieldError = (key: keyof FormData): string | undefined => {
+    if (errors[key]) return errors[key];
+    if (touched[key]) return validateField(key, form[key]);
+    return undefined;
+  };
+
+  const handleFieldChange = <K extends keyof FormData>(key: K, value: FormData[K]) => {
+    set(key, value);
+    if (touched[key] || errors[key]) {
+      const fieldError = validateField(key, value);
+      setErrors((prev) => {
+        const next = { ...prev };
+        if (fieldError) next[key] = fieldError;
+        else delete next[key];
+        return next;
+      });
+    }
+  };
+
   const validate = (): boolean => {
     const e: Partial<Record<keyof FormData, string>> = {};
     if (!form.companyName.trim()) e.companyName = 'Company name is required';
@@ -176,10 +218,10 @@ const NewSubmission: React.FC = () => {
         <section className="rounded-xl border border-slate-200/60 bg-white p-5 shadow-[var(--shadow-xs)]">
           <h2 className="mb-4 text-sm font-semibold text-slate-800">Applicant Information</h2>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <FormField type="text" label="Company Name" name="companyName" value={form.companyName} onChange={(v) => set('companyName', v)} error={errors.companyName} required />
-            <FormField type="text" label="Contact Name" name="contactName" value={form.contactName} onChange={(v) => set('contactName', v)} error={errors.contactName} required />
-            <FormField type="email" label="Contact Email" name="contactEmail" value={form.contactEmail} onChange={(v) => set('contactEmail', v)} error={errors.contactEmail} required />
-            <FormField type="tel" label="Contact Phone" name="contactPhone" value={form.contactPhone} onChange={(v) => set('contactPhone', v)} />
+            <FormField type="text" label="Company Name" name="companyName" value={form.companyName} onChange={(v) => handleFieldChange('companyName', v)} onBlur={() => markTouched('companyName')} error={getFieldError('companyName')} required />
+            <FormField type="text" label="Contact Name" name="contactName" value={form.contactName} onChange={(v) => handleFieldChange('contactName', v)} onBlur={() => markTouched('contactName')} error={getFieldError('contactName')} required />
+            <FormField type="email" label="Contact Email" name="contactEmail" value={form.contactEmail} onChange={(v) => handleFieldChange('contactEmail', v)} onBlur={() => markTouched('contactEmail')} error={getFieldError('contactEmail')} required />
+            <FormField type="tel" label="Contact Phone" name="contactPhone" value={form.contactPhone} onChange={(v) => handleFieldChange('contactPhone', v)} />
             <FormField type="text" label="Street Address" name="street" value={form.street} onChange={(v) => set('street', v)} className="sm:col-span-2" />
             <FormField type="text" label="City" name="city" value={form.city} onChange={(v) => set('city', v)} />
             <div className="grid grid-cols-2 gap-4">
@@ -193,7 +235,7 @@ const NewSubmission: React.FC = () => {
         <section className="rounded-xl border border-slate-200/60 bg-white p-5 shadow-[var(--shadow-xs)]">
           <h2 className="mb-4 text-sm font-semibold text-slate-800">Submission Details</h2>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <FormField type="select" label="Line of Business" name="lob" value={form.lob} onChange={(v) => set('lob', v)} options={LOB_OPTIONS} placeholder="Select LOB…" error={errors.lob} required />
+            <FormField type="select" label="Line of Business" name="lob" value={form.lob} onChange={(v) => handleFieldChange('lob', v)} onBlur={() => markTouched('lob')} options={LOB_OPTIONS} placeholder="Select LOB…" error={getFieldError('lob')} required />
             <FormField type="select" label="Channel" name="channel" value={form.channel} onChange={(v) => set('channel', v)} options={CHANNEL_OPTIONS} placeholder="Select channel…" />
             <FormField type="date" label="Requested Effective Date" name="effectiveDate" value={form.effectiveDate} onChange={(v) => set('effectiveDate', v)} />
             <FormField type="date" label="Requested Expiration Date" name="expirationDate" value={form.expirationDate} onChange={(v) => set('expirationDate', v)} />
