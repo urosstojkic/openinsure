@@ -61,3 +61,15 @@ Lessons learned from deploying OpenInsure to Azure.
 - **Problem:** ACR names are globally unique DNS names (`*.azurecr.io`). A name like `openinsureacr` will collide.
 - **Fix:** Use `resourceToken` (from `uniqueString()`) as a suffix: e.g. `openinsuredevacra1b2c3`.
 - **Confidence:** High.
+
+## Renaming Response Fields Breaks Tests Silently
+
+- **Problem:** When standardising `events.py` response envelope (`events`→`items`, `count`→`total`), the test at `test_event_store.py:260` used `body["count"]` and `body["events"]`. The failure only surfaced at runtime as a `KeyError`, not a type error.
+- **Fix:** After renaming any response model field, grep tests for the old field name: `grep -rn '"count"\|"events"' tests/`. Pydantic response models don't protect against dict-key access in tests.
+- **Confidence:** High — hit this exact issue.
+
+## Envelope Audit Needs Full-Codebase Grep, Not Spot-Checks
+
+- **Problem:** Initial fix for #287 only checked the 6 main CRUD modules. A second audit found 11 more endpoints across `broker.py`, `underwriter.py`, `gdpr.py`, `events.py`, `documents.py`, `work_items.py`, `workflows.py`, `parties.py`, and `risk_attributes.py` that still returned non-standard envelopes.
+- **Fix:** Grep all API files for `-> dict[str` and `-> list[` return types, plus audit every response model missing `skip`/`limit` fields. The command: `grep -rn 'response_model=\|-> dict\[str\|-> list\[' src/openinsure/api/`.
+- **Confidence:** High — the full audit caught 11 endpoints the initial pass missed.
