@@ -21,7 +21,15 @@ OpenInsure is an **enterprise-grade, open-source core insurance platform** — a
 
 ## 2. Squad-First Development (MANDATORY)
 
-This project uses the **Squad framework** (`.squad/`) for all development. Every task MUST be routed through Squad agents.
+This project uses the **Squad framework** (`.squad/`) for all development, orchestrated by **AiScrum Pro** (`.aiscrum/`) for sprint discipline. Every task MUST be routed through Squad agents.
+
+### Sprint Engine (AiScrum Pro)
+
+- **Configuration:** `.aiscrum/config.yaml` — sprint settings, quality gates, parallel sessions
+- **Integration guide:** `.aiscrum/INTEGRATION.md` — how Squad + AiScrum Pro + claude-code-prompts work together
+- **Quality gates:** Automated per issue — tests, lint, build, diff-size, challenger review
+- **Sprint cycle:** Refine → Plan (ICE-score) → Execute (parallel worktrees) → Review → Retro
+- **Drift control:** Sprint scope is locked. Unplanned work goes to backlog. >2 drift incidents = escalate.
 
 ### Routing Table
 
