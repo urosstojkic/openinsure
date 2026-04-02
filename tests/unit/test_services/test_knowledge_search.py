@@ -106,3 +106,82 @@ class TestFallbackSearch:
             assert "category" in r
             assert "source" in r
             assert r["source"] == "static"
+
+
+# ---------------------------------------------------------------------------
+# Adversarial / edge-case tests
+# ---------------------------------------------------------------------------
+
+class TestKnowledgeSearchAdversarial:
+    """Tests that try to break knowledge search with hostile inputs."""
+
+    @pytest.mark.asyncio
+    async def test_empty_query(self):
+        """Empty query string should return results (matches everything in fallback)."""
+        with patch("openinsure.services.knowledge_search.get_search_adapter", return_value=None):
+            results = await search_knowledge("")
+        assert isinstance(results, list)
+
+    @pytest.mark.asyncio
+    async def test_top_zero(self):
+        """top=0 should return empty list."""
+        with patch("openinsure.services.knowledge_search.get_search_adapter", return_value=None):
+            results = await search_knowledge("cyber", top=0)
+        assert results == []
+
+    @pytest.mark.asyncio
+    async def test_top_negative(self):
+        """top=-1 → Python slice [:−1] drops last element but doesn't crash."""
+        with patch("openinsure.services.knowledge_search.get_search_adapter", return_value=None):
+            results = await search_knowledge("cyber", top=-1)
+        assert isinstance(results, list)
+
+    @pytest.mark.asyncio
+    async def test_category_special_chars(self):
+        """Category with special characters in filter string."""
+        mock_adapter = AsyncMock()
+        mock_adapter.search.return_value = {"results": []}
+        with patch("openinsure.services.knowledge_search.get_search_adapter", return_value=mock_adapter):
+            await search_knowledge("test", category="it's a 'test'")
+        # Should not crash — the filter string may be malformed but adapter handles it
+
+    @pytest.mark.asyncio
+    async def test_adapter_returns_malformed_response(self):
+        """Adapter returns dict without 'results' key → should return empty list."""
+        mock_adapter = AsyncMock()
+        mock_adapter.search.return_value = {"items": [{"id": "1"}]}
+        with patch("openinsure.services.knowledge_search.get_search_adapter", return_value=mock_adapter):
+            results = await search_knowledge("test")
+        assert results == []
+
+    @pytest.mark.asyncio
+    async def test_adapter_returns_none_falls_back(self):
+        """Adapter.search returns None → AttributeError caught → falls back to static."""
+        mock_adapter = AsyncMock()
+        mock_adapter.search.return_value = None
+        with patch("openinsure.services.knowledge_search.get_search_adapter", return_value=mock_adapter):
+            # The AttributeError from None.get() is caught by the except block
+            # and falls back to _fallback_search gracefully
+            results = await search_knowledge("test")
+        assert isinstance(results, list)
+
+    def test_fallback_nonexistent_category(self):
+        """Non-existent category should return empty results."""
+        results = _fallback_search("cyber", "nonexistent_category", 10)
+        assert results == []
+
+    def test_fallback_content_truncation(self):
+        """Content in results should be truncated to 500 chars."""
+        results = _fallback_search("cyber", None, 100)
+        for r in results:
+            assert len(r["content"]) <= 500
+
+    @pytest.mark.asyncio
+    async def test_concurrent_adapter_failure_and_fallback(self):
+        """Adapter raises, falls back, and fallback succeeds — end-to-end."""
+        mock_adapter = AsyncMock()
+        mock_adapter.search.side_effect = ConnectionError("Network unreachable")
+        with patch("openinsure.services.knowledge_search.get_search_adapter", return_value=mock_adapter):
+            results = await search_knowledge("cyber")
+        # Falls back to static search
+        assert isinstance(results, list)

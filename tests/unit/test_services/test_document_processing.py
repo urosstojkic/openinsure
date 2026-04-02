@@ -251,3 +251,78 @@ class TestGenerateDocument:
         svc = _service()
         result = svc.generate_document(DocumentType.endorsement, {})
         assert result.generated_at is not None
+
+
+# ---------------------------------------------------------------------------
+# Adversarial / edge-case tests
+# ---------------------------------------------------------------------------
+
+class TestDocumentProcessingAdversarial:
+    """Tests that try to break document processing with hostile inputs."""
+
+    def test_classify_empty_content(self):
+        """Empty file content should still classify (by filename)."""
+        svc = _service()
+        result = svc.classify_document(b"", "acord_form.pdf")
+        assert result.document_type == DocumentType.acord_application
+        assert result.metadata["size_bytes"] == 0
+
+    def test_classify_huge_content(self):
+        """Large content should not crash classification."""
+        svc = _service()
+        result = svc.classify_document(b"x" * 10_000_000, "unknown.pdf")
+        assert result.metadata["size_bytes"] == 10_000_000
+
+    def test_classify_unicode_filename(self):
+        """Unicode in filename should not crash."""
+        svc = _service()
+        result = svc.classify_document(b"data", "声明_declaration_页.pdf")
+        assert result.document_type == DocumentType.declarations_page
+
+    def test_classify_path_traversal_filename(self):
+        """Malicious filename should not cause issues."""
+        svc = _service()
+        result = svc.classify_document(b"data", "../../etc/passwd")
+        assert result.document_type == DocumentType.unknown
+
+    @pytest.mark.asyncio
+    async def test_extract_async_di_returns_empty_kv(self):
+        """DI returns key_value_pairs with empty key → should skip."""
+        with patch("openinsure.infrastructure.factory.get_document_intelligence") as mock_get:
+            mock_di = MagicMock()
+            mock_di.is_available = True
+            mock_di.analyze_document = AsyncMock(return_value={
+                "key_value_pairs": [
+                    {"key": "", "value": "orphan"},
+                    {"key": "  ", "value": "whitespace"},
+                    {"key": "valid", "value": "ok"},
+                ],
+                "fields": {},
+                "text": "text",
+            })
+            mock_get.return_value = mock_di
+            svc = DocumentProcessingService()
+
+        result = await svc.extract_data_async(b"content", DocumentType.unknown)
+        assert "valid" in result.extracted_fields
+        # Empty string key stripped → not included
+        assert "" not in result.extracted_fields
+
+    def test_generate_different_types(self):
+        """Generate documents of every type to verify no crashes."""
+        svc = _service()
+        for doc_type in DocumentType:
+            result = svc.generate_document(doc_type, {"key": "value"})
+            assert result.document_type == doc_type
+            assert result.filename.endswith(".pdf")
+
+    def test_extract_sync_with_binary_content(self):
+        """Binary content (non-text) should not crash sync extraction."""
+        svc = _service()
+        binary = bytes(range(256))  # All byte values
+        with patch("openinsure.infrastructure.document_intelligence._fallback_analyze", return_value={
+            "key_value_pairs": [],
+            "text": "",
+        }):
+            result = svc.extract_data(binary, DocumentType.unknown)
+        assert result.confidence == 0.0

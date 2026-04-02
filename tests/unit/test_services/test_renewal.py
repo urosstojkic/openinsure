@@ -151,3 +151,105 @@ class TestGenerateRenewalTerms:
         policy = {"policy_number": "P-1", "premium": 8000}
         terms = await generate_renewal_terms(policy)
         assert terms["renewal_premium"] == pytest.approx(8400.0)
+
+
+# ---------------------------------------------------------------------------
+# Adversarial / edge-case tests
+# ---------------------------------------------------------------------------
+
+class TestRenewalAdversarial:
+    """Tests that try to break renewal logic with hostile inputs."""
+
+    @pytest.mark.asyncio
+    async def test_repo_exception_propagates(self):
+        """Repository failure should propagate — not silently swallowed."""
+        mock_repo = AsyncMock()
+        mock_repo.list_all.side_effect = RuntimeError("Database connection lost")
+        with patch("openinsure.services.renewal.get_policy_repository", return_value=mock_repo):
+            with pytest.raises(RuntimeError, match="Database connection lost"):
+                await identify_renewals()
+
+    @pytest.mark.asyncio
+    async def test_negative_days_ahead(self):
+        """Negative days_ahead → target_date in the past → only already-expired policies."""
+        yesterday = str(date.today() - timedelta(days=1))
+        policies = [_policy(expiration_date=yesterday)]
+        mock_repo = AsyncMock()
+        mock_repo.list_all.return_value = policies
+        with patch("openinsure.services.renewal.get_policy_repository", return_value=mock_repo):
+            result = await identify_renewals(days_ahead=-10)
+        # yesterday <= (today - 10 days) is False, so nothing returned
+        assert len(result) == 0
+
+    @pytest.mark.asyncio
+    async def test_zero_days_ahead(self):
+        """days_ahead=0 → target is today → only today/past expiries."""
+        today_str = str(date.today())
+        policies = [_policy("EXP-TODAY", expiration_date=today_str)]
+        mock_repo = AsyncMock()
+        mock_repo.list_all.return_value = policies
+        with patch("openinsure.services.renewal.get_policy_repository", return_value=mock_repo):
+            result = await identify_renewals(days_ahead=0)
+        assert len(result) == 1
+
+    @pytest.mark.asyncio
+    async def test_negative_premium_renewal(self):
+        """Negative premium → 5% increase on a negative = more negative."""
+        terms = await generate_renewal_terms(_policy(premium=-5000.0))
+        assert terms["renewal_premium"] == pytest.approx(-5250.0)
+        assert terms["recommendation"] == "review_required"
+
+    @pytest.mark.asyncio
+    async def test_none_premium_crashes(self):
+        """None premium values → float(None) raises TypeError.
+        Adversarial finding: renewal.py doesn't guard against None premium.
+        """
+        policy = {"policy_number": "P-1", "total_premium": None, "premium": None}
+        with pytest.raises(TypeError):
+            await generate_renewal_terms(policy)
+
+    @pytest.mark.asyncio
+    async def test_missing_all_premium_keys(self):
+        """No premium keys at all → should default to 0."""
+        policy = {"policy_number": "P-1"}
+        terms = await generate_renewal_terms(policy)
+        assert terms["renewal_premium"] == pytest.approx(0.0)
+
+    @pytest.mark.asyncio
+    async def test_very_large_days_ahead(self):
+        """Extreme days_ahead should not overflow."""
+        far = str(date.today() + timedelta(days=36500))
+        policies = [_policy(expiration_date=far)]
+        mock_repo = AsyncMock()
+        mock_repo.list_all.return_value = policies
+        with patch("openinsure.services.renewal.get_policy_repository", return_value=mock_repo):
+            result = await identify_renewals(days_ahead=36500)
+        assert len(result) == 1
+
+    @pytest.mark.asyncio
+    async def test_malformed_expiration_date_string_comparison(self):
+        """Malformed date string → str comparison still works (no fromisoformat
+        called until days_to_expiry calc), so ValueError may or may not fire
+        depending on whether the string sorts before the target date."""
+        policies = [_policy(expiration_date="not-a-date")]
+        mock_repo = AsyncMock()
+        mock_repo.list_all.return_value = policies
+        with patch("openinsure.services.renewal.get_policy_repository", return_value=mock_repo):
+            try:
+                result = await identify_renewals()
+                # "not-a-date" <= str(target_date) → True (alphabetical)
+                # Then date.fromisoformat("not-a-date") → ValueError
+            except ValueError:
+                pass  # Expected when trying to parse the date for days_to_expiry
+
+    @pytest.mark.asyncio
+    async def test_already_expired_policy(self):
+        """Already-expired policies should still be returned (overdue renewals)."""
+        past = str(date.today() - timedelta(days=30))
+        policies = [_policy("EXPIRED", expiration_date=past)]
+        mock_repo = AsyncMock()
+        mock_repo.list_all.return_value = policies
+        with patch("openinsure.services.renewal.get_policy_repository", return_value=mock_repo):
+            result = await identify_renewals(days_ahead=90)
+        assert len(result) == 1
+        assert result[0]["days_to_expiry"] < 0

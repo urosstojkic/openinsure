@@ -1,6 +1,6 @@
 """Unit tests for actuarial service — loss triangles, IBNR, rate adequacy."""
 
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 
 import pytest
 
@@ -181,3 +181,100 @@ class TestCalculateRateAdequacy:
         assert r["segment"] == "seg"
         assert r["current_rate"] == "100"
         assert r["indicated_rate"] == "120"
+
+
+# ---------------------------------------------------------------------------
+# Adversarial / edge-case tests
+# ---------------------------------------------------------------------------
+
+class TestActuarialAdversarial:
+    """Tests that try to BREAK the code with malformed, boundary, and hostile inputs."""
+
+    def test_triangle_malformed_numeric_string(self):
+        """Non-numeric incurred_amount should raise InvalidOperation or ValueError."""
+        claims = [_claim(2020, 12, "not_a_number")]
+        with pytest.raises((InvalidOperation, ValueError)):
+            generate_loss_triangle("cyber", claims)
+
+    def test_triangle_missing_key(self):
+        """Missing 'incurred_amount' key should raise KeyError."""
+        claims = [{"accident_year": 2020, "development_month": 12}]
+        with pytest.raises(KeyError):
+            generate_loss_triangle("cyber", claims)
+
+    def test_triangle_missing_accident_year(self):
+        claims = [{"development_month": 12, "incurred_amount": "100"}]
+        with pytest.raises(KeyError):
+            generate_loss_triangle("cyber", claims)
+
+    def test_triangle_negative_amount(self):
+        """Negative amounts should be accepted (represent salvage/recovery)."""
+        claims = [_claim(2020, 12, "-500")]
+        triangle = generate_loss_triangle("cyber", claims)
+        assert triangle[2020][12] == Decimal("-500")
+
+    def test_triangle_none_amount_raises(self):
+        """None incurred_amount should raise."""
+        claims = [{"accident_year": 2020, "development_month": 12, "incurred_amount": None}]
+        with pytest.raises((TypeError, InvalidOperation)):
+            generate_loss_triangle("cyber", claims)
+
+    def test_factors_all_zero_denominator(self):
+        """All zero current-period values → no factors (division by zero guard)."""
+        triangle = {
+            2020: {12: Decimal("0"), 24: Decimal("0")},
+            2021: {12: Decimal("0"), 24: Decimal("0")},
+        }
+        factors = _age_to_age_factors(triangle)
+        assert 12 not in factors
+
+    def test_ibnr_shrinking_losses(self):
+        """Losses that shrink over time → factors < 1 → negative IBNR is possible."""
+        triangle = {
+            2020: {12: Decimal("1000"), 24: Decimal("500")},
+            2021: {12: Decimal("800")},
+        }
+        result = estimate_ibnr(triangle)
+        # Shrinking losses produce negative IBNR (valid actuarially)
+        assert "total_ibnr" in result
+        total = Decimal(result["total_ibnr"])
+        assert isinstance(total, Decimal)
+
+    def test_ibnr_very_large_triangle(self):
+        """Large triangle with many years should not crash."""
+        triangle = {}
+        for year in range(2000, 2025):
+            triangle[year] = {}
+            for month in range(12, min(12 + (2025 - year) * 12, 300), 12):
+                triangle[year][month] = Decimal("10000")
+        result = estimate_ibnr(triangle)
+        assert "total_ibnr" in result
+
+    def test_rate_adequacy_negative_current_rate(self):
+        """Negative current rate → division guard should return 0."""
+        current = {"seg": Decimal("-100")}
+        indicated = {"seg": Decimal("50")}
+        results = calculate_rate_adequacy("cyber", current, indicated)
+        # Current rate <= 0, so adequacy should be 0
+        assert Decimal(results[0]["adequacy_ratio"]) == Decimal("0")
+
+    def test_rate_adequacy_both_zero(self):
+        current = {"seg": Decimal("0")}
+        indicated = {"seg": Decimal("0")}
+        results = calculate_rate_adequacy("cyber", current, indicated)
+        assert Decimal(results[0]["adequacy_ratio"]) == Decimal("0")
+
+    def test_rate_adequacy_very_high_ratio(self):
+        """Extreme adequacy ratio (indicated >> current)."""
+        current = {"seg": Decimal("1")}
+        indicated = {"seg": Decimal("100000")}
+        results = calculate_rate_adequacy("cyber", current, indicated)
+        ratio = Decimal(results[0]["adequacy_ratio"])
+        assert ratio == Decimal("100000.0000")
+
+    def test_triangle_float_precision(self):
+        """Float inputs must not lose precision through str conversion."""
+        claims = [_claim(2020, 12, 0.1), _claim(2020, 12, 0.2)]
+        triangle = generate_loss_triangle("cyber", claims)
+        # 0.1 + 0.2 == 0.3 in Decimal (not 0.30000000000000004)
+        assert triangle[2020][12] == Decimal("0.1") + Decimal("0.2")

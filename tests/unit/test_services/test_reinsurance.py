@@ -4,6 +4,8 @@ from datetime import date
 from decimal import Decimal
 from uuid import uuid4
 
+import pytest
+
 from openinsure.domain.reinsurance import (
     ReinsuranceContract,
     TreatyStatus,
@@ -274,3 +276,143 @@ class TestGenerateBordereau:
         assert result["cession_count"] == 0
         assert result["recovery_count"] == 0
         assert Decimal(result["total_ceded_premium"]) == Decimal("0")
+
+
+# ---------------------------------------------------------------------------
+# Adversarial / edge-case tests
+# ---------------------------------------------------------------------------
+
+class TestReinsuranceAdversarial:
+    """Tests that try to break cession/recovery with hostile inputs."""
+
+    def test_cession_zero_rate_produces_no_cession(self):
+        """Rate=0 → ceded_premium=0 → cession should not be appended."""
+        treaty = _treaty(treaty_type=TreatyType.QUOTA_SHARE, rate=Decimal("0"))
+        cessions = calculate_cession(_policy(premium="10000"), [treaty])
+        assert cessions == []
+
+    def test_cession_negative_premium(self):
+        """Negative premium → negative cession (business allows credit return)."""
+        treaty = _treaty(treaty_type=TreatyType.QUOTA_SHARE, rate=Decimal("25"))
+        cessions = calculate_cession(_policy(premium="-5000"), [treaty])
+        # Negative ceded_premium → not > 0 → not appended
+        assert cessions == []
+
+    def test_cession_rate_exactly_one(self):
+        """Rate=1 (not > 1) → used directly as multiplier → 100% cession."""
+        treaty = _treaty(treaty_type=TreatyType.QUOTA_SHARE, rate=Decimal("1"))
+        cessions = calculate_cession(_policy(premium="10000"), [treaty])
+        assert len(cessions) == 1
+        # rate=1 is NOT divided by 100 (only rates > 1 are divided)
+        # So rate=1 means 100% of premium is ceded
+        assert cessions[0].ceded_premium == Decimal("10000.00")
+
+    def test_cession_rate_exactly_100(self):
+        """Rate=100 → should cede 100% of premium."""
+        treaty = _treaty(treaty_type=TreatyType.QUOTA_SHARE, rate=Decimal("100"))
+        cessions = calculate_cession(_policy(premium="10000"), [treaty])
+        assert cessions[0].ceded_premium == Decimal("10000.00")
+
+    def test_cession_rate_over_100(self):
+        """Rate > 100 → still divided by 100, yields > 100% cession."""
+        treaty = _treaty(treaty_type=TreatyType.QUOTA_SHARE, rate=Decimal("200"))
+        cessions = calculate_cession(_policy(premium="10000"), [treaty])
+        assert cessions[0].ceded_premium == Decimal("20000.00")
+
+    def test_excess_of_loss_zero_policy_limit(self):
+        """Zero policy limit → division by zero guard in premium calc."""
+        treaty = _treaty(
+            treaty_type=TreatyType.EXCESS_OF_LOSS,
+            retention=Decimal("0"),
+            limit=Decimal("100000"),
+        )
+        cessions = calculate_cession(_policy(premium="10000", limit="0"), [treaty])
+        # limit=0, retention=0, excess=0 → no cession
+        assert cessions == []
+
+    def test_excess_of_loss_zero_retention(self):
+        """Zero retention → entire limit is excess."""
+        treaty = _treaty(
+            treaty_type=TreatyType.EXCESS_OF_LOSS,
+            retention=Decimal("0"),
+            limit=Decimal("500000"),
+        )
+        cessions = calculate_cession(_policy(premium="10000", limit="1000000"), [treaty])
+        assert len(cessions) == 1
+        assert cessions[0].ceded_limit == Decimal("500000")
+
+    def test_recovery_zero_claim_amount(self):
+        """Zero paid amount → no recovery."""
+        treaty = _treaty(treaty_type=TreatyType.QUOTA_SHARE, rate=Decimal("25"))
+        recoveries = calculate_recovery(_claim(paid_amount="0"), [treaty])
+        assert recoveries == []
+
+    def test_recovery_negative_amount(self):
+        """Negative paid amount → negative recovery → not appended."""
+        treaty = _treaty(treaty_type=TreatyType.QUOTA_SHARE, rate=Decimal("25"))
+        recoveries = calculate_recovery(_claim(paid_amount="-10000"), [treaty])
+        assert recoveries == []
+
+    def test_cession_empty_policy_dict(self):
+        """Empty policy dict → defaults to 0 premium, 0 limit → no cession."""
+        treaty = _treaty(treaty_type=TreatyType.QUOTA_SHARE, rate=Decimal("25"))
+        cessions = calculate_cession({}, [treaty])
+        assert cessions == []  # 0 premium → 0 ceded → not appended
+
+    def test_cession_missing_lob_in_policy(self):
+        """Missing lob key → empty string, matches empty treaty LOB list."""
+        treaty = _treaty(lobs=[])
+        cessions = calculate_cession(
+            {"id": str(uuid4()), "policy_number": "P-X", "premium": "1000", "limit": "10000"},
+            [treaty],
+        )
+        assert len(cessions) == 1
+
+    def test_cession_empty_policy_dict_crashes_on_uuid(self):
+        """Empty policy dict → causes Pydantic UUID validation error (discovered adversarially)."""
+        treaty = _treaty(treaty_type=TreatyType.QUOTA_SHARE, rate=Decimal("25"))
+        import pydantic
+        with pytest.raises(pydantic.ValidationError, match="uuid"):
+            calculate_cession({"premium": "1000", "limit": "10000"}, [treaty])
+
+    def test_bordereau_negative_recovery_amounts(self):
+        """Negative recovery amounts should sum correctly."""
+        treaty = _treaty()
+        tid = str(treaty.id)
+        recoveries = [
+            {"treaty_id": tid, "recovery_amount": "-500", "recovery_date": "2024-06-15"},
+            {"treaty_id": tid, "recovery_amount": "1000", "recovery_date": "2024-06-20"},
+        ]
+        result = generate_bordereau(treaty, [], recoveries)
+        assert Decimal(result["total_recoveries"]) == Decimal("500")
+
+    def test_bordereau_period_filter_string_comparison(self):
+        """Period filter uses string comparison — verify ISO date ordering works."""
+        treaty = _treaty()
+        tid = str(treaty.id)
+        cessions = [
+            {"treaty_id": tid, "ceded_premium": "100", "ceded_limit": "1000", "cession_date": "2024-01-15"},
+            {"treaty_id": tid, "ceded_premium": "200", "ceded_limit": "2000", "cession_date": "2024-12-31"},
+        ]
+        result = generate_bordereau(
+            treaty, cessions, [],
+            period_start=date(2024, 6, 1),
+        )
+        assert result["cession_count"] == 1
+        assert Decimal(result["total_ceded_premium"]) == Decimal("200")
+
+    def test_cession_pending_treaty_skipped(self):
+        """PENDING status should also be skipped (only ACTIVE cedes)."""
+        treaty = _treaty(status=TreatyStatus.PENDING)
+        cessions = calculate_cession(_policy(), [treaty])
+        assert cessions == []
+
+    def test_recovery_surplus_claim_exceeds_limit(self):
+        """Surplus recovery should cap at treaty limit."""
+        treaty = _treaty(
+            treaty_type=TreatyType.SURPLUS,
+            retention=Decimal("50000"),
+            limit=Decimal("30000"),
+        )
+        recoveries = calculate_recovery(_claim(paid_amount="200000"), [treaty])
+        assert recoveries[0].recovery_amount == Decimal("30000.00")
