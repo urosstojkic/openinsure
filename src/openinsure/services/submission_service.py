@@ -757,20 +757,54 @@ class SubmissionService:
         # Local fallback -- use deterministic rating engine (no hardcoded premium)
         premium = None
         rating_breakdown = None
-        try:
-            from openinsure.agents.prompts import _get_rating_breakdown
 
-            rating_breakdown = _get_rating_breakdown(record)
-            if rating_breakdown and rating_breakdown.get("final_premium"):
-                premium = float(rating_breakdown["final_premium"])
+        # When product_id is available, prefer the async RatingEngine which
+        # loads product-specific base_rate from product_pricing (#308).
+        product_id = record.get("product_id")
+        if product_id:
+            try:
+                risk_data = _extract_risk_data(record)
+                rating_input = _build_rating_input(risk_data)
+                rating_engine = RatingEngine()
+                rating_result = await rating_engine.calculate(product_id, rating_input)
+                premium = float(rating_result.final_premium)
+                rating_breakdown = {
+                    "final_premium": premium,
+                    "confidence": rating_result.confidence,
+                    "factors_applied": {k: float(v) for k, v in rating_result.factors_applied.items()},
+                    "explanation": rating_result.explanation,
+                }
                 logger.info(
-                    "submissions.fallback_quote_rated",
+                    "submissions.fallback_quote_product_engine",
                     submission_id=submission_id,
+                    product_id=product_id,
                     premium=premium,
-                    source="rating_engine",
+                    source="product_rating_engine",
                 )
-        except Exception:
-            logger.debug("submissions.rating_engine_fallback_failed", exc_info=True)
+            except Exception:
+                logger.warning(
+                    "submissions.product_rating_engine_failed",
+                    submission_id=submission_id,
+                    product_id=product_id,
+                    exc_info=True,
+                )
+
+        # Fallback: _get_rating_breakdown (no product context)
+        if premium is None:
+            try:
+                from openinsure.agents.prompts import _get_rating_breakdown
+
+                rating_breakdown = _get_rating_breakdown(record)
+                if rating_breakdown and rating_breakdown.get("final_premium"):
+                    premium = float(rating_breakdown["final_premium"])
+                    logger.info(
+                        "submissions.fallback_quote_rated",
+                        submission_id=submission_id,
+                        premium=premium,
+                        source="rating_engine",
+                    )
+            except Exception:
+                logger.debug("submissions.rating_engine_fallback_failed", exc_info=True)
 
         # Second attempt: RatingEngine (product-aware) → CyberRatingEngine fallback
         if premium is None:
@@ -1120,23 +1154,26 @@ class SubmissionService:
         )
 
         # ── Record compliance audit event (#314) ──────────────────────────
-        from openinsure.infrastructure.factory import get_compliance_repository
+        try:
+            from openinsure.infrastructure.factory import get_compliance_repository
 
-        comp_repo = get_compliance_repository()
-        if comp_repo:
-            await comp_repo.store_audit_event(
-                {
-                    "actor": user_display_name,
-                    "action": "bind",
-                    "entity_type": "policy",
-                    "entity_id": policy_id,
-                    "details": {
-                        "submission_id": submission_id,
-                        "policy_number": policy_number,
-                        "premium": float(premium),
-                    },
-                }
-            )
+            comp_repo = get_compliance_repository()
+            if comp_repo:
+                await comp_repo.store_audit_event(
+                    {
+                        "actor": user_display_name,
+                        "action": "bind",
+                        "entity_type": "policy",
+                        "entity_id": policy_id,
+                        "details": {
+                            "submission_id": submission_id,
+                            "policy_number": policy_number,
+                            "premium": float(premium),
+                        },
+                    }
+                )
+        except Exception:
+            logger.debug("bind.compliance_audit_event_failed", policy_id=policy_id, exc_info=True)
 
         # Auto-generate declaration page via Foundry document agent (non-critical)
         if foundry.is_available:

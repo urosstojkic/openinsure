@@ -99,6 +99,11 @@ def _get_rating_breakdown(submission: dict[str, Any]) -> dict[str, Any] | None:
     """Run the deterministic rating engine and return the factor breakdown.
 
     Returns ``None`` when the submission lacks enough data to rate.
+
+    .. note:: This function creates a default ``CyberRatingEngine``.  When
+       the submission carries a ``product_id``, callers should prefer the
+       async :class:`RatingEngine` path which loads product-specific
+       base_rate from the database (#308).
     """
     try:
         from decimal import Decimal
