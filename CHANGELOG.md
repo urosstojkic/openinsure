@@ -5,6 +5,38 @@ All notable changes to OpenInsure will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## v112 — Adopt claude-code-prompts Patterns (2026-04-02)
+
+### Summary
+Adopts 6 development process improvements from the [claude-code-prompts](https://github.com/repowise-dev/claude-code-prompts)
+research. No product code changes — this is about how we build, not what we build.
+
+### New Agents
+- **Verification Specialist** (`.squad/agents/verifier/`) — adversarial testing agent that tries to BREAK
+  implementations. Anti-rationalization checklist, mandatory adversarial probes (concurrency, boundary values,
+  idempotency, orphan operations), structured PASS/FAIL/PARTIAL verdicts backed by command output.
+- **Solution Architect** (`.squad/agents/architect/`) — pre-implementation planning agent that explores the
+  codebase, presents 2+ options with trade-offs, recommends one with justification, and breaks into ordered
+  implementation steps. Produces plans, not code.
+
+### Process Improvements
+- **Anti-rationalization in completion checklist** — 5 new verification checks in `.squad/templates/completion-checklist.md`
+  preventing "looks correct" without execution, sole reliance on AI-written tests, and inference-based PASS claims.
+- **Session notes template** — 10-section structured format (`.squad/templates/session-notes.md`) with mandatory
+  "Current State" section for session continuity.
+- **Coordinator synthesis mandate** — added to `.github/copilot-instructions.md`. Between research and implementation
+  phases, the coordinator must read all findings, synthesize, and write self-contained prompts with specific file paths.
+  No more "based on what you discovered."
+- **Routing table updated** — Verifier and Architect added to `.squad/routing.md` with correct dependency tiers
+  (Architect at P0, Verifier at P2).
+
+### Knowledge Base
+- Created `knowledge/learned/` with extracted lessons from 111 versions of development:
+  - `sql-gotchas.md` — column mappings, NULL constraints, type coercion, auto-managed columns
+  - `deployment-quirks.md` — ARM64/x64 Python, Azure SQL policy, Cosmos DB auth, Container Apps, Docker build context
+  - `foundry-patterns.md` — agent invocation format, SDK dicts, model deployment, timeouts
+  - `portal-lessons.md` — API routing, nginx auth forwarding, Axios timeouts, UX patterns
+
 ## v111 — Commercial Property LOB (2026-04-01)
 
 ### Summary

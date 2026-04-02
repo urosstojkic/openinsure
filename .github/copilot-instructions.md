@@ -64,6 +64,18 @@ Full routing rules including issue triage and @copilot assignment: `.squad/routi
 5. **Record decisions** in `.squad/decisions.md` if architectural choices were made
 6. **Label GitHub issues** with `squad:{agent}` for tracking
 
+### Synthesis Mandate (CRITICAL)
+
+Between research and implementation phases, the coordinator (main session) MUST:
+
+1. **Read ALL sub-agent findings** before dispatching the next phase
+2. **Synthesize findings** — identify the correct approach, resolve conflicts between agents
+3. **Write implementation prompts that cite specific file paths, line numbers, and exact changes** — workers cannot infer what was discussed in the main conversation
+4. **NEVER write "based on what you discovered"** — embed the actual findings in the prompt. Every fact must be stated explicitly.
+5. **Every implementation prompt must be self-contained** — workers can't see the main conversation. If a worker needs context, the prompt must provide it completely.
+
+**Why:** Sub-agents are stateless. They cannot access the coordinator's conversation history. Phrases like "based on your earlier findings" delegate comprehension and produce inferior results. The coordinator's job is to compress research into actionable, specific instructions.
+
 ### Quality Gates (MANDATORY before deploy)
 
 1. **CI must be green** — Check `gh run list --limit 1` before deploying. If CI is red, fix it first. Never deploy with failing CI. No exceptions.
@@ -108,6 +120,7 @@ After completing a significant feature block (new process, major fix, architectu
 - Never use `Start-Job` for Azure CLI (breaks auth — use sequential commands)
 - Never merge on red CI. "Tests passed locally" is NOT sufficient.
 - Never hardcode credentials, connection strings, or API keys
+- Never store sensitive env vars (API keys, connection strings) as plain Container App environment variables in production — use Container App secrets (`secretRef`) or Key Vault references. See `docs/guides/enterprise-integration-guide.md` Appendix A.2.
 - Never skip feature documentation after a major block
 - Never implement a feature without documenting it in an existing doc (feature-guide, TECHNICAL_OVERVIEW, or CHANGELOG)
 - Every new feature, API endpoint, or UI page MUST be documented in `docs/guides/feature-guide.md` before the feature is considered done

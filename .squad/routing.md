@@ -14,6 +14,8 @@ How to decide who handles what.
 | Security, RBAC, auth, audit | Security | Authority engine, JWT/API key auth, bias monitoring, audit trail |
 | Docs, history, decisions | Scribe | README, architecture docs, decision records, session logs |
 | Code review | QA + Security | Review PRs, check quality, suggest improvements |
+| Adversarial verification | Verifier | Break implementations, boundary testing, anti-rationalization |
+| Architecture & planning | Architect | Multi-file features, option analysis, implementation plans |
 | Scope & priorities | Insurance | What to build next, trade-offs, domain decisions |
 | Async issue work (bugs, tests, small features) | @copilot 🤖 | Well-defined tasks matching capability profile |
 | Session logging | Scribe | Automatic — never needs routing |
@@ -73,9 +75,9 @@ Agents are grouped into dependency tiers that determine execution ordering:
 
 | Tier | Agents | Execution | Rationale |
 |------|--------|-----------|-----------|
-| **P0 — Lead** | Lead (coordinator) | Sequential | Must triage and assign before others start |
+| **P0 — Lead + Architect** | Lead (coordinator), Architect | Sequential | Must triage, plan, and assign before others start |
 | **P1 — Specialists** | Backend, Frontend, Insurance, Security | Parallel OK | Independent domain owners; can work simultaneously |
-| **P2 — Supporting** | QA, Scribe, Infra | Parallel OK | Can run alongside P1 or after P1 completes |
+| **P2 — Supporting** | QA, Scribe, Infra, Verifier | Parallel OK | Can run alongside P1 or after P1 completes |
 
 ### Parallel Execution Guidelines
 
@@ -87,6 +89,8 @@ Agents are grouped into dependency tiers that determine execution ordering:
 
 ## Dependency Tiers
 
-- **P0 = Lead (sequential):** Triage, routing, priority decisions. Must complete before work begins.
+- **P0 = Lead + Architect (sequential):** Triage, routing, priority decisions, architecture plans. Must complete before implementation begins.
 - **P1 = Specialists (parallel OK):** Backend, Frontend, Insurance, Security. Own their domains independently.
-- **P2 = Supporting (parallel OK):** QA, Scribe, Infra. Support P1 work and can run concurrently.
+- **P2 = Supporting (parallel OK):** QA, Scribe, Infra, Verifier. Support P1 work and can run concurrently.
+
+**Note:** The Verifier runs AFTER implementation, not during. Its purpose is adversarial — it tries to break what was built. The Architect runs BEFORE implementation to produce plans with concrete file paths and trade-offs.
