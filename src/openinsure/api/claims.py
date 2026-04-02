@@ -772,6 +772,8 @@ async def set_reserve(
     )
 
     return ReserveResponse(
+        claim_id=claim_id,
+        reserve_id=rid,
         category=body.category,
         amount=body.amount,
         currency=body.currency,

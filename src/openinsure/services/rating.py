@@ -157,14 +157,54 @@ class RatingEngine:
 
         When *as_of_date* is provided, loads factors effective at that
         date for historical rating (regulatory audit support, #181).
+
+        Loads product-specific ``base_rate_per_1000`` from the
+        ``product_pricing`` table when available (#308).
         """
         factors_from_db = await self.load_factors_for_product(product_id, as_of_date=as_of_date)
 
-        engine = CyberRatingEngine()
+        # Load product-specific base_rate from product_pricing table (#308)
+        base_rate = await self._load_product_base_rate(product_id)
+
+        engine = CyberRatingEngine(**({"base_rate_per_thousand": base_rate} if base_rate is not None else {}))
         if factors_from_db:
             engine.set_db_factors(factors_from_db)
 
         return engine.calculate_premium(rating_input)
+
+    async def _load_product_base_rate(self, product_id: str) -> Decimal | None:
+        """Load base_rate_per_1000 from product_pricing table.
+
+        Returns ``None`` when no pricing row exists or the value is absent,
+        letting the caller fall back to the platform default.
+        """
+        from openinsure.infrastructure.factory import get_product_relations_repository
+
+        relations = get_product_relations_repository()
+        if relations is None:
+            return None
+
+        try:
+            pricing = await relations.get_pricing(product_id)
+            if pricing and pricing.get("base_rate_per_1000") is not None:
+                rate = Decimal(str(pricing["base_rate_per_1000"]))
+                if rate > 0:
+                    logger.info(
+                        "rating.product_base_rate_loaded",
+                        product_id=product_id,
+                        base_rate_per_1000=str(rate),
+                    )
+                    return rate
+                logger.warning(
+                    "rating.product_base_rate_invalid",
+                    product_id=product_id,
+                    base_rate_per_1000=str(rate),
+                    reason="base_rate must be > 0, falling back to platform default",
+                )
+        except Exception:
+            logger.debug("rating.pricing_load_failed", product_id=product_id, exc_info=True)
+
+        return None
 
 
 class CyberRatingEngine:

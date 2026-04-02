@@ -22,7 +22,7 @@ from openinsure.infrastructure.factory import (
     get_submission_repository,
 )
 from openinsure.rbac.authority import AuthorityDecision, AuthorityEngine
-from openinsure.services.rating import CyberRatingEngine, RatingInput
+from openinsure.services.rating import CyberRatingEngine, RatingEngine, RatingInput
 
 logger = structlog.get_logger()
 
@@ -164,6 +164,53 @@ def _extract_risk_data(record: dict[str, Any]) -> dict[str, Any]:
     return _parse_json_field(raw)
 
 
+# Industry name → SIC code mapping for portal/API normalization (#316)
+_INDUSTRY_TO_SIC: dict[str, str] = {
+    "technology": "7372",
+    "financial_services": "6021",
+    "finance": "6021",
+    "banking": "6021",
+    "healthcare": "8011",
+    "health": "8011",
+    "education": "8211",
+    "government": "9111",
+    "retail": "5311",
+    "manufacturing": "3599",
+    "insurance": "6311",
+    "legal": "8111",
+    "media": "7812",
+    "energy": "4911",
+    "real_estate": "6512",
+    "transportation": "4210",
+    "hospitality": "7011",
+    "construction": "1522",
+    "agriculture": "0100",
+    "telecommunications": "4813",
+    "consulting": "7389",
+    "nonprofit": "8399",
+    "computer_services": "7372",
+}
+
+
+def _normalize_industry_sic(risk_data: dict[str, Any]) -> str:
+    """Return a SIC code from risk_data, normalizing industry names (#316).
+
+    Priority:
+    1. ``industry_sic_code`` if already a numeric SIC code
+    2. ``industry`` mapped through ``_INDUSTRY_TO_SIC``
+    3. Default ``7372`` (Computer services)
+    """
+    sic = str(risk_data.get("industry_sic_code", "")).strip()
+    if sic and sic[:1].isdigit():
+        return sic
+
+    industry = str(risk_data.get("industry", "")).strip().lower().replace(" ", "_")
+    if industry in _INDUSTRY_TO_SIC:
+        return _INDUSTRY_TO_SIC[industry]
+
+    return sic or "7372"
+
+
 def _build_rating_input(risk_data: dict[str, Any]) -> RatingInput:
     """Build a ``RatingInput`` from a risk-data dict.
 
@@ -173,7 +220,7 @@ def _build_rating_input(risk_data: dict[str, Any]) -> RatingInput:
     return RatingInput(
         annual_revenue=Decimal(str(risk_data.get("annual_revenue", 1_000_000))),
         employee_count=max(1, int(risk_data.get("employee_count", 10))),
-        industry_sic_code=str(risk_data.get("industry_sic_code", "7372")),
+        industry_sic_code=_normalize_industry_sic(risk_data),
         security_maturity_score=float(risk_data.get("security_maturity_score", 5.0)),
         has_mfa=bool(risk_data.get("has_mfa", False)),
         has_endpoint_protection=bool(risk_data.get("has_endpoint_protection", False)),
@@ -725,13 +772,18 @@ class SubmissionService:
         except Exception:
             logger.debug("submissions.rating_engine_fallback_failed", exc_info=True)
 
-        # Second attempt: CyberRatingEngine
+        # Second attempt: RatingEngine (product-aware) → CyberRatingEngine fallback
         if premium is None:
             try:
                 risk_data = _extract_risk_data(record)
                 rating_input = _build_rating_input(risk_data)
-                engine = CyberRatingEngine()
-                rating_result = engine.calculate_premium(rating_input)
+                product_id = record.get("product_id")
+                if product_id:
+                    rating_engine = RatingEngine()
+                    rating_result = await rating_engine.calculate(product_id, rating_input)
+                else:
+                    engine = CyberRatingEngine()
+                    rating_result = engine.calculate_premium(rating_input)
                 premium = float(rating_result.final_premium)
                 rating_breakdown = {
                     "final_premium": premium,
@@ -859,11 +911,16 @@ class SubmissionService:
             except Exception:
                 logger.warning("premium.foundry_call_failed", submission_id=submission_id, exc_info=True)
 
-        # --- Attempt 2: Local CyberRatingEngine ---
+        # --- Attempt 2: Local RatingEngine (product-aware) → CyberRatingEngine ---
         try:
             rating_input = _build_rating_input(risk_data)
-            engine = CyberRatingEngine()
-            rating_result = engine.calculate_premium(rating_input)
+            product_id = record.get("product_id")
+            if product_id:
+                rating_engine = RatingEngine()
+                rating_result = await rating_engine.calculate(product_id, rating_input)
+            else:
+                engine = CyberRatingEngine()
+                rating_result = engine.calculate_premium(rating_input)
             premium = float(rating_result.final_premium)
 
             logger.info(
@@ -1048,6 +1105,38 @@ class SubmissionService:
             }
             await dispatch_bind_events(bind_events, handler_ctx)
             await self._repo.update(submission_id, {"status": "bound", "updated_at": now})
+
+        # ── Record policy transaction (#312) ────────────────────────────
+        from openinsure.services.policy_transaction_service import record_transaction
+
+        await record_transaction(
+            policy_id=policy_id,
+            transaction_type="new_business",
+            effective_date=policy_data.get("effective_date", _now()[:10]),
+            expiration_date=policy_data.get("expiration_date"),
+            premium_change=float(premium),
+            description=f"New business bind for submission {submission_id}",
+            created_by=user_display_name,
+        )
+
+        # ── Record compliance audit event (#314) ──────────────────────────
+        from openinsure.infrastructure.factory import get_compliance_repository
+
+        comp_repo = get_compliance_repository()
+        if comp_repo:
+            await comp_repo.store_audit_event(
+                {
+                    "actor": user_display_name,
+                    "action": "bind",
+                    "entity_type": "policy",
+                    "entity_id": policy_id,
+                    "details": {
+                        "submission_id": submission_id,
+                        "policy_number": policy_number,
+                        "premium": float(premium),
+                    },
+                }
+            )
 
         # Auto-generate declaration page via Foundry document agent (non-critical)
         if foundry.is_available:
@@ -1262,6 +1351,19 @@ class SubmissionService:
                     "created_at": now,
                     "updated_at": now,
                 }
+            )
+
+            # Record policy transaction (#312)
+            from openinsure.services.policy_transaction_service import record_transaction
+
+            await record_transaction(
+                policy_id=policy_id,
+                transaction_type="new_business",
+                effective_date=policy_data.get("effective_date", now[:10]),
+                expiration_date=policy_data.get("expiration_date"),
+                premium_change=float(premium),
+                description=f"New business bind for submission {submission_id}",
+                created_by=user_display_name,
             )
 
             await _auto_cession(policy_id, policy_number, policy_data)

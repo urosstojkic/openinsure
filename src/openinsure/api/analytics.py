@@ -243,29 +243,29 @@ async def get_uw_analytics(
     quote_hours: list[float] = []
     bind_hours: list[float] = []
     for s in submissions:
-        received = _parse_ts(s.get("received_at") or s.get("created_at"))
-        triaged = _parse_ts(s.get("triaged_at"))
-        quoted = _parse_ts(s.get("quoted_at"))
-        bound = _parse_ts(s.get("bound_at"))
+        ts_received = _parse_ts(s.get("received_at") or s.get("created_at"))
+        ts_triaged = _parse_ts(s.get("triaged_at"))
+        ts_quoted = _parse_ts(s.get("quoted_at"))
+        ts_bound = _parse_ts(s.get("bound_at"))
         updated = _parse_ts(s.get("updated_at"))
 
         # intake_to_triage
-        if received and s.get("status") in ("triaging", "underwriting", "quoted", "bound"):
-            t_end = triaged or updated
-            if t_end and t_end > received:
-                intake_hours.append((t_end - received).total_seconds() / 3600)
+        if ts_received and s.get("status") in ("triaging", "underwriting", "quoted", "bound"):
+            t_end = ts_triaged or updated
+            if t_end and t_end > ts_received:
+                intake_hours.append((t_end - ts_received).total_seconds() / 3600)
 
         # triage_to_quote
         if s.get("status") in ("quoted", "bound"):
-            t_start = triaged or received
-            t_end = quoted or updated
+            t_start = ts_triaged or ts_received
+            t_end = ts_quoted or updated
             if t_start and t_end and t_end > t_start:
                 quote_hours.append((t_end - t_start).total_seconds() / 3600)
 
         # quote_to_bind
         if s.get("status") == "bound":
-            t_start = quoted or triaged or received
-            t_end = bound or updated
+            t_start = ts_quoted or ts_triaged or ts_received
+            t_end = ts_bound or updated
             if t_start and t_end and t_end > t_start:
                 bind_hours.append((t_end - t_start).total_seconds() / 3600)
 

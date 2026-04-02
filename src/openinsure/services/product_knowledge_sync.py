@@ -310,7 +310,13 @@ class ProductKnowledgeSyncService:
                     await asyncio.sleep(0.5 * (attempt + 1))
 
         # 2. AI Search — for agent retrieval via search tool
-        if self._search is not None:
+        if self._search is None:
+            logger.warning(
+                "product_sync.search_client_unavailable",
+                product_code=code,
+                reason="AI Search client not initialised — check SEARCH_ENDPOINT config",
+            )
+        else:
             for attempt in range(_MAX_RETRIES + 1):
                 try:
                     # Field names must match the AI Search index schema:
@@ -323,22 +329,36 @@ class ProductKnowledgeSyncService:
                         "source": "product-management",
                         "last_updated": doc["last_updated"],
                     }
+                    logger.info(
+                        "product_sync.search_upload_attempt",
+                        product_code=code,
+                        attempt=attempt,
+                        doc_id=search_doc["id"],
+                        doc_keys=list(search_doc.keys()),
+                        content_length=len(search_doc.get("content", "")),
+                    )
                     upload_result = self._search.upload_documents(documents=[search_doc])
                     result.search_ok = upload_result[0].succeeded if upload_result else False
                     if not result.search_ok and upload_result:
                         err_msg = getattr(upload_result[0], "error_message", None)
+                        status_code = getattr(upload_result[0], "status_code", None)
                         logger.warning(
                             "product_sync.search_upload_rejected",
                             product_code=code,
                             error=err_msg,
+                            status_code=status_code,
+                            key=getattr(upload_result[0], "key", None),
+                            succeeded=getattr(upload_result[0], "succeeded", None),
                         )
                     if result.search_ok:
                         break
-                except Exception:
+                except Exception as exc:
                     logger.warning(
                         "product_sync.search_write_failed",
                         product_code=code,
                         attempt=attempt,
+                        error_type=type(exc).__name__,
+                        error_detail=str(exc)[:500],
                         exc_info=True,
                     )
                     import asyncio
