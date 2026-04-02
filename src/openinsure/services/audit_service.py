@@ -35,7 +35,27 @@ class AuditService:
         reason: str | None = None,
         ip_address: str | None = None,
     ) -> None:
-        """Insert a row into change_log.  No-op when DB is unavailable."""
+        """Insert a row into change_log.  No-op when DB is unavailable.
+
+        Also mirrors the event to the compliance audit trail (#314) so
+        ``GET /compliance/audit-trail`` returns the same data.
+        """
+        # Mirror to compliance audit-trail (#314)
+        try:
+            from openinsure.infrastructure.factory import get_compliance_repository
+
+            comp_repo = get_compliance_repository()
+            if comp_repo:
+                await comp_repo.store_audit_event({
+                    "actor": changed_by,
+                    "action": action,
+                    "entity_type": entity_type,
+                    "entity_id": entity_id,
+                    "details": changes or {},
+                })
+        except Exception:
+            logger.debug("AuditService: compliance mirror failed", exc_info=True)
+
         if self.db is None:
             logger.debug("AuditService: no DB configured — skipping log_change")
             return

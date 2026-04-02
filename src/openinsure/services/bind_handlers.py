@@ -59,6 +59,51 @@ class PolicyCreationHandler:
             else:
                 await policy_repo.create(policy_data)
 
+            # Denormalize coverages onto policy_coverages table (#317)
+            try:
+                from openinsure.infrastructure.factory import get_database_adapter
+
+                db = get_database_adapter()
+                if db:
+                    for cov in policy_data.get("coverages", []):
+                        if not isinstance(cov, dict):
+                            continue
+                        from uuid import uuid4
+
+                        cov_id = str(uuid4())
+                        params = [
+                            cov_id,
+                            policy_data.get("id"),
+                            cov.get("coverage_code", ""),
+                            cov.get("coverage_name", ""),
+                            float(cov.get("limit", 0)),
+                            float(cov.get("deductible", 0)),
+                            float(cov.get("premium", 0)),
+                        ]
+                        if txn:
+                            await db.execute_query(
+                                """INSERT INTO policy_coverages
+                                   (id, policy_id, coverage_code, coverage_name,
+                                    coverage_limit, deductible, premium)
+                                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                                params,
+                                txn=txn,
+                            )
+                        else:
+                            await db.execute_query(
+                                """INSERT INTO policy_coverages
+                                   (id, policy_id, coverage_code, coverage_name,
+                                    coverage_limit, deductible, premium)
+                                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                                params,
+                            )
+            except Exception:
+                logger.warning(
+                    "policy_creation_handler.coverage_denorm_failed",
+                    policy_id=policy_data.get("id"),
+                    exc_info=True,
+                )
+
             logger.info(
                 "policy_creation_handler.policy_created",
                 policy_id=policy_data.get("id"),
@@ -112,7 +157,32 @@ class BillingHandler:
             txn = context.get("txn")
             if txn:
                 kwargs["txn"] = txn
-            await billing_fn(**kwargs)
+            billing_record = await billing_fn(**kwargs)
+
+            # Link billing_account_id back to the policy (#318)
+            billing_account_id = billing_record.get("id") if isinstance(billing_record, dict) else None
+            if billing_account_id:
+                policy_repo = context.get("policy_repo")
+                if policy_repo:
+                    try:
+                        if txn:
+                            await policy_repo.update(
+                                context["policy_id"],
+                                {"billing_account_id": billing_account_id},
+                                txn=txn,
+                            )
+                        else:
+                            await policy_repo.update(
+                                context["policy_id"],
+                                {"billing_account_id": billing_account_id},
+                            )
+                    except Exception:
+                        logger.warning(
+                            "billing_handler.link_billing_account_failed",
+                            policy_id=context["policy_id"],
+                            billing_account_id=billing_account_id,
+                            exc_info=True,
+                        )
 
             logger.info(
                 "billing_handler.billing_created",

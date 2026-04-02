@@ -129,7 +129,9 @@ async def get_product_context(submission: dict[str, Any]) -> list[dict[str, Any]
                     f"Description: {match.get('description', '')}",
                 ]
                 if appetite_rules:
-                    lines = [f"  - {r.get('field', '')} {r.get('operator', '')} {r.get('value', '')}" for r in appetite_rules]
+                    lines = [
+                        f"  - {r.get('field', '')} {r.get('operator', '')} {r.get('value', '')}" for r in appetite_rules
+                    ]
                     content_parts.append("Appetite Rules:\n" + "\n".join(lines))
                 if coverages:
                     lines = [f"  - {c.get('name', '')}: limit ${c.get('default_limit', 0):,.0f}" for c in coverages]

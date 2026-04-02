@@ -238,7 +238,11 @@ def _format_decision_details(audit_entry: dict[str, Any]) -> str:
         if rec:
             parts.append(f"Recommendation: {rec}")
     elif action in ("quote", "update") and changes.get("premium"):
-        parts.append(f"Premium: ${changes['premium']:,.0f}" if isinstance(changes["premium"], (int, float)) else f"Premium: {changes['premium']}")
+        parts.append(
+            f"Premium: ${changes['premium']:,.0f}"
+            if isinstance(changes["premium"], (int, float))
+            else f"Premium: {changes['premium']}"
+        )
     elif action == "bind":
         pid = changes.get("policy_id", "")
         if pid:
@@ -331,11 +335,28 @@ async def create_submission(body: SubmissionCreate) -> SubmissionResponse:
         ]
     party_id = await party_svc.resolve_or_create(applicant_data)
 
+    # Auto-grant underwriting consent for GDPR compliance (#315)
+    try:
+        from openinsure.services.gdpr_service import get_gdpr_service
+
+        gdpr_svc = get_gdpr_service()
+        await gdpr_svc.grant_consent(
+            party_id=party_id,
+            purpose="insurance_underwriting",
+            evidence="Implied consent via submission creation",
+        )
+    except Exception:
+        _logger.debug("gdpr.auto_consent_failed", party_id=party_id, exc_info=True)
+
+    # Derive product_id from line_of_business so policies inherit it (#313)
+    product_id = f"{body.line_of_business}-smb"
+
     record: dict[str, Any] = {
         "id": sid,
         "applicant_name": body.applicant_name,
         "applicant_email": body.applicant_email,
         "applicant_id": party_id,
+        "product_id": product_id,
         "status": body.status or SubmissionStatus.RECEIVED,
         "channel": body.channel,
         "line_of_business": body.line_of_business,

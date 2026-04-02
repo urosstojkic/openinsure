@@ -42,6 +42,8 @@ class ProductRelationsRepository:
         try:
             await self._sync_coverages(product_id, product_data.get("coverages", []))
             await self._sync_rating_factors(product_id, product_data.get("rating_factors", []))
+            # Also sync structured rating_factor_tables → rating_factor_tables SQL table (#319)
+            await self._sync_rating_factor_tables(product_id, product_data.get("rating_factor_tables", []))
             await self._sync_appetite_rules(product_id, product_data.get("appetite_rules", []))
             await self._sync_authority_limits(product_id, product_data.get("authority_limits", {}))
             await self._sync_territories(product_id, product_data.get("territories", []))
@@ -202,6 +204,53 @@ class ProductRelationsRepository:
                 ],
             )
 
+    async def _sync_rating_factor_tables(self, product_id: str, tables: Any) -> None:
+        """Upsert structured rating factor tables into ``rating_factor_tables`` (#319).
+
+        The API model stores tables as ``[{name, description, entries: [{key, multiplier, description}]}]``.
+        The SQL table stores one row per (factor_category, factor_key).
+        """
+        items = self._ensure_list(tables)
+        if not items:
+            return
+
+        await self.db.execute_query("DELETE FROM rating_factor_tables WHERE product_id = ?", [product_id])
+
+        from uuid import uuid4
+
+        sort_order = 0
+        for table in items:
+            if not isinstance(table, dict):
+                continue
+            category = table.get("name") or table.get("factor_category", "")
+            if not category:
+                continue
+            table_desc = table.get("description", "")
+            for entry in self._ensure_list(table.get("entries", [])):
+                if not isinstance(entry, dict):
+                    continue
+                factor_key = entry.get("key") or entry.get("factor_key", "")
+                if not factor_key:
+                    continue
+                multiplier = self._dec(entry.get("multiplier", 1.0))
+                entry_desc = entry.get("description", table_desc)
+                await self.db.execute_query(
+                    """INSERT INTO rating_factor_tables
+                       (id, product_id, factor_category, factor_key, multiplier,
+                        description, sort_order)
+                       VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                    [
+                        str(uuid4()),
+                        product_id,
+                        str(category),
+                        str(factor_key),
+                        multiplier,
+                        entry_desc,
+                        sort_order,
+                    ],
+                )
+                sort_order += 1
+
     async def _sync_appetite_rules(self, product_id: str, rules: Any) -> None:
         """Upsert appetite rules into ``product_appetite_rules``."""
         items = self._ensure_list(rules)
@@ -227,7 +276,13 @@ class ProductRelationsRepository:
             numeric_max = ar.get("numeric_max")
             string_value = ar.get("string_value")
 
-            if api_value is not None and numeric_value is None and numeric_min is None and numeric_max is None and string_value is None:
+            if (
+                api_value is not None
+                and numeric_value is None
+                and numeric_min is None
+                and numeric_max is None
+                and string_value is None
+            ):
                 if operator == "between" and isinstance(api_value, dict):
                     numeric_min = api_value.get("min")
                     numeric_max = api_value.get("max")
