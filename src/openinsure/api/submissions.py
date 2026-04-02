@@ -99,6 +99,7 @@ class SubmissionCreate(BaseModel):
     line_of_business: LineOfBusiness = LineOfBusiness.CYBER
     risk_data: dict[str, Any] = Field(default_factory=dict)
     cyber_risk_data: dict[str, Any] = Field(default_factory=dict)
+    product_id: str | None = Field(None, description="Product ID to use for rating")
     effective_date: str | None = None
     expiration_date: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
@@ -348,8 +349,8 @@ async def create_submission(body: SubmissionCreate) -> SubmissionResponse:
     except Exception:
         _logger.debug("gdpr.auto_consent_failed", party_id=party_id, exc_info=True)
 
-    # Derive product_id from line_of_business so policies inherit it (#313)
-    product_id = f"{body.line_of_business}-smb"
+    # Use explicit product_id if provided, else derive from LOB (#308, #313)
+    product_id = body.product_id or f"{body.line_of_business}-smb"
 
     record: dict[str, Any] = {
         "id": sid,
