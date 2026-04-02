@@ -15,6 +15,7 @@ import structlog
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
 from pydantic import BaseModel, Field
 
+from openinsure.domain.exceptions import SubmissionNotFoundError
 from openinsure.infrastructure.factory import get_audit_service, get_blob_storage, get_submission_repository
 from openinsure.rate_limit import limiter
 from openinsure.rbac.auth import CurrentUser, get_current_user
@@ -197,10 +198,10 @@ class DocumentUploadResponse(BaseModel):
 
 
 async def _get_submission(submission_id: str) -> dict[str, Any]:
-    """Retrieve a submission or raise 404."""
+    """Retrieve a submission or raise SubmissionNotFoundError."""
     sub = await _repo.get_by_id(submission_id)
     if sub is None:
-        raise HTTPException(status_code=404, detail=f"Submission {submission_id} not found")
+        raise SubmissionNotFoundError(submission_id)
     return sub
 
 
@@ -213,7 +214,51 @@ def _now() -> str:
 # ---------------------------------------------------------------------------
 
 
-@router.post("", response_model=SubmissionResponse, status_code=201)
+@router.post(
+    "",
+    response_model=SubmissionResponse,
+    status_code=201,
+    summary="Create submission",
+    description="Accepts applicant information and risk data for a new insurance "
+    "submission. The submission enters the pipeline at **received** status "
+    "and can be advanced through triage → quote → bind.",
+    openapi_extra={
+        "x-openapi-examples": {
+            "cyber_small_business": {
+                "summary": "Small business cyber submission",
+                "value": {
+                    "applicant_name": "Acme Cyber Corp",
+                    "applicant_email": "risk@acmecyber.com",
+                    "channel": "api",
+                    "line_of_business": "cyber",
+                    "risk_data": {
+                        "annual_revenue": 5000000,
+                        "employee_count": 50,
+                        "industry": "Technology",
+                        "security_maturity_score": 7,
+                    },
+                },
+            },
+            "cyber_enterprise": {
+                "summary": "Enterprise cyber submission",
+                "value": {
+                    "applicant_name": "GlobalTech Holdings",
+                    "applicant_email": "underwriting@globaltech.com",
+                    "channel": "broker",
+                    "line_of_business": "cyber",
+                    "risk_data": {
+                        "annual_revenue": 500000000,
+                        "employee_count": 5000,
+                        "industry": "Financial Services",
+                        "security_maturity_score": 9,
+                        "has_mfa": True,
+                        "has_endpoint_protection": True,
+                    },
+                },
+            },
+        }
+    },
+)
 async def create_submission(body: SubmissionCreate) -> SubmissionResponse:
     """Create a new insurance submission.
 
@@ -323,7 +368,13 @@ async def ingest_acord_xml(file: UploadFile = File(...)) -> SubmissionResponse:
     return SubmissionResponse(**record)
 
 
-@router.get("", response_model=SubmissionList)
+@router.get(
+    "",
+    response_model=SubmissionList,
+    summary="List submissions",
+    description="List submissions with optional filtering by status, channel, "
+    "line of business, and date range. Returns paginated results.",
+)
 async def list_submissions(
     status: SubmissionStatus | None = Query(None, description="Filter by status"),
     channel: SubmissionChannel | None = Query(None, description="Filter by intake channel"),
@@ -356,7 +407,12 @@ async def list_submissions(
     )
 
 
-@router.get("/{submission_id}", response_model=SubmissionResponse)
+@router.get(
+    "/{submission_id}",
+    response_model=SubmissionResponse,
+    summary="Get submission",
+    description="Retrieve a single submission by its unique ID.",
+)
 async def get_submission(submission_id: str) -> SubmissionResponse:
     """Retrieve a single submission by ID."""
     return SubmissionResponse(**await _get_submission(submission_id))
@@ -390,7 +446,15 @@ async def update_submission(submission_id: str, body: SubmissionUpdate) -> Submi
     return SubmissionResponse(**record)
 
 
-@router.post("/{submission_id}/triage", response_model=TriageResult)
+@router.post(
+    "/{submission_id}/triage",
+    response_model=TriageResult,
+    summary="Triage submission",
+    description="Trigger AI-powered triage on a submission. Uses the Foundry triage "
+    "agent to assess risk appetite, assign a risk score, and recommend "
+    "whether to proceed to quoting or decline. Advances the submission "
+    "from **received** → **underwriting**.",
+)
 @limiter.limit("20/minute")
 async def triage_submission(request: Request, submission_id: str) -> TriageResult:
     """Trigger AI-powered triage on a submission.
@@ -429,7 +493,14 @@ async def triage_submission(request: Request, submission_id: str) -> TriageResul
     )
 
 
-@router.post("/{submission_id}/quote", response_model=QuoteResponse)
+@router.post(
+    "/{submission_id}/quote",
+    response_model=QuoteResponse,
+    summary="Generate quote",
+    description="Generate a premium quote using the Foundry underwriting agent "
+    "and CyberRatingEngine. Includes authority check — if the premium "
+    "exceeds the user's delegated authority, the submission is escalated.",
+)
 @limiter.limit("20/minute")
 async def generate_quote(
     request: Request, submission_id: str, user: CurrentUser = Depends(get_current_user)

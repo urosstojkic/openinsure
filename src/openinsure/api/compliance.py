@@ -216,7 +216,13 @@ async def get_compliance_stats() -> ComplianceStatsResponse:
     return ComplianceStatsResponse(**stats)
 
 
-@router.get("/decisions", response_model=DecisionList)
+@router.get(
+    "/decisions",
+    response_model=DecisionList,
+    summary="List AI decisions",
+    description="List AI decision records (EU AI Act Art. 12 audit trail) with optional "
+    "filtering by decision type, entity type, and entity ID.",
+)
 async def list_decisions(
     decision_type: DecisionType | None = Query(None, description="Filter by decision type"),
     entity_type: str | None = Query(None, description="Filter by entity type"),

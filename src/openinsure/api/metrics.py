@@ -199,7 +199,13 @@ class ExecutiveDashboardResponse(BaseModel):
     agent_impact: AgentImpact = Field(default_factory=AgentImpact)
 
 
-@router.get("/summary", response_model=SummaryMetricsResponse)
+@router.get(
+    "/summary",
+    response_model=SummaryMetricsResponse,
+    summary="Summary KPIs",
+    description="Top-level key performance indicators for the executive dashboard: "
+    "submissions, policies, claims, premiums, loss ratios.",
+)
 async def get_summary_metrics() -> dict[str, Any]:
     """Top-level KPIs for the main dashboard."""
     from openinsure.services.escalation import count_pending

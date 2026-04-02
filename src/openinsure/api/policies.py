@@ -15,6 +15,7 @@ import structlog
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
+from openinsure.domain.exceptions import PolicyNotFoundError
 from openinsure.infrastructure.factory import get_audit_service, get_policy_repository
 
 router = APIRouter()
@@ -218,7 +219,7 @@ class PolicyTransactionList(BaseModel):
 async def _get_policy(policy_id: str) -> dict[str, Any]:
     policy = await _repo.get_by_id(policy_id)
     if policy is None:
-        raise HTTPException(status_code=404, detail=f"Policy {policy_id} not found")
+        raise PolicyNotFoundError(policy_id)
     return policy
 
 
@@ -235,7 +236,13 @@ def _generate_policy_number() -> str:
 # ---------------------------------------------------------------------------
 
 
-@router.post("", response_model=PolicyResponse, status_code=201)
+@router.post(
+    "",
+    response_model=PolicyResponse,
+    status_code=201,
+    summary="Create policy",
+    description="Create a new policy record, typically as a result of binding a submission.",
+)
 async def create_policy(body: PolicyCreate) -> PolicyResponse:
     """Create a policy (typically from binding a submission)."""
     pid = str(uuid.uuid4())
@@ -263,7 +270,12 @@ async def create_policy(body: PolicyCreate) -> PolicyResponse:
     return PolicyResponse(**record)
 
 
-@router.get("", response_model=PolicyList)
+@router.get(
+    "",
+    response_model=PolicyList,
+    summary="List policies",
+    description="List policies with optional filtering by status, policyholder, and product.",
+)
 async def list_policies(
     status: PolicyStatus | None = Query(None, description="Filter by policy status"),
     policyholder: str | None = Query(None, description="Filter by policyholder name (substring)"),

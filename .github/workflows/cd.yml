@@ -10,6 +10,13 @@ permissions:
   contents: read
   id-token: write # For Azure OIDC login
 
+env:
+  # Resource names — override via repo variables if desired
+  ACR_NAME: ${{ vars.ACR_NAME || 'openinsureacr' }}
+  RESOURCE_GROUP: ${{ vars.RESOURCE_GROUP || 'openinsure-rg' }}
+  BACKEND_APP: ${{ vars.BACKEND_APP || 'openinsure-backend' }}
+  DASHBOARD_APP: ${{ vars.DASHBOARD_APP || 'openinsure-dashboard' }}
+
 jobs:
   deploy:
     # CD is disabled until Azure OIDC secrets are configured.
@@ -27,48 +34,80 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
 
-      - name: Azure Login
+      - name: Azure Login (OIDC)
         uses: azure/login@v2
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Build & Push Backend
+      # ── Database Migrations ──────────────────────────────────────────
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install migration dependencies
+        run: pip install pyodbc structlog pydantic pydantic-settings
+
+      - name: Run database migrations
+        env:
+          OPENINSURE_STORAGE_MODE: azure
+          OPENINSURE_SQL_CONNECTION_STRING: ${{ secrets.SQL_CONNECTION_STRING }}
         run: |
-          az acr build --registry openinsuredevacr \
+          python -c "
+          import asyncio
+          from openinsure.infrastructure.auto_migrate import apply_pending_migrations
+          applied = asyncio.run(apply_pending_migrations())
+          print(f'Migrations applied: {applied or \"up-to-date\"}')
+          "
+
+      # ── Build Container Images ───────────────────────────────────────
+      - name: Build & push backend image
+        run: |
+          az acr build --registry ${{ env.ACR_NAME }} \
             --image openinsure-backend:${{ github.event.workflow_run.head_sha }} \
             --image openinsure-backend:latest \
             --file Dockerfile . \
             --no-logs \
-            --cache-from type=registry,ref=openinsuredevacr.azurecr.io/openinsure-backend:latest
+            --cache-from type=registry,ref=${{ env.ACR_NAME }}.azurecr.io/openinsure-backend:latest
 
-      - name: Build & Push Dashboard
+      - name: Build & push dashboard image
         run: |
-          az acr build --registry openinsuredevacr \
+          az acr build --registry ${{ env.ACR_NAME }} \
             --image openinsure-dashboard:${{ github.event.workflow_run.head_sha }} \
             --image openinsure-dashboard:latest \
             --file dashboard/Dockerfile dashboard/ \
             --no-logs \
-            --cache-from type=registry,ref=openinsuredevacr.azurecr.io/openinsure-dashboard:latest
+            --cache-from type=registry,ref=${{ env.ACR_NAME }}.azurecr.io/openinsure-dashboard:latest
 
-      - name: Deploy Backend
+      # ── Deploy to Container Apps ─────────────────────────────────────
+      - name: Deploy backend
         run: |
           az containerapp update \
-            --name openinsure-backend \
-            --resource-group openinsure-dev-sc \
-            --image openinsuredevacr.azurecr.io/openinsure-backend:${{ github.event.workflow_run.head_sha }} \
+            --name ${{ env.BACKEND_APP }} \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --image ${{ env.ACR_NAME }}.azurecr.io/openinsure-backend:${{ github.event.workflow_run.head_sha }} \
             --output none
 
-      - name: Deploy Dashboard
+      - name: Deploy dashboard
         run: |
           az containerapp update \
-            --name openinsure-dashboard \
-            --resource-group openinsure-dev-sc \
-            --image openinsuredevacr.azurecr.io/openinsure-dashboard:${{ github.event.workflow_run.head_sha }} \
+            --name ${{ env.DASHBOARD_APP }} \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --image ${{ env.ACR_NAME }}.azurecr.io/openinsure-dashboard:${{ github.event.workflow_run.head_sha }} \
             --output none
 
-      - name: Smoke Test
+      # ── Post-deploy Verification ─────────────────────────────────────
+      - name: Wait for rollout
+        run: sleep 30
+
+      - name: Smoke test
         run: |
           pip install httpx
-          python scripts/smoke_test.py https://<your-backend-url>
+          python scripts/smoke_test.py https://${{ env.BACKEND_APP }}.<your-env>.<region>.azurecontainerapps.io
+
+      - name: Foundry smoke test
+        run: |
+          python scripts/foundry_smoke_test.py https://${{ env.BACKEND_APP }}.<your-env>.<region>.azurecontainerapps.io
+        continue-on-error: true  # Foundry may not be configured in all environments

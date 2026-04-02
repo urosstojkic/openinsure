@@ -1114,6 +1114,50 @@ The MCP server exposes OpenInsure as a tool provider for AI agents (GitHub Copil
 
 ---
 
+### API Versioning Strategy
+
+All API endpoints are served under the `/api/v1/` prefix. The versioning strategy follows these rules:
+
+1. **URL-path versioning** — all endpoints are prefixed with `/api/v1/`. This makes the version explicit in every request and allows proxies to route by version.
+
+2. **Backward-compatible changes** (no version bump required):
+   - Adding new optional fields to response models
+   - Adding new endpoints
+   - Adding new query parameters with defaults
+   - Widening accepted input types (e.g., accepting both string and number)
+
+3. **Breaking changes require a new version** (`/api/v2/`):
+   - Removing or renaming response fields
+   - Changing field types or semantics
+   - Removing endpoints
+   - Changing authentication requirements
+
+4. **Deprecation process:**
+   - Deprecated endpoints return a `Deprecation` header: `Deprecation: true`
+   - A `Sunset` header indicates the planned removal date: `Sunset: Sat, 01 Mar 2027 00:00:00 GMT`
+   - Deprecated endpoints are documented in the OpenAPI spec with `deprecated: true`
+   - Minimum deprecation window: **6 months** before removal
+
+5. **Version lifecycle:**
+
+   | Phase | Duration | Behaviour |
+   |-------|----------|-----------|
+   | Active | Indefinite | Full support, new features |
+   | Deprecated | ≥ 6 months | Bug fixes only, deprecation headers |
+   | Sunset | N/A | Removed, returns 410 Gone |
+
+6. **Response envelope** — all list endpoints return a consistent paginated envelope:
+   ```json
+   {
+     "items": [...],
+     "total": 42,
+     "skip": 0,
+     "limit": 20
+   }
+   ```
+
+---
+
 ## 7. Security & Compliance
 
 ### Authentication & Authorization
@@ -1713,6 +1757,11 @@ These decisions are foundational and unlikely to change. They are recorded here 
 | **ADR-008** | Explicit transaction boundaries for multi-step operations | Bind (policy + billing + status) wrapped in a single DB transaction to prevent orphan records. Non-critical ops (events, AI, compliance) excluded to avoid coupling. Cessions use a separate transaction for independent atomicity |
 | **ADR-009** | DDD aggregate boundaries with synchronous event dispatch | Submission, Policy, Claim as independent consistency units (Evans DDD Ch.6). Cross-aggregate communication via domain events dispatched synchronously for now. Async event-driven architecture is future work. Each aggregate validates its own invariants before mutating (#170) |
 | **ADR-010** | Data-driven workflow templates with hardcoded fallback | Workflow steps stored in SQL (per-product configurable) with in-memory defaults as fallback. Product-specific templates loaded via `WorkflowRegistry` only when `product_id` is specified; otherwise hardcoded definitions preserved for backward compatibility (#180) |
+| **ADR-011** | URL-path API versioning (`/api/v1/`) | Explicit version in URL for proxy routing and client clarity. Breaking changes require `/api/v2/` with 6-month deprecation window. Avoids header-based versioning complexity (#288) |
+| **ADR-012** | Three-tier health probes (liveness / readiness / startup) | `/health` is lightweight (no dep checks) to avoid restart loops during transient outages. `/ready` checks all deps for load-balancer decisions. `/startup` allows slow initialisation without premature restarts (#294) |
+| **ADR-013** | Middleware extraction pattern | HTTP middleware (broker scope enforcement, rate limiting) extracted to `middleware.py` to keep `main.py` under 200 lines. Improves testability and separation of concerns (#295) |
+| **ADR-014** | Typed service interfaces with Pydantic models | Critical service methods (`run_triage`, `generate_quote`) use Pydantic input/output models instead of `dict[str, Any]` for type safety, IDE support, and self-documenting APIs (#296) |
+| **ADR-015** | Consistent paginated response envelope | All list endpoints return `{items, total, skip, limit}` via `PaginatedResponse` model. Enables uniform client-side pagination and avoids per-endpoint response format divergence (#287) |
 
 ## Appendix D: Related Documentation
 
@@ -1721,6 +1770,7 @@ These decisions are foundational and unlikely to change. They are recorded here 
 | [Architecture Specification v01](architecture/architecture-spec-v01.md) | North star vision document | Architect, CTO |
 | [Operating Model v02](architecture/operating-model-v02.md) | AI-native carrier/MGA operating model | CTO, COO, Strategy |
 | [Feature Guide](guides/feature-guide.md) | Detailed walkthrough of all 16 features | Product, Demo, QA |
+| [Developer Quickstart](guides/developer-quickstart.md) | Local setup, first API call, run tests | New developers |
 | [Enterprise Integration Guide](guides/enterprise-integration-guide.md) | Production deployment and integration | DevOps, Solutions Architect |
 | [CHANGELOG](../CHANGELOG.md) | Version history and release notes | All |
 

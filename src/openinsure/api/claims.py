@@ -17,6 +17,7 @@ import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
+from openinsure.domain.exceptions import ClaimNotFoundError
 from openinsure.infrastructure.factory import (
     get_audit_service,
     get_claim_repository,
@@ -233,7 +234,7 @@ class ReopenResponse(BaseModel):
 async def _get_claim(claim_id: str) -> dict[str, Any]:
     claim = await _repo.get_by_id(claim_id)
     if claim is None:
-        raise HTTPException(status_code=404, detail=f"Claim {claim_id} not found")
+        raise ClaimNotFoundError(claim_id)
     return claim
 
 
@@ -250,8 +251,20 @@ def _generate_claim_number() -> str:
 # ---------------------------------------------------------------------------
 
 
-@router.get("/queue")
-async def get_claims_queue(limit: int = Query(20, ge=1, le=100)) -> dict[str, Any]:
+class ClaimsQueueResponse(BaseModel):
+    """Paginated claims adjuster work queue response."""
+
+    items: list[dict[str, Any]]
+    total: int
+    skip: int
+    limit: int
+
+
+@router.get("/queue", response_model=ClaimsQueueResponse)
+async def get_claims_queue(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+) -> ClaimsQueueResponse:
     """Get the claims adjuster's work queue.
 
     Returns open claims sorted by severity-based priority.
@@ -305,7 +318,9 @@ async def get_claims_queue(limit: int = Query(20, ge=1, le=100)) -> dict[str, An
             item["fraud_score"] = round(base * base * 0.8 + 0.05, 2)
 
     queue.sort(key=lambda x: ({"urgent": 0, "high": 1, "medium": 2, "low": 3}.get(x.get("priority", "medium"), 2),))
-    return {"items": queue[:limit], "total": len(queue)}
+    total = len(queue)
+    page = queue[skip : skip + limit]
+    return ClaimsQueueResponse(items=page, total=total, skip=skip, limit=limit)
 
 
 # ---------------------------------------------------------------------------
@@ -413,7 +428,42 @@ async def subrogation_queue(
     return SubrogationQueueList(items=page, total=total, skip=skip, limit=limit)
 
 
-@router.post("", response_model=ClaimResponse, status_code=201)
+@router.post(
+    "",
+    response_model=ClaimResponse,
+    status_code=201,
+    summary="File a claim (FNOL)",
+    description="First Notice of Loss — file a new claim against an active policy. "
+    "The claim enters the pipeline at **reported** status.",
+    openapi_extra={
+        "x-openapi-examples": {
+            "ransomware": {
+                "summary": "Ransomware attack claim",
+                "value": {
+                    "policy_id": "pol-123",
+                    "claimant_name": "Acme Corp",
+                    "loss_date": "2026-01-15",
+                    "date_reported": "2026-01-16",
+                    "claim_type": "ransomware",
+                    "description": "Ransomware attack encrypting production servers",
+                    "estimated_amount": 250000,
+                },
+            },
+            "data_breach": {
+                "summary": "Data breach claim",
+                "value": {
+                    "policy_id": "pol-456",
+                    "claimant_name": "TechStart Inc",
+                    "loss_date": "2026-02-01",
+                    "date_reported": "2026-02-02",
+                    "claim_type": "data_breach",
+                    "description": "Unauthorised access to customer PII database",
+                    "estimated_amount": 500000,
+                },
+            },
+        }
+    },
+)
 async def create_claim(body: ClaimCreate) -> ClaimResponse:
     """Report a new claim (First Notice of Loss).
 
@@ -477,7 +527,12 @@ async def create_claim(body: ClaimCreate) -> ClaimResponse:
     return ClaimResponse(**record)
 
 
-@router.get("", response_model=ClaimList)
+@router.get(
+    "",
+    response_model=ClaimList,
+    summary="List claims",
+    description="List claims with optional filtering by status and pagination.",
+)
 async def list_claims(
     status: ClaimStatus | None = Query(None, description="Filter by claim status"),
     claim_type: ClaimType | None = Query(None, description="Filter by claim type"),

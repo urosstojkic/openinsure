@@ -1,4 +1,11 @@
-"""Health check endpoints for OpenInsure."""
+"""Health check endpoints for OpenInsure.
+
+Three-tier health probe design for container orchestrators:
+
+* ``/health``  — **Liveness**: is the process alive? Lightweight, no dep checks.
+* ``/ready``   — **Readiness**: can the pod serve traffic? Checks all deps.
+* ``/startup`` — **Startup**: has the app finished initialising? Heavy checks OK.
+"""
 
 from __future__ import annotations
 
@@ -34,17 +41,25 @@ class HealthChecks(BaseModel):
 
 
 class HealthResponse(BaseModel):
-    """Liveness probe response."""
+    """Liveness probe response — lightweight, no dependency checks."""
 
     status: str
     checks: HealthChecks
 
 
 class ReadyResponse(BaseModel):
-    """Readiness probe response."""
+    """Readiness probe response — all dependencies checked."""
 
     status: str
     checks: dict[str, str]
+
+
+class StartupResponse(BaseModel):
+    """Startup probe response — full dependency verification."""
+
+    status: str
+    checks: dict[str, str]
+    version: str
 
 
 # ---------------------------------------------------------------------------
@@ -110,34 +125,39 @@ async def root() -> RootResponse:
     )
 
 
-@router.get("/health", response_model=HealthResponse)
+@router.get(
+    "/health",
+    response_model=HealthResponse,
+    summary="Liveness probe",
+    description="Lightweight check that the process is alive. Does **not** call "
+    "downstream dependencies — use ``/ready`` for that. Container "
+    "orchestrators should restart the pod only when this returns non-200.",
+)
 async def health() -> HealthResponse:
-    """Liveness probe — confirms the process is running and core deps reachable.
+    """Liveness probe — confirms the process is running.
 
-    Checks SQL connectivity and Foundry availability in addition to API status.
-    Returns "healthy" only when all configured dependencies are reachable.
+    This endpoint intentionally skips expensive dependency checks so that
+    a slow database or Foundry outage does not trigger a restart loop.
     """
-    db_status = await _check_database()
-    foundry_status = await _check_foundry()
-
-    checks = HealthChecks(api="ok", database=db_status, foundry=foundry_status)
-
-    # Healthy if API is ok and configured deps aren't in error state
-    all_ok = all(v in ("ok", "not_configured", "unchecked") for v in (checks.api, checks.database, checks.foundry))
     return HealthResponse(
-        status="healthy" if all_ok else "degraded",
-        checks=checks,
+        status="healthy",
+        checks=HealthChecks(api="ok"),
     )
 
 
-@router.get("/ready", response_model=ReadyResponse)
+@router.get(
+    "/ready",
+    response_model=ReadyResponse,
+    summary="Readiness probe",
+    description="Checks all downstream dependencies (SQL, Foundry). Returns "
+    "``ready`` only when every configured dependency is reachable. "
+    "Container Apps should remove the pod from the load-balancer pool "
+    "when this returns non-200.",
+)
 async def ready() -> ReadyResponse:
     """Readiness probe — checks all downstream dependencies.
 
-    Returns "ready" only when ALL configured dependencies are reachable.
-    Container Apps should use this to determine if the pod can serve traffic.
-
-    Probe configuration note for Container Apps (infra-level):
+    Container Apps configuration:
     ```yaml
     readinessProbe:
       httpGet:
@@ -152,6 +172,13 @@ async def ready() -> ReadyResponse:
         port: 8000
       initialDelaySeconds: 5
       periodSeconds: 30
+    startupProbe:
+      httpGet:
+        path: /startup
+        port: 8000
+      initialDelaySeconds: 3
+      periodSeconds: 5
+      failureThreshold: 30
     ```
     """
     checks: dict[str, str] = {"api": "ok"}
@@ -163,4 +190,32 @@ async def ready() -> ReadyResponse:
     return ReadyResponse(
         status="ready" if all_ok else "degraded",
         checks=checks,
+    )
+
+
+@router.get(
+    "/startup",
+    response_model=StartupResponse,
+    summary="Startup probe",
+    description="Full initialisation check — verifies database and Foundry are "
+    "reachable before the orchestrator begins sending liveness/readiness "
+    "probes. Allowed to take longer than ``/health``.",
+)
+async def startup() -> StartupResponse:
+    """Startup probe — verifies the app has finished initialising.
+
+    Runs the same dependency checks as ``/ready`` but is only polled during
+    container startup (``startupProbe``).  Once this returns 200 the
+    orchestrator switches to liveness + readiness probes.
+    """
+    settings = get_settings()
+    checks: dict[str, str] = {"api": "ok"}
+    checks["database"] = await _check_database()
+    checks["foundry"] = await _check_foundry()
+
+    all_ok = all(v in ("ok", "not_configured") for v in checks.values())
+    return StartupResponse(
+        status="started" if all_ok else "starting",
+        checks=checks,
+        version=settings.app_version,
     )

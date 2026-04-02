@@ -1,7 +1,14 @@
 // ──────────────────────────────────────────────────────────────────────────────
 // OpenInsure Platform — Root Deployment Template
 // Orchestrates all infrastructure modules for the OpenInsure platform.
-// Deploys managed identity, monitoring, data stores, messaging, and RBAC.
+// Deploys managed identity, networking, monitoring, data stores, messaging,
+// container apps, and RBAC.
+//
+// Usage:
+//   az deployment group create \
+//     --resource-group <rg-name> \
+//     --template-file infra/main.bicep \
+//     --parameters infra/parameters/dev.bicepparam
 // ──────────────────────────────────────────────────────────────────────────────
 
 targetScope = 'resourceGroup'
@@ -36,6 +43,32 @@ resource managedIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-
   name: '${projectName}-${environmentName}-identity'
   location: location
   tags: tags
+}
+
+// ─── Networking ───────────────────────────────────────────────────────────────
+// VNet with subnets for Container Apps, private endpoints, and services.
+
+module vnet './modules/vnet.bicep' = {
+  name: 'vnet-deployment'
+  params: {
+    projectName: projectName
+    environmentName: environmentName
+    location: location
+    tags: tags
+  }
+}
+
+// ─── Container Registry ──────────────────────────────────────────────────────
+
+module acr './modules/acr.bicep' = {
+  name: 'acr-deployment'
+  params: {
+    projectName: projectName
+    environmentName: environmentName
+    location: location
+    resourceToken: resourceToken
+    tags: tags
+  }
 }
 
 // ─── Monitoring ───────────────────────────────────────────────────────────────
@@ -120,6 +153,28 @@ module eventgrid './modules/eventgrid.bicep' = {
   }
 }
 
+// ─── Container Apps ───────────────────────────────────────────────────────────
+// Backend + Dashboard deployed into a VNet-integrated Container Apps environment.
+
+module containerapps './modules/containerapps.bicep' = {
+  name: 'containerapps-deployment'
+  params: {
+    projectName: projectName
+    environmentName: environmentName
+    location: location
+    tags: tags
+    logAnalyticsWorkspaceId: monitoring.outputs.workspaceId
+    containerAppsSubnetId: vnet.outputs.containerAppsSubnetId
+    acrLoginServer: acr.outputs.acrLoginServer
+    managedIdentityId: managedIdentity.id
+    appInsightsConnectionString: monitoring.outputs.appInsightsConnectionString
+    sqlServerFqdn: sql.outputs.serverFqdn
+    sqlDatabaseName: sql.outputs.databaseName
+    cosmosEndpoint: cosmos.outputs.accountEndpoint
+    searchEndpoint: search.outputs.searchEndpoint
+  }
+}
+
 // ─── RBAC Role Assignments ────────────────────────────────────────────────────
 // Deployed after all resource modules so resource IDs are available.
 // Grants the managed identity least-privilege access to each service.
@@ -162,3 +217,9 @@ output eventGridTopicEndpoint string = eventgrid.outputs.topicEndpoint
 
 output appInsightsConnectionString string = monitoring.outputs.appInsightsConnectionString
 output logAnalyticsWorkspaceId string = monitoring.outputs.workspaceId
+
+output vnetName string = vnet.outputs.vnetName
+output acrLoginServer string = acr.outputs.acrLoginServer
+
+output backendFqdn string = containerapps.outputs.backendFqdn
+output dashboardFqdn string = containerapps.outputs.dashboardFqdn

@@ -14,6 +14,7 @@ from decimal import Decimal
 from typing import Any
 
 import structlog
+from pydantic import BaseModel, Field
 
 from openinsure.infrastructure.factory import (
     get_billing_repository,
@@ -24,6 +25,86 @@ from openinsure.rbac.authority import AuthorityDecision, AuthorityEngine
 from openinsure.services.rating import CyberRatingEngine, RatingInput
 
 logger = structlog.get_logger()
+
+
+# ---------------------------------------------------------------------------
+# Typed request/response models for critical service interfaces (#296)
+# ---------------------------------------------------------------------------
+
+
+class TriageInput(BaseModel):
+    """Typed input for ``SubmissionService.run_triage``."""
+
+    submission_id: str
+    applicant: str = ""
+    line_of_business: str = "cyber"
+    annual_revenue: float = 0
+    employee_count: int = 0
+    industry: str = ""
+    risk_data: dict[str, Any] = Field(default_factory=dict)
+    cyber_risk_data: dict[str, Any] = Field(default_factory=dict)
+    product_id: str | None = None
+    status: str = ""
+
+    @classmethod
+    def from_record(cls, submission_id: str, record: dict[str, Any]) -> TriageInput:
+        """Build from a raw submission dict."""
+        return cls(
+            submission_id=submission_id,
+            applicant=record.get("applicant", ""),
+            line_of_business=record.get("line_of_business", "cyber"),
+            annual_revenue=_safe_float(record.get("annual_revenue", 0), 0),
+            employee_count=int(record.get("employee_count", 0) or 0),
+            industry=record.get("industry", ""),
+            risk_data=_parse_json_field(record.get("risk_data", {})),
+            cyber_risk_data=_parse_json_field(record.get("cyber_risk_data", {})),
+            product_id=record.get("product_id"),
+            status=record.get("status", ""),
+        )
+
+
+class TriageOutput(BaseModel):
+    """Typed output from ``SubmissionService.run_triage``."""
+
+    status: str
+    risk_score: float
+    recommendation: str
+    flags: list[str] = Field(default_factory=list)
+
+
+class QuoteInput(BaseModel):
+    """Typed input for ``SubmissionService.generate_quote``."""
+
+    submission_id: str
+    user_role: str
+    user_display_name: str
+
+    @classmethod
+    def from_args(
+        cls,
+        submission_id: str,
+        user_role: str,
+        user_display_name: str,
+    ) -> QuoteInput:
+        return cls(
+            submission_id=submission_id,
+            user_role=user_role,
+            user_display_name=user_display_name,
+        )
+
+
+class QuoteOutput(BaseModel):
+    """Typed output from ``SubmissionService.generate_quote``."""
+
+    escalated: bool = False
+    escalation_id: str | None = None
+    reason: str | None = None
+    required_role: str | None = None
+    premium: float | None = None
+    coverages: list[dict[str, Any]] | None = None
+    valid_until: str | None = None
+    authority: dict[str, str] | None = None
+    rating_breakdown: dict[str, Any] | None = None
 
 
 def _safe_float(value: Any, default: float, *, label: str = "value") -> float:

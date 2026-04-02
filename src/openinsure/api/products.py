@@ -365,7 +365,14 @@ def _snapshot(record: dict[str, Any]) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
-@router.post("", response_model=ProductResponse, status_code=201)
+@router.post(
+    "",
+    response_model=ProductResponse,
+    status_code=201,
+    summary="Create product",
+    description="Create a new insurance product definition. Triggers async knowledge "
+    "sync to Cosmos DB and AI Search so Foundry agents have current data.",
+)
 async def create_product(body: ProductCreate, background_tasks: BackgroundTasks) -> ProductResponse:
     """Create a new insurance product definition."""
     pid = str(uuid.uuid4())
@@ -418,7 +425,12 @@ async def create_product(body: ProductCreate, background_tasks: BackgroundTasks)
     return ProductResponse(**record)
 
 
-@router.get("", response_model=ProductList)
+@router.get(
+    "",
+    response_model=ProductList,
+    summary="List products",
+    description="List insurance products with optional filtering by status and product line.",
+)
 async def list_products(
     status: ProductStatus | None = Query(None, description="Filter by product status"),
     product_line: ProductLine | None = Query(None, description="Filter by product line"),
